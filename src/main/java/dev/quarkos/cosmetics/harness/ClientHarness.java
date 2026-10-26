@@ -55,6 +55,7 @@ public final class ClientHarness {
     private static boolean shotQueued;
     private static boolean studio;
     private static int shotIndex;
+    private static int settledAt = -1;
     private static boolean pairStarted;
     private static volatile boolean pairReady;
     private static volatile boolean pairFailed;
@@ -78,7 +79,7 @@ public final class ClientHarness {
             client.options.renderDistance().set(8);
             client.options.simulationDistance().set(6);
             client.options.framerateLimit().set(30);
-            client.options.fov().set(86);
+            client.options.fov().set(54);
             client.options.gamma().set(1.0);
             client.options.bobView().set(false);
             client.options.hideGui = true;
@@ -173,18 +174,30 @@ public final class ClientHarness {
             return;
         }
         Shot shot = SHOTS.get(shotIndex);
-        if (ticks == 1) {
-            prepare(client, shot);
-            shotQueued = false;
-        }
         frame(client, shot.front);
-        if (ticks < 36) {
+        // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
+        if (settledAt < 0) {
+            if (ticks == 1 || ticks % 10 == 0) {
+                prepare(client, shot);
+                shotQueued = false;
+            }
+            if (client.player.getY() >= 100.0) {
+                settledAt = ticks;
+                LOGGER.info("studio ready at y={}", client.player.getY());
+            } else if (ticks > 20 * 30) {
+                LOGGER.error("player never reached the studio, y={}", client.player.getY());
+                state = State.STOP;
+            }
+            return;
+        }
+        if (ticks - settledAt < 40) {
             return;
         }
         shootWhenReady(client, shot.name, () -> {
             shotIndex++;
             ticks = 0;
             shotQueued = false;
+            settledAt = -1;
             state = State.SHOTS;
         });
     }
@@ -192,19 +205,16 @@ public final class ClientHarness {
     private static void prepare(Minecraft client, Shot shot) {
         client.setScreen(null);
         client.options.hideGui = true;
-        client.options.fov().set(86);
+        client.options.fov().set(54);
         client.options.gamma().set(1.0);
         client.options.bobView().set(false);
         if (!studio) {
             studio = true;
             client.player.connection.sendCommand("time set 6000");
             client.player.connection.sendCommand("weather clear");
-            client.player.connection.sendCommand("gamerule doDaylightCycle false");
-            client.player.connection.sendCommand("gamerule doWeatherCycle false");
-            client.player.connection.sendCommand("gamerule doMobSpawning false");
             client.player.connection.sendCommand("gamemode creative");
-            client.player.connection.sendCommand("fill -8 100 -8 8 100 8 white_concrete");
-            client.player.connection.sendCommand("fill -8 101 -8 8 112 8 air");
+            client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
+            client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
         client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");

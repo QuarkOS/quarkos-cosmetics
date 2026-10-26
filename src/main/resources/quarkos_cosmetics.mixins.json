@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_21",
     "client": [
     "PlayerCosmeticsMixin",
+    "CosmeticLayerAccess",
     "PauseScreenMixin",
     "ClientTickMixin",
     "CameraZoomMixin"
