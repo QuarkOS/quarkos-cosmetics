@@ -488,17 +488,17 @@ def build_bell() -> None:
 
 
 def feather_wing(mesh: Mesh, side: str, origin: tuple[float, float, float]) -> None:
-    """Folded wing on the upper back. The flap bones swing these long panels out.
+    """Three broad membranes and one leading-edge bone, folded on the back.
 
-    Four feathers and one leading-edge bone share the shoulder-blade pivot. Each
-    feather is a long panel plus a narrower tip, not a pile of small tiles. A
-    slight pitch lays the tips back against the body without parking them on the shoulders.
+    Each membrane is a wide panel plus a shorter, narrower tip on the same pivot,
+    so the tip is the taper of that panel. They overlap at rest and only fan a
+    little when they flap, instead of separating into spikes.
     """
     direction = 1.0 if side == "left" else -1.0
     ox, oy, oz = origin
     bone = f"wing_{side}_flap"
-    # A small pitch lays the hanging tips back against the torso.
-    pitch = -6.0
+    # Rest pitch keeps the panels on the back. The flap clip adds the spread.
+    pitch = -3.0
 
     def box(suffix: str, x0: float, y0: float, z0: float, x1: float, y1: float, z1: float, tile: str) -> None:
         mesh.cube(
@@ -514,17 +514,16 @@ def feather_wing(mesh: Mesh, side: str, origin: tuple[float, float, float]) -> N
             rotation=(pitch, 0, 0),
         )
 
-    # Inner to outer. The panels overlap at the root and narrow at the tip.
-    box("feather_a", 0.15, -12.2, 0.06, 2.15, 0.15, 0.34, "feather")
-    box("feather_a_tip", 0.45, -15.4, 0.08, 1.65, -11.2, 0.30, "tip")
-    box("feather_b", 0.55, -12.8, 0.14, 2.70, 0.05, 0.40, "feather")
-    box("feather_b_tip", 0.95, -16.0, 0.16, 2.15, -11.8, 0.36, "tip")
-    box("feather_c", 1.05, -12.4, 0.20, 3.15, 0.20, 0.46, "feather")
-    box("feather_c_tip", 1.50, -15.2, 0.22, 2.55, -11.4, 0.42, "tip")
-    box("feather_d", 1.55, -11.2, 0.26, 3.45, 0.30, 0.52, "feather")
-    box("feather_d_tip", 1.95, -13.8, 0.28, 2.95, -10.2, 0.48, "tip")
-    box("lead", 2.35, -13.2, 0.38, 3.55, 0.65, 0.82, "leading")
-    box("lead_tip", 2.60, -16.2, 0.42, 3.35, -12.2, 0.74, "leading")
+    # Inner to outer. Each panel is wide enough to read as a membrane, and the tip
+    # overlaps it so the pair is one tapered feather rather than two spikes.
+    box("feather_a", -3.1, -6.4, 0.06, 2.2, 0.25, 0.48, "feather")
+    box("feather_a_tip", -1.8, -8.8, 0.12, 0.9, -4.8, 0.42, "tip")
+    box("feather_b", -2.2, -6.6, 0.32, 3.1, 0.3, 0.74, "feather")
+    box("feather_b_tip", -0.9, -9.0, 0.38, 1.8, -5.0, 0.68, "tip")
+    box("feather_c", -1.1, -6.2, 0.56, 3.8, 0.45, 1.00, "feather")
+    box("feather_c_tip", 0.1, -8.6, 0.62, 2.6, -4.6, 0.94, "tip")
+    box("lead", 3.0, -7.2, 0.70, 4.4, 0.7, 1.45, "leading")
+    box("lead_tip", 3.2, -9.0, 0.80, 4.2, -5.6, 1.35, "leading")
 
 
 def build_wings() -> None:
