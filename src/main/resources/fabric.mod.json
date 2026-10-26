@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+  "name": "${name}",
+  "description": "Free client cosmetics: hats, shoulders, idle wings, tails, and ears, plus an original 3D second skin. Local equip works offline. The gallery is optional and talks only to this mod's own server.",
+  "authors": [
+    "Emilio Schwaiger"
+  ],
+  "license": "MIT",
+  "icon": "assets/quarkos_cosmetics/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.quarkos.cosmetics.FabricQuarkosCosmetics"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "${minecraft}",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

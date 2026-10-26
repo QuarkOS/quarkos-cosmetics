@@ -1,0 +1,28 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "quarkos_cosmetics"
+version = "${version}"
+displayName = "Quarkos Cosmetics"
+authors = "Emilio Schwaiger"
+description = '''Free client cosmetics: hats, shoulders, idle wings, tails, and ears, plus an original 3D second skin. Local equip works offline. The gallery is optional and talks only to this mod's own server.'''
+displayTest = "IGNORE_ALL_VERSION"
+
+[[dependencies.quarkos_cosmetics]]
+modId = "forge"
+mandatory = true
+versionRange = "[${forge_dep},)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.quarkos_cosmetics]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[${minecraft}]"
+ordering = "NONE"
+side = "CLIENT"
+
+[[mixins]]
+config = "quarkos_cosmetics.mixins.json"
