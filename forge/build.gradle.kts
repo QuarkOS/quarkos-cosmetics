@@ -13,10 +13,7 @@ buildscript {
 data class ForgeNode(
     val forgeCoordinate: String,
     val forgeDep: String,
-    val loaderRange: String,
-    val geckolibArtifact: String,
     val geckolibVersion: String,
-    val geckolibRange: String,
     val packMeta: String,
 )
 
@@ -25,20 +22,14 @@ val forgeNode = when (minecraftVersion) {
     "1.21.1" -> ForgeNode(
         "1.21.1-52.1.20",
         "52.1.20",
-        "[52,)",
-        "geckolib-forge-1.21.1",
         "4.9.3",
-        "[4.9.3,5)",
         """{"pack":{"description":"Quarkos Cosmetics","pack_format":34}}""" + "\n",
     )
     "1.21.11" -> ForgeNode(
         "1.21.11-61.2.4",
         "61.2.4",
-        "[61,)",
-        "geckolib-forge-1.21.11",
         "5.4.5",
-        "[5.4.5,6)",
-        """{"pack":{"description":"Quarkos Cosmetics","pack_format":75,"supported_formats":[75,81],"min_format":75,"max_format":81}}""" + "\n",
+        """{"pack":{"description":"Quarkos Cosmetics","min_format":[75,0],"max_format":[75,0]}}""" + "\n",
     )
     else -> null
 }
@@ -86,33 +77,20 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     }
     val sourceSets = extensions.getByType(org.gradle.api.tasks.SourceSetContainer::class.java)
     val mainSource = sourceSets.named("main")
-    val forgeJava = rootProject.layout.projectDirectory.dir("forge/src/main/java")
-    val forgeVersionJava = rootProject.layout.projectDirectory.dir("forge/src/$minecraftVersion/java")
-    val forgeResources = rootProject.layout.projectDirectory.dir("forge/src/main/resources")
-    val forgeVersionResources = rootProject.layout.projectDirectory.dir("forge/src/$minecraftVersion/resources")
+    val chiseledMain = layout.buildDirectory.dir("generated/stonecutter/main")
+    val syncBranchSources = tasks.register<Sync>("syncBranchSources") {
+        from(rootProject.file("src"))
+        into(rootProject.file("forge/src"))
+    }
+    tasks.named("stonecutterPrepare") { dependsOn(syncBranchSources) }
     gradle.projectsEvaluated {
         val main = mainSource.get()
-        main.java.setSrcDirs(listOf(
-            rootProject.file("src/main/java"),
-            forgeJava.asFile,
-            forgeVersionJava.asFile,
-        ))
-        main.java.exclude("**/FabricQuarkosCosmetics.java")
-        main.java.exclude("**/cosmetics/harness/**")
-        if (minecraftVersion == "1.21.1") {
-            main.java.exclude("**/render/WingLayer.java")
-        }
-        main.resources.setSrcDirs(listOf(
-            rootProject.file("src/main/resources"),
-            forgeResources.asFile,
-            forgeVersionResources.asFile,
-        ))
-        main.resources.exclude("fabric.mod.json")
-        main.resources.exclude("quarkos_cosmetics.mixins.json")
-        main.resources.exclude("META-INF/mods.toml")
-        main.resources.exclude("pack.mcmeta")
+        main.java.setSrcDirs(listOf(chiseledMain.get().dir("java").asFile))
+        main.resources.setSrcDirs(listOf(chiseledMain.get().dir("resources").asFile))
         main.output.setResourcesDir(main.java.destinationDirectory)
     }
+    tasks.named("compileJava") { dependsOn("stonecutterGenerate") }
+    tasks.named("processResources") { dependsOn("stonecutterGenerate") }
     runs.register("client") {
         mods {
             register("quarkos_cosmetics") {
@@ -139,8 +117,21 @@ if (minecraftVersion == "forge" || forgeNode == null) {
 
     dependencies {
         add("implementation", forgeMinecraft.dependency("net.minecraftforge:forge:${node.forgeCoordinate}"))
-        add("implementation", "software.bernie.geckolib:${node.geckolibArtifact}:${node.geckolibVersion}")
         add("compileOnly", "com.unascribed:ears-api:1.4.5")
+        add("implementation", "com.fasterxml.jackson.core:jackson-databind:2.18.3")
+        add("implementation", "com.fasterxml.jackson.core:jackson-core:2.18.3")
+        add("implementation", "com.fasterxml.jackson.core:jackson-annotations:2.18.3")
+        add("implementation", "software.bernie.geckolib:geckolib-forge-$minecraftVersion:${node.geckolibVersion}")
+    }
+
+    tasks.named<Jar>("jar") {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+        from({
+            configurations.getByName("runtimeClasspath")
+                .filter { it.name.startsWith("jackson-") }
+                .map { zipTree(it) }
+        })
     }
 
     val forgePack = layout.buildDirectory.dir("generated/forge-pack")
@@ -152,68 +143,23 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             file.writeText(node.packMeta)
         }
     }
-    val forgeMeta = layout.buildDirectory.dir("generated/forge-meta")
-    val writeModsToml = tasks.register("writeForgeModsToml") {
-        outputs.dir(forgeMeta)
-        doLast {
-            val file = forgeMeta.get().asFile.resolve("META-INF/mods.toml")
-            file.parentFile.mkdirs()
-            val mixins = if (minecraftVersion == "1.21.11") {
-                "\n[[mixins]]\nconfig = \"quarkos_cosmetics.forge.mixins.json\"\n"
-            } else {
-                ""
-            }
-            file.writeText(
-                """
-                modLoader = "javafml"
-                loaderVersion = "${node.loaderRange}"
-                license = "MIT"
-
-                [[mods]]
-                modId = "quarkos_cosmetics"
-                version = "1.0.0+$minecraftVersion"
-                displayName = "Quarkos Cosmetics"
-                authors = "Emilio Schwaiger"
-                description = '''Free client cosmetics for Forge. Slots are hat, ears, both shoulders, back, and tail, plus an original 3D second skin. Animation is GeckoLib (MIT), loaded as its own mod and not shaded. Ears (MIT) is an optional inhibitor hook. The gallery client talks only to this mod's own server.'''
-                displayTest = "IGNORE_ALL_VERSION"
-
-                [[dependencies.quarkos_cosmetics]]
-                modId = "forge"
-                mandatory = true
-                versionRange = "[${node.forgeDep},)"
-                ordering = "NONE"
-                side = "CLIENT"
-
-                [[dependencies.quarkos_cosmetics]]
-                modId = "minecraft"
-                mandatory = true
-                versionRange = "[$minecraftVersion]"
-                ordering = "NONE"
-                side = "CLIENT"
-
-                [[dependencies.quarkos_cosmetics]]
-                modId = "geckolib"
-                mandatory = true
-                versionRange = "${node.geckolibRange}"
-                ordering = "AFTER"
-                side = "CLIENT"
-
-                [[dependencies.quarkos_cosmetics]]
-                modId = "ears"
-                mandatory = false
-                versionRange = "[1.4,)"
-                ordering = "AFTER"
-                side = "CLIENT"
-                $mixins
-                """.trimIndent() + "\n"
-            )
-        }
-    }
 
     tasks.named<ProcessResources>("processResources") {
-        dependsOn(writeForgePack, writeModsToml)
+        dependsOn(writeForgePack)
+        val props = mapOf(
+            "version" to "1.0.0+$minecraftVersion",
+            "forge_dep" to node.forgeDep,
+            "minecraft" to minecraftVersion,
+            "geckolib" to node.geckolibVersion,
+        )
+        inputs.property("forge_dep", node.forgeDep)
+        inputs.property("minecraft", minecraftVersion)
+        filesMatching("META-INF/mods.toml") {
+            expand(props)
+        }
+        exclude("fabric.mod.json")
+        exclude("pack.mcmeta")
         from(forgePack)
-        from(forgeMeta)
     }
 
     tasks.withType<JavaExec>().configureEach {
@@ -223,14 +169,9 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         systemProperty("quarkos_cosmetics.loader", "forge")
         val gallery = providers.gradleProperty("galleryUrl").orNull ?: "http://127.0.0.1:39221"
         systemProperty("cosmetics.galleryUrl", gallery)
-        val watch = providers.gradleProperty("watchFile").orNull
-            ?: "/tmp/quarkos-gallery-watch.json"
-        systemProperty("cosmetics.watchFile", watch)
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
-        }
-        if (providers.gradleProperty("skipSettings").orNull == "true") {
-            systemProperty("quarkos_cosmetics.skipSettings", "true")
+            args("--width", "960", "--height", "540")
         }
         val display = providers.gradleProperty("display").orNull
         val xauth = providers.gradleProperty("xauth").orNull
@@ -254,14 +195,6 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             }
         }
     }
-
-    tasks.register<JavaExec>("galleryPeer") {
-        group = "application"
-        description = "Signs another client into the local gallery and equips a cosmetic."
-        classpath = sourceSets.named("main").get().runtimeClasspath
-        mainClass.set("dev.quarkos.cosmetics.forge.gallery.GalleryPeer")
-        workingDir = rootProject.layout.projectDirectory.asFile
-    }
 }
 
 fun seedHarnessOptions(existing: String): String {
@@ -272,8 +205,9 @@ fun seedHarnessOptions(existing: String): String {
         "guiScale" to "2",
         "maxFps" to "30",
         "enableVsync" to "false",
-        "renderDistance" to "4",
-        "simulationDistance" to "5",
+        "renderDistance" to "8",
+        "simulationDistance" to "6",
+        "fov" to "54",
         "mipmapLevels" to "0",
         "entityShadows" to "false",
         "renderClouds" to "\"false\"",

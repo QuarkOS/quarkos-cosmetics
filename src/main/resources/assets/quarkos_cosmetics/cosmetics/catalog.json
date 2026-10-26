@@ -1,0 +1,148 @@
+{
+  "items": [
+    {
+      "id": "quarkos:lantern_cap",
+      "name": "Lantern cap",
+      "description": "A folded paper lantern for the top of the head.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/lantern_cap.png",
+      "model": "cosmetics/lantern_cap.json",
+      "marker": "FF3366"
+    },
+    {
+      "id": "quarkos:paper_boat",
+      "name": "Paper boat",
+      "description": "A wide paper boat that sits on the hair.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/paper_boat.png",
+      "model": "cosmetics/paper_boat.json",
+      "marker": "FFB15A"
+    },
+    {
+      "id": "quarkos:crescent_circlet",
+      "name": "Crescent circlet",
+      "description": "A thin brass crescent, open at the front.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/crescent_circlet.png",
+      "model": "cosmetics/crescent_circlet.json",
+      "marker": "F4E2B0"
+    },
+    {
+      "id": "quarkos:fox_tips",
+      "name": "Fox tips",
+      "description": "Short russet tips, not a copy of any ears mod.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/fox_tips.png",
+      "model": "cosmetics/fox_tips.json",
+      "marker": "33DD88"
+    },
+    {
+      "id": "quarkos:moth_tufts",
+      "name": "Moth tufts",
+      "description": "Soft tufts that sit above the temples.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/moth_tufts.png",
+      "model": "cosmetics/moth_tufts.json",
+      "marker": "7DDFB0"
+    },
+    {
+      "id": "quarkos:ribbon_bows",
+      "name": "Ribbon bows",
+      "description": "Two paper bows tied at the sides of the head.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/ribbon_bows.png",
+      "model": "cosmetics/ribbon_bows.json",
+      "marker": "F2A3C7"
+    },
+    {
+      "id": "quarkos:ink_wren",
+      "name": "Ink wren",
+      "description": "A little ink-blue wren perched on the left shoulder.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/ink_wren.png",
+      "model": "cosmetics/ink_wren.json",
+      "marker": "3388FF"
+    },
+    {
+      "id": "quarkos:moss_pebble",
+      "name": "Moss pebble",
+      "description": "A mossy pebble strapped to the left shoulder.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/moss_pebble.png",
+      "model": "cosmetics/moss_pebble.json",
+      "marker": "5E8C4A"
+    },
+    {
+      "id": "quarkos:pebble_moth",
+      "name": "Pebble moth",
+      "description": "A moth with slow flapping wings on the right shoulder.",
+      "slot": "shoulder_right",
+      "texture": "textures/cosmetics/pebble_moth.png",
+      "model": "cosmetics/pebble_moth.json",
+      "marker": "FFCC22"
+    },
+    {
+      "id": "quarkos:copper_bell",
+      "name": "Copper bell",
+      "description": "A small copper bell hung at the right shoulder.",
+      "slot": "shoulder_right",
+      "texture": "textures/cosmetics/copper_bell.png",
+      "model": "cosmetics/copper_bell.json",
+      "marker": "E08A3C"
+    },
+    {
+      "id": "quarkos:kite_wings",
+      "name": "Kite wings",
+      "description": "Idle kite wings that flap while you stand.",
+      "slot": "back",
+      "texture": "textures/cosmetics/kite_wings.png",
+      "model": "cosmetics/kite_wings.json",
+      "marker": "CC44FF"
+    },
+    {
+      "id": "quarkos:folded_cloak",
+      "name": "Folded cloak",
+      "description": "A short cloak gathered at the shoulder blades.",
+      "slot": "back",
+      "texture": "textures/cosmetics/folded_cloak.png",
+      "model": "cosmetics/folded_cloak.json",
+      "marker": "6C4A8A"
+    },
+    {
+      "id": "quarkos:paper_fan",
+      "name": "Paper fan",
+      "description": "A paper fan that sways on the back.",
+      "slot": "back",
+      "texture": "textures/cosmetics/paper_fan.png",
+      "model": "cosmetics/paper_fan.json",
+      "marker": "F2C14E"
+    },
+    {
+      "id": "quarkos:ribbon_tail",
+      "name": "Ribbon tail",
+      "description": "A long ribbon that idles behind the legs.",
+      "slot": "tail",
+      "texture": "textures/cosmetics/ribbon_tail.png",
+      "model": "cosmetics/ribbon_tail.json",
+      "marker": "22E0E0"
+    },
+    {
+      "id": "quarkos:fern_plume",
+      "name": "Fern plume",
+      "description": "A fern plume that nods while you walk.",
+      "slot": "tail",
+      "texture": "textures/cosmetics/fern_plume.png",
+      "model": "cosmetics/fern_plume.json",
+      "marker": "3FAE6A"
+    },
+    {
+      "id": "quarkos:bead_chain",
+      "name": "Bead chain",
+      "description": "Glass beads on a short chain.",
+      "slot": "tail",
+      "texture": "textures/cosmetics/bead_chain.png",
+      "model": "cosmetics/bead_chain.json",
+      "marker": "F0D48A"
+    }
+  ]
+}

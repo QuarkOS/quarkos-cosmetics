@@ -1,28 +1,67 @@
 package dev.quarkos.cosmetics.harness;
 
-import dev.quarkos.cosmetics.config.CosmeticsScreen;
+import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.platform.NativeImage;
+import dev.quarkos.cosmetics.config.ClientSettings;
+import dev.quarkos.cosmetics.gallery.EquipmentMirror;
+import dev.quarkos.cosmetics.gallery.GalleryClient;
+import dev.quarkos.cosmetics.model.ModelException;
+import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
+import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
+/**
+ * Headless portrait pass. Third person, HUD hidden, one cosmetic at a time, front then back.
+ * The last frame is another player wearing cosmetics published through the local gallery.
+ */
 public final class ClientHarness {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
+    private static final List<Shot> SHOTS = List.of(
+            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true),
+            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false),
+            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true),
+            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false),
+            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true),
+            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false),
+            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true),
+            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false),
+            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true),
+            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false),
+            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true),
+            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false)
+    );
+
     private static State state = State.WAIT_TITLE;
     private static int ticks;
     private static boolean armed;
     private static boolean shotQueued;
+    private static boolean studio;
+    private static int shotIndex;
+    private static int settledAt = -1;
+    private static boolean pairStarted;
+    private static volatile boolean pairReady;
+    private static volatile boolean pairFailed;
+    private static volatile String pairKey = "";
+    private static volatile UUID pairId;
+    private static RemotePlayer guest;
 
     private ClientHarness() {
     }
@@ -37,23 +76,22 @@ public final class ClientHarness {
             client.options.onboardAccessibility = false;
             client.options.menuBackgroundBlurriness().set(0);
             client.options.guiScale().set(2);
-            client.options.renderDistance().set(6);
-            client.options.simulationDistance().set(5);
+            client.options.renderDistance().set(8);
+            client.options.simulationDistance().set(6);
             client.options.framerateLimit().set(30);
+            client.options.fov().set(54);
+            client.options.gamma().set(1.0);
+            client.options.bobView().set(false);
+            client.options.hideGui = true;
             LOGGER.info("cosmetics harness armed");
         }
         ticks++;
         try {
             switch (state) {
                 case WAIT_TITLE -> waitTitle(client);
-                case OPEN_SETTINGS -> openSettings(client);
-                case SHOOT_SETTINGS -> shootWhenReady(client, "settings", ClientHarness::openWorld);
                 case WAIT_WORLD -> waitWorld(client);
-                case POSE -> pose(client);
-                case SHOOT_PLAYER -> shootWhenReady(client, "cosmetic-player", () -> {
-                    state = State.STOP;
-                    ticks = 0;
-                });
+                case SHOTS -> shots(client);
+                case PAIR -> pair(client);
                 case STOP -> stop(client);
             }
         } catch (RuntimeException e) {
@@ -70,27 +108,8 @@ public final class ClientHarness {
             }
             return;
         }
-        state = State.OPEN_SETTINGS;
-        ticks = 0;
-    }
-
-    private static void openSettings(Minecraft client) {
-        if (!(client.screen instanceof TitleScreen)) {
-            if (ticks > 20 * 20) {
-                state = State.STOP;
-            }
-            return;
-        }
-        client.setScreen(new CosmeticsScreen(client.screen));
-        state = State.SHOOT_SETTINGS;
-        ticks = 0;
-        shotQueued = false;
-    }
-
-    private static void openWorld() {
         state = State.WAIT_WORLD;
         ticks = 0;
-        shotQueued = false;
     }
 
     private static void waitWorld(Minecraft client) {
@@ -101,7 +120,11 @@ public final class ClientHarness {
         }
         if (!(screen instanceof CreateWorldScreen create)) {
             if (ticks == 1) {
+                //? if >=1.21.11 {
                 CreateWorldScreen.openFresh(client, () -> client.setScreen(new TitleScreen()));
+                //?} else {
+                CreateWorldScreen.openFresh(client, new TitleScreen());
+                //?}
             }
             if (ticks > 20 * 90) {
                 LOGGER.error("create world did not open, screen={}", screen);
@@ -120,18 +143,20 @@ public final class ClientHarness {
         WorldCreationUiState ui = create.getUiState();
         ui.setGameMode(WorldCreationUiState.SelectedGameMode.CREATIVE);
         ui.setAllowCommands(true);
-        ui.setName("cosmetics");
+        ui.setName("quarkos-portraits");
         presets.stream().filter(entry -> entry.preset().is(WorldPresets.FLAT)).findFirst().ifPresent(ui::setWorldType);
         if (!press(create, "selectWorld.create")) {
             LOGGER.error("could not press the create button");
             state = State.STOP;
             return;
         }
-        state = State.POSE;
+        state = State.SHOTS;
         ticks = 0;
+        shotIndex = 0;
+        shotQueued = false;
     }
 
-    private static void pose(Minecraft client) {
+    private static void shots(Minecraft client) {
         if (client.player == null || client.level == null) {
             if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
                 pressFirst(client.screen);
@@ -142,35 +167,202 @@ public final class ClientHarness {
             }
             return;
         }
-        if (ticks < 30) {
+        if (shotIndex >= SHOTS.size()) {
+            state = State.PAIR;
+            ticks = 0;
+            shotQueued = false;
             return;
         }
+        Shot shot = SHOTS.get(shotIndex);
+        frame(client, shot.front);
+        // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
+        if (settledAt < 0) {
+            if (ticks == 1 || ticks % 10 == 0) {
+                prepare(client, shot);
+                shotQueued = false;
+            }
+            if (client.player.getY() >= 100.0) {
+                settledAt = ticks;
+                LOGGER.info("studio ready at y={}", client.player.getY());
+            } else if (ticks > 20 * 30) {
+                LOGGER.error("player never reached the studio, y={}", client.player.getY());
+                state = State.STOP;
+            }
+            return;
+        }
+        if (ticks - settledAt < 40) {
+            return;
+        }
+        shootWhenReady(client, shot.name, () -> {
+            shotIndex++;
+            ticks = 0;
+            shotQueued = false;
+            settledAt = -1;
+            state = State.SHOTS;
+        });
+    }
+
+    private static void prepare(Minecraft client, Shot shot) {
+        client.setScreen(null);
         client.options.hideGui = true;
-        client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-        if (ticks == 30) {
-            client.player.connection.sendCommand("time set day");
+        client.options.fov().set(54);
+        client.options.gamma().set(1.0);
+        client.options.bobView().set(false);
+        if (!studio) {
+            studio = true;
+            client.player.connection.sendCommand("time set 6000");
             client.player.connection.sendCommand("weather clear");
             client.player.connection.sendCommand("gamemode creative");
-            client.player.connection.sendCommand("tp @s ~ ~ ~ 180 8");
-            return;
+            client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
+            client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
+            client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
+        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
+        client.player.connection.sendCommand("item replace entity @s armor.head with air");
+        client.player.connection.sendCommand("item replace entity @s armor.chest with air");
+        client.player.connection.sendCommand("item replace entity @s armor.legs with air");
+        client.player.connection.sendCommand("clear @s");
+        client.player.setShiftKeyDown(false);
+        client.player.setSwimming(false);
+        client.player.stopFallFlying();
+        ClientSettings settings = ClientSettings.get();
+        settings.skinLayers = false;
+        settings.hideOthers = false;
+        settings.disabled.clear();
+        for (Slot slot : Slot.values()) {
+            settings.categoryOn.put(slot, true);
+            settings.equip(slot, "");
+        }
+        settings.equip(shot.slot, shot.id);
+        settings.save(client.gameDirectory.toPath());
+    }
+
+    private static void frame(Minecraft client, boolean front) {
+        client.options.hideGui = true;
+        client.options.setCameraType(front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
         client.player.setYRot(180f);
         client.player.setYHeadRot(180f);
         client.player.setXRot(8f);
-        if (ticks < 90) {
+        client.setCameraEntity(client.player);
+    }
+
+    private static void pair(Minecraft client) {
+        if (client.player == null || client.level == null) {
+            state = State.STOP;
             return;
         }
-        state = State.SHOOT_PLAYER;
-        ticks = 0;
-        shotQueued = false;
+        if (!pairStarted) {
+            pairStarted = true;
+            publishAda(client);
+        }
+        client.options.hideGui = true;
+        client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+        client.player.connection.sendCommand("tp @s 0.5 90 0.5 180 0");
+        if (!pairReady) {
+            if (pairFailed || ticks > 20 * 40) {
+                LOGGER.error("two-client gallery setup failed");
+                state = State.STOP;
+            }
+            return;
+        }
+        anchorGuest(client);
+        if (ticks < 50) {
+            return;
+        }
+        shootWhenReady(client, "two-client", () -> {
+            state = State.STOP;
+            ticks = 0;
+        });
+    }
+
+    private static void publishAda(Minecraft client) {
+        List<String> bodies = new ArrayList<>();
+        List<Slot> slots = new ArrayList<>();
+        try {
+            for (String packed : List.of("quarkos:lantern_cap", "quarkos:kite_wings")) {
+                ModelLibrary.Resolved resolved = ModelLibrary.resolve(packed);
+                if (resolved == null || resolved.png() == null) {
+                    LOGGER.error("packed cosmetic missing for gallery publish: {}", packed);
+                    pairFailed = true;
+                    return;
+                }
+                bodies.add(resolved.model().publishBody(resolved.name(), resolved.description(), resolved.slot(), "texture", resolved.png()));
+                slots.add(resolved.slot());
+            }
+        } catch (ModelException ex) {
+            LOGGER.error("could not build a gallery publish body", ex);
+            pairFailed = true;
+            return;
+        }
+        for (Slot slot : Slot.values()) {
+            ClientSettings.get().equip(slot, "");
+        }
+        Thread worker = new Thread(() -> {
+            try {
+                GalleryClient gallery = new GalleryClient(ClientSettings.get().galleryUrl);
+                GalleryClient.Challenge challenge = gallery.createChallenge();
+                GalleryClient.Session session = gallery.completeSession("Ada", challenge.serverId());
+                String key = ClientSettings.hyphenate(session.uuid());
+                for (int i = 0; i < bodies.size(); i++) {
+                    GalleryClient.Listed listed = gallery.publish(session.token(), bodies.get(i));
+                    gallery.equip(session.token(), slots.get(i), listed.id());
+                }
+                GalleryClient.Equipment equipment = gallery.equipment(key);
+                List<GalleryClient.Detail> details = new ArrayList<>();
+                for (Slot slot : Slot.values()) {
+                    String id = equipment.id(slot);
+                    if (id != null && !id.isBlank()) {
+                        details.add(gallery.cosmetic(id));
+                    }
+                }
+                client.execute(() -> {
+                    for (GalleryClient.Detail detail : details) {
+                        Slot slot = Slot.parse(detail.listed().slot()).orElse(null);
+                        if (slot != null) {
+                            ModelLibrary.remember(detail.listed().id(), detail.listed().name(), detail.listed().description(), slot, detail.model());
+                        }
+                    }
+                    EquipmentMirror.accept(key, equipment);
+                    pairKey = key;
+                    pairId = UUID.fromString(key);
+                    pairReady = true;
+                    LOGGER.info("gallery client B can see Ada {} with {} cosmetics", key, details.size());
+                });
+            } catch (Exception ex) {
+                LOGGER.error("Ada gallery publish failed", ex);
+                pairFailed = true;
+            }
+        }, "quarkos-ada");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static void anchorGuest(Minecraft client) {
+        if (pairId == null || client.level == null) {
+            return;
+        }
+        if (guest == null || client.level.getEntity(guest.getId()) == null) {
+            guest = new RemotePlayer(client.level, new GameProfile(pairId, "Ada"));
+            guest.setId(1_600_001);
+            client.level.addEntity(guest);
+            LOGGER.info("spawned gallery player Ada {}", pairKey);
+        }
+        guest.setPos(0.5, 101.0, 0.5);
+        guest.setYRot(180f);
+        guest.setXRot(8f);
+        guest.setYHeadRot(180f);
+        guest.yRotO = 180f;
+        guest.xRotO = 8f;
+        guest.yHeadRotO = 180f;
+        guest.xo = guest.getX();
+        guest.yo = guest.getY();
+        guest.zo = guest.getZ();
+        client.setCameraEntity(guest);
     }
 
     private static void shootWhenReady(Minecraft client, String name, Runnable next) {
         Path path = shots().resolve(name + ".png");
         if (!shotQueued) {
-            if (ticks < 25) {
-                return;
-            }
             shotQueued = true;
             try {
                 Files.createDirectories(path.getParent());
@@ -179,16 +371,12 @@ public final class ClientHarness {
                 state = State.STOP;
                 return;
             }
-            Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> {
-                try {
-                    image.writeToFile(path);
-                    LOGGER.info("wrote {}", path);
-                } catch (Exception e) {
-                    LOGGER.error("failed to write {}", path, e);
-                } finally {
-                    image.close();
-                }
-            });
+            //? if >=1.21.11 {
+            Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+            //?} else {
+            NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+            writeImage(path, image);
+            //?}
             return;
         }
         try {
@@ -206,8 +394,20 @@ public final class ClientHarness {
         }
     }
 
+    private static void writeImage(Path path, NativeImage image) {
+        try {
+            image.writeToFile(path);
+            LOGGER.info("wrote {}", path);
+        } catch (Exception e) {
+            LOGGER.error("failed to write {}", path, e);
+        } finally {
+            image.close();
+        }
+    }
+
     private static void stop(Minecraft client) {
         if (ticks > 10) {
+            LOGGER.info("cosmetics harness finished");
             client.stop();
         }
     }
@@ -236,6 +436,7 @@ public final class ClientHarness {
     }
 
     private static void pressButton(Button button) {
+        //? if >=1.21.11 {
         button.onPress(new net.minecraft.client.input.InputWithModifiers() {
             @Override
             public int input() {
@@ -247,6 +448,9 @@ public final class ClientHarness {
                 return 0;
             }
         });
+        //?} else {
+        button.onPress();
+        //?}
     }
 
     private static Path shots() {
@@ -259,11 +463,12 @@ public final class ClientHarness {
 
     private enum State {
         WAIT_TITLE,
-        OPEN_SETTINGS,
-        SHOOT_SETTINGS,
         WAIT_WORLD,
-        POSE,
-        SHOOT_PLAYER,
+        SHOTS,
+        PAIR,
         STOP
+    }
+
+    private record Shot(String name, Slot slot, String id, boolean front) {
     }
 }
