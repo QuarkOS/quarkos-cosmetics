@@ -487,59 +487,87 @@ def build_bell() -> None:
     save_pair("copper_bell", atlas, mesh)
 
 
-def wing(mesh: Mesh, side: str, origin: tuple[float, float, float], tilt: float, direction: float) -> None:
-    # direction +1 builds toward +X. Folded by tilt around Z, about 14px long.
+def feather_wing(mesh: Mesh, side: str, origin: tuple[float, float, float], tilt: float) -> None:
+    """A narrow feathered wing. Outward distance is small so the rest pose hugs the back.
+
+    Shared origin keeps every strip on one flap bone. Negative pitch lifts the tips off
+    the torso; yaw fans the trailing edge backward instead of sideways.
+    """
+    direction = 1.0 if side == "left" else -1.0
     ox, oy, oz = origin
-    name = "wing_right_flap" if "right" in side else "wing_left_flap"
-    steps = (
-        (0.4, 3.4, -0.6, 2.4, "membrane"),
-        (3.1, 7.2, -1.5, 2.8, "membrane"),
-        (6.8, 10.6, -1.0, 2.2, "membrane_dark"),
-        (10.2, 14.0, -0.4, 1.2, "tip"),
-    )
-    for index, (x0, x1, y0, y1, tile) in enumerate(steps):
+    bone = f"wing_{side}_flap"
+
+    def box(suffix: str, x0: float, y0: float, z0: float, x1: float, y1: float, z1: float, tile: str, yaw: float = 0.0, pitch: float = 0.0) -> None:
         mesh.cube(
-            name if index else f"{name}_root",
+            f"{bone}_{suffix}",
             ox + direction * x0,
             oy + y0,
-            oz - 0.35,
+            oz + z0,
             ox + direction * x1,
             oy + y1,
-            oz + 0.45,
+            oz + z1,
             tile,
             origin=origin,
-            rotation=(0, 0, tilt),
+            rotation=(pitch, -direction * yaw, tilt),
         )
-    mesh.cube(
-        f"{name}_strut",
-        ox + direction * 0.6,
-        oy - 0.2,
-        oz - 0.2,
-        ox + direction * 12.4,
-        oy + 0.5,
-        oz + 0.25,
-        "strut",
-        origin=origin,
-        rotation=(0, 0, tilt),
-    )
+
+    box("covert_a", 0.15, -2.6, 0.02, 2.05, 0.45, 0.36, "covert", yaw=10, pitch=-4)
+    box("covert_b", 0.55, -5.4, 0.08, 2.45, -2.1, 0.4, "covert", yaw=16, pitch=-6)
+    box("primary_a", 0.3, -11.6, 0.18, 1.85, -4.0, 0.5, "feather", yaw=8, pitch=-8)
+    box("primary_b", 1.35, -14.0, 0.26, 2.85, -5.2, 0.58, "feather", yaw=18, pitch=-10)
+    box("primary_c", 2.15, -12.4, 0.34, 3.45, -6.0, 0.64, "feather", yaw=26, pitch=-12)
+    box("tip", 2.7, -14.6, 0.4, 3.7, -9.0, 0.68, "feather", yaw=32, pitch=-14)
+    box("lead_root", 1.9, -3.8, 0.46, 3.15, 0.65, 0.86, "leading", yaw=6, pitch=-4)
+    box("lead_mid", 2.45, -8.4, 0.5, 3.4, -3.3, 0.82, "leading", yaw=14, pitch=-6)
+    box("lead_tip", 2.9, -13.8, 0.52, 3.5, -7.8, 0.74, "leading", yaw=22, pitch=-8)
+    box("rachis", 1.15, -13.6, 0.6, 1.55, 0.3, 0.88, "rachis", yaw=12, pitch=-6)
 
 
 def build_wings() -> None:
-    marker = (204, 68, 255)
     atlas = Atlas()
-    atlas.paint("membrane", 4, 6, (168, 96, 214))
-    atlas.paint("membrane_dark", 3, 5, (112, 52, 156))
-    atlas.paint("tip", 3, 3, (214, 160, 236))
-    atlas.paint("strut", 2, 4, (74, 42, 96))
-    atlas.paint("spine", 3, 6, (58, 36, 78))
-    atlas.paint("jewel", 3, 3, marker)
+    use_palette(
+        {
+            "p": (198, 132, 224),
+            "m": (154, 82, 190),
+            "d": (98, 46, 136),
+            "v": (236, 206, 248),
+            "e": (72, 36, 96),
+            "h": (220, 168, 236),
+            "k": (204, 68, 255),
+        }
+    )
+    atlas.stamp(
+        "feather",
+        [
+            "vppppppm",
+            "vpmmmmmd",
+            "vpmddmmd",
+            "vpmmmmmd",
+            "vpmddmmd",
+            "vpmmmmmd",
+            "vppppppm",
+            "dddddddd",
+        ],
+    )
+    atlas.stamp(
+        "leading",
+        [
+            "ehhe",
+            "eeed",
+            "eeed",
+            "eedd",
+            "eedd",
+            "dddd",
+        ],
+    )
+    atlas.stamp("covert", ["vppm", "vpmd", "vmmd", "dddd"])
+    atlas.stamp("rachis", ["vd", "vd", "ed", "ed", "ed", "dd"])
+    atlas.stamp("mark", ["kk", "kk"])
     mesh = Mesh(atlas)
-    mesh.cube("spine", 7.25, -3.2, 10.25, 8.75, 8.2, 11.35, "spine")
-    mesh.cube("jewel", 7.45, 3.4, 11.2, 8.55, 5.4, 11.85, "jewel")
-    # 1.2x a 12px torso, folded down against the back instead of stuck out flat.
-    wing(mesh, "left", (8.35, 5.6, 10.9), -50, 1)
-    wing(mesh, "right", (7.65, 5.6, 10.9), 50, -1)
-    mesh.cube("kite_tail_idle", 7.6, -6.4, 10.6, 8.4, -2.6, 11.3, "tip", origin=(8.0, -2.4, 10.8), rotation=(18, 0, 0))
+    mesh.cube("clasp", 7.35, 5.55, 10.3, 8.65, 7.2, 11.0, "mark")
+    # Shoulder-blade pivots. A short Z tilt plus the downward feathers keeps them on the back.
+    feather_wing(mesh, "left", (10.2, 6.4, 10.35), -12)
+    feather_wing(mesh, "right", (5.8, 6.4, 10.35), 12)
     save_pair("kite_wings", atlas, mesh)
 
 
