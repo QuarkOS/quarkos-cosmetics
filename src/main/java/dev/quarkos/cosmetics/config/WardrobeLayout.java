@@ -20,8 +20,8 @@ public final class WardrobeLayout {
     }
 
     public static final class Palette {
-        public static final int INK = 0xF0181614;
-        public static final int PANEL = 0xE028241C;
+        public static final int INK = 0xFF181614;
+        public static final int PANEL = 0xFF28241C;
         public static final int LINE = 0xFF8A5A32;
         public static final int AMBER = 0xFFE08A3C;
         public static final int PAPER = 0xFFF4E2B0;
@@ -56,7 +56,7 @@ public final class WardrobeLayout {
             regions.add(new Rect(SETTINGS, margin, height - 70, width - margin * 2, 62));
             return regions;
         }
-        int previewW = Math.min(168, width / 5);
+        int previewW = Math.min(240, Math.max(160, width / 4));
         regions.add(new Rect(PREVIEW, margin, 34, previewW, height - 78));
         int x = margin + previewW + 8;
         int right = width - margin;

@@ -8,7 +8,8 @@
     "CosmeticLayerAccess",
     "PauseScreenMixin",
     "ClientTickMixin",
-    "CameraZoomMixin"
+    "CameraZoomMixin",
+    "InventoryPreviewAccess"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,5 +1,6 @@
 package dev.quarkos.cosmetics.mixin;
 
+import dev.quarkos.cosmetics.harness.ClientHarness;
 import net.minecraft.client.Camera;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -22,7 +23,7 @@ public abstract class CameraZoomMixin {
     @ModifyVariable(method = "getMaxZoom", at = @At("HEAD"), argsOnly = true)
     private float quarkos$portraitDistance(float zoom) {
         if (Boolean.getBoolean("quarkos_cosmetics.harness")) {
-            return 2.55f;
+            return ClientHarness.portraitDistance;
         }
         return zoom;
     }
@@ -44,6 +45,6 @@ public abstract class CameraZoomMixin {
             return;
         }
         Vec3 pos = this.position;
-        this.setPosition(pos.x, pos.y - 0.42, pos.z);
+        this.setPosition(pos.x, pos.y - ClientHarness.portraitDrop, pos.z);
     }
 }

@@ -2,26 +2,40 @@ package dev.quarkos.cosmetics.config;
 
 import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.gallery.GalleryWork;
+import dev.quarkos.cosmetics.mixin.InventoryPreviewAccess;
 import dev.quarkos.cosmetics.model.Slot;
 import dev.quarkos.cosmetics.render.ModelLibrary;
+import dev.quarkos.cosmetics.render.SkinImages;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Structured wardrobe. Regions come from {@link WardrobeLayout} so a reskin can keep the same ids. */
 public final class WardrobeScreen extends Screen {
+    private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private final Screen parent;
     private Slot slot = Slot.HAT;
+    private boolean pickedSlot;
+    private boolean loggedThumbs;
     private String selectedPacked = "";
     private String selectedGallery = "";
     private EditBox urlBox;
     private EditBox queryBox;
     private List<WardrobeLayout.Rect> regions = List.of();
+    private final List<Thumb> thumbs = new ArrayList<>();
+    private float spin = 110f;
 
     public WardrobeScreen(Screen parent) {
         super(Component.translatable("screen.quarkos_cosmetics.title"));
@@ -40,6 +54,15 @@ public final class WardrobeScreen extends Screen {
     protected void init() {
         this.regions = WardrobeLayout.regions(this.width, this.height);
         ClientSettings settings = ClientSettings.get();
+        if (!pickedSlot) {
+            for (Slot value : Slot.values()) {
+                if (!settings.equippedId(value).isBlank()) {
+                    slot = value;
+                    break;
+                }
+            }
+            pickedSlot = true;
+        }
         WardrobeLayout.Rect header = region(WardrobeLayout.HEADER);
         WardrobeLayout.Rect tabs = region(WardrobeLayout.TABS);
         WardrobeLayout.Rect list = region(WardrobeLayout.LIST);
@@ -66,20 +89,30 @@ public final class WardrobeScreen extends Screen {
             }
         }
 
-        int y = list.y();
+        thumbs.clear();
+        int cell = 44;
+        int cols = Math.max(1, list.w() / cell);
+        int index = 0;
+        String equipped = settings.equippedId(slot);
         for (ModelLibrary.Resolved resolved : ModelLibrary.packed(slot)) {
-            if (y > list.y() + list.h() - 22) {
+            int col = index % cols;
+            int row = index / cols;
+            int x = list.x() + col * cell;
+            int y = list.y() + row * cell;
+            if (y + cell > list.y() + list.h()) {
                 break;
             }
             String id = resolved.id();
-            String label = (id.equals(settings.equippedId(slot)) ? "* " : "") + resolved.name();
-            addRenderableWidget(Button.builder(Component.literal(trim(label, 28)), button -> {
+            Button button = Button.builder(Component.empty(), pressed -> {
                 selectedPacked = id;
                 settings.equip(slot, id);
                 save();
                 rebuild();
-            }).bounds(list.x(), y, list.w(), 20).build());
-            y += 22;
+            }).bounds(x, y, cell - 4, cell - 4).build();
+            button.setTooltip(Tooltip.create(Component.literal(resolved.name())));
+            addRenderableWidget(button);
+            thumbs.add(new Thumb(button, resolved.texture(), id.equals(equipped)));
+            index++;
         }
 
         addRenderableWidget(Button.builder(Component.literal("Empty slot"), button -> {
@@ -119,7 +152,7 @@ public final class WardrobeScreen extends Screen {
 
         int row = gallery.y() + 44;
         for (GalleryClient.Listed listed : GalleryWork.browse()) {
-            if (row > gallery.y() + gallery.h() - 64) {
+            if (row > gallery.y() + gallery.h() - 78) {
                 break;
             }
             Slot listedSlot = Slot.parse(listed.slot()).orElse(slot);
@@ -179,6 +212,7 @@ public final class WardrobeScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        graphics.fill(0, 0, this.width, this.height, WardrobeLayout.Palette.INK);
         for (WardrobeLayout.Rect rect : regions) {
             graphics.fill(rect.x() - 2, rect.y() - 2, rect.x() + rect.w() + 2, rect.y() + rect.h() + 2, WardrobeLayout.Palette.PANEL);
             graphics.fill(rect.x() - 2, rect.y() - 2, rect.x() + rect.w() + 2, rect.y() - 1, WardrobeLayout.Palette.LINE);
@@ -189,13 +223,70 @@ public final class WardrobeScreen extends Screen {
         graphics.drawString(this.font, "Preview", preview.x() + 4, preview.y() + 4, WardrobeLayout.Palette.MUTED, false);
         graphics.drawString(this.font, "Packed", region(WardrobeLayout.LIST).x(), region(WardrobeLayout.LIST).y() - 10, WardrobeLayout.Palette.PAPER, false);
         graphics.drawString(this.font, "Gallery", region(WardrobeLayout.GALLERY).x(), region(WardrobeLayout.GALLERY).y() - 10, WardrobeLayout.Palette.PAPER, false);
-        String status = GalleryWork.status();
-        graphics.drawString(this.font, trim(status, 72), region(WardrobeLayout.GALLERY).x(), region(WardrobeLayout.SETTINGS).y() - 12, WardrobeLayout.Palette.MUTED, false);
+        WardrobeLayout.Rect gallery = region(WardrobeLayout.GALLERY);
+        String status = trim(GalleryWork.status(), Math.max(16, gallery.w() / 6));
+        graphics.drawString(this.font, status, gallery.x(), gallery.y() + gallery.h() - 40, WardrobeLayout.Palette.MUTED, false);
+        int painted = 0;
+        for (Thumb thumb : thumbs) {
+            if (thumb.equipped) {
+                int x = thumb.button.getX();
+                int y = thumb.button.getY();
+                graphics.fill(x, y, x + thumb.button.getWidth(), y + 2, WardrobeLayout.Palette.AMBER);
+            }
+            if (thumb.paint(graphics)) {
+                painted++;
+            }
+        }
+        if (!loggedThumbs && painted > 0) {
+            loggedThumbs = true;
+            LOGGER.info("wardrobe painted {} item thumbnails", painted);
+        }
         if (this.minecraft != null && this.minecraft.player != null) {
-            InventoryScreen.renderEntityInInventoryFollowsMouse(graphics, preview.x() + 8, preview.y() + 18, preview.x() + preview.w() - 8, preview.y() + preview.h() - 8, 50, 0.0625F, mouseX, mouseY, this.minecraft.player);
+            // Start on a rear three-quarter so a back cosmetic is in frame, then keep turning.
+            spin = (spin + partialTick * 1.4f) % 360f;
+            int top = preview.y() + 18;
+            int bottom = preview.y() + preview.h() - 8;
+            int box = Math.max(24, bottom - top);
+            int scale = Math.max(22, Math.round(box * 0.36f));
+            spinPreview(graphics, preview, scale, this.minecraft.player);
         } else {
             graphics.drawString(this.font, "Join a world to preview.", preview.x() + 6, preview.y() + 28, WardrobeLayout.Palette.PAPER, false);
         }
+    }
+
+    private void spinPreview(GuiGraphics graphics, WardrobeLayout.Rect preview, int scale, net.minecraft.world.entity.LivingEntity player) {
+        int x0 = preview.x() + 6;
+        int y0 = preview.y() + 18;
+        int x1 = preview.x() + preview.w() - 6;
+        int y1 = preview.y() + preview.h() - 8;
+        graphics.fill(x0, y0, x1, y1, 0xFF100E0C);
+        //? if >=1.21.11 {
+        for (int guard = 0; guard < 8 && graphics.scissorStack.peek() != null; guard++) {
+            graphics.disableScissor();
+        }
+        var state = InventoryPreviewAccess.quarkos$extract(player);
+        if (state instanceof net.minecraft.client.renderer.entity.state.LivingEntityRenderState living) {
+            living.bodyRot = 180f + spin;
+            living.yRot = spin;
+            living.xRot = 8f;
+            float entityScale = living.scale == 0f ? 1f : living.scale;
+            living.boundingBoxWidth /= entityScale;
+            living.boundingBoxHeight /= entityScale;
+            living.scale = 1f;
+            living.shadowRadius = 0f;
+        }
+        Quaternionf camera = new Quaternionf().rotateX(0.18f);
+        Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).mul(camera);
+        Vector3f translation = new Vector3f(0f, state.boundingBoxHeight / 2f + 0.0625f, 0f);
+        graphics.submitEntityRenderState(state, scale, translation, pose, camera, x0, y0, x1, y1);
+        //?} else {
+        Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).rotateY((float) Math.toRadians(spin));
+        Quaternionf camera = new Quaternionf().rotateX(0.18f);
+        Vector3f translation = new Vector3f(0f, player.getBbHeight() / 2f + 0.0625f, 0f);
+        float x = (x0 + x1) / 2f;
+        float y = y1 - 4f;
+        InventoryScreen.renderEntityInInventory(graphics, x, y, scale, translation, pose, camera, player);
+        //?}
     }
 
     @Override
@@ -233,6 +324,62 @@ public final class WardrobeScreen extends Screen {
             case BACK -> "Back";
             case TAIL -> "Tail";
         };
+    }
+
+    private static final class Thumb {
+        private final Button button;
+        private final Identifier texture;
+        private final boolean equipped;
+        private int[] argb;
+        private int width;
+        private int height;
+
+        private Thumb(Button button, Identifier texture, boolean equipped) {
+            this.button = button;
+            this.texture = texture;
+            this.equipped = equipped;
+        }
+
+        private boolean paint(GuiGraphics graphics) {
+            ensure();
+            int dest = Math.min(32, button.getWidth() - 6);
+            if (dest < 8) {
+                return false;
+            }
+            int ox = button.getX() + (button.getWidth() - dest) / 2;
+            int oy = button.getY() + (button.getHeight() - dest) / 2 + 1;
+            graphics.fill(ox - 1, oy - 1, ox + dest + 1, oy + dest + 1, 0xFF14110E);
+            if (argb == null) {
+                return false;
+            }
+            for (int sy = 0; sy < height; sy++) {
+                int y0 = oy + sy * dest / height;
+                int y1 = oy + (sy + 1) * dest / height;
+                for (int sx = 0; sx < width; sx++) {
+                    int color = argb[sy * width + sx];
+                    if (((color >>> 24) & 255) < 16) {
+                        continue;
+                    }
+                    int x0 = ox + sx * dest / width;
+                    int x1 = ox + (sx + 1) * dest / width;
+                    graphics.fill(x0, y0, x1, Math.max(y0 + 1, y1), color | 0xFF000000);
+                }
+            }
+            return true;
+        }
+
+        private void ensure() {
+            if (argb != null) {
+                return;
+            }
+            SkinImages.Pixels pixels = SkinImages.read(texture);
+            if (pixels == null || pixels.width() <= 0 || pixels.height() <= 0 || pixels.argb().length < pixels.width() * pixels.height()) {
+                return;
+            }
+            argb = pixels.argb();
+            width = pixels.width();
+            height = pixels.height();
+        }
     }
 
     private static String trim(String value, int max) {

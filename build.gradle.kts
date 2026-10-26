@@ -127,6 +127,9 @@ tasks {
             systemProperty("quarkos_cosmetics.harness", "true")
             args("--width", "960", "--height", "540")
         }
+        if (providers.gradleProperty("wardrobeOnly").orNull == "true") {
+            systemProperty("quarkos_cosmetics.wardrobeOnly", "true")
+        }
         val display = providers.gradleProperty("display").orNull
         val xauth = providers.gradleProperty("xauth").orNull
         if (!display.isNullOrBlank()) {
