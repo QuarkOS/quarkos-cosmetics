@@ -183,6 +183,43 @@ class GalleryServerTest {
     }
 
     @Test
+    void twoClientsPublishEquipAndReadEachOther() throws Exception {
+        String ada = signIn("Ada", ADA);
+        String bea = signIn("Bea", BEA);
+
+        Response adaHat = send("POST", "/v1/cosmetics", modelBody("Straw hat", "hat"), ada);
+        assertEquals(201, adaHat.status);
+        Response beaEars = send("POST", "/v1/cosmetics", modelBody("Fox ears", "ears"), bea);
+        assertEquals(201, beaEars.status);
+        String hatId = adaHat.json.get("id").asText();
+        String earsId = beaEars.json.get("id").asText();
+
+        assertEquals(200, send("PUT", "/v1/equipment",
+                "{\"slot\":\"hat\",\"cosmeticId\":\"" + hatId + "\"}", ada).status);
+        assertEquals(200, send("PUT", "/v1/equipment",
+                "{\"slot\":\"ears\",\"cosmeticId\":\"" + earsId + "\"}", bea).status);
+
+        Response adaGear = send("GET", "/v1/equipment/" + ADA, null, null);
+        Response beaGear = send("GET", "/v1/equipment/" + BEA_HYPHEN, null, null);
+        assertEquals(200, adaGear.status);
+        assertEquals(200, beaGear.status);
+        assertEquals(hatId, adaGear.json.get("slots").get("hat").asText());
+        assertTrue(adaGear.json.get("slots").get("ears").isNull());
+        assertEquals(earsId, beaGear.json.get("slots").get("ears").asText());
+        assertTrue(beaGear.json.get("slots").get("hat").isNull());
+
+        Response hat = send("GET", "/v1/cosmetics/" + adaGear.json.get("slots").get("hat").asText(), null, null);
+        Response ears = send("GET", "/v1/cosmetics/" + beaGear.json.get("slots").get("ears").asText(), null, null);
+        assertEquals(200, hat.status);
+        assertEquals(200, ears.status);
+        assertEquals("cosmetics-model-1", hat.json.get("model").get("format").asText());
+        assertEquals("Straw hat", hat.json.get("name").asText());
+        assertEquals("ears", ears.json.get("slot").asText());
+        assertEquals("Fox ears", ears.json.get("name").asText());
+        assertEquals("cosmetics-model-1", ears.json.get("model").get("format").asText());
+    }
+
+    @Test
     void serverIdIsOneTimeAndExpires() throws Exception {
         Response challenge = send("POST", "/v1/session/challenges", null, null);
         String serverId = challenge.json.get("serverId").asText();
@@ -293,6 +330,7 @@ class GalleryServerTest {
     }
 
     private static final String ADA_HYPHEN = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    private static final String BEA_HYPHEN = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
     private record Response(int status, String raw, JsonNode json) {
     }

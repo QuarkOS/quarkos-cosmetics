@@ -8,6 +8,8 @@ A later shared backend can serve these same `/v1` routes from one store. Records
 
 The machine-readable spec is [`openapi.yaml`](openapi.yaml). It is also served at `GET /openapi.yaml`.
 
+HTTP requests are parsed by [Javalin](https://javalin.io) 7.2.4 (Apache License 2.0). Javalin embeds Eclipse Jetty 12.1.14, which is dual-licensed Apache License 2.0 or Eclipse Public License 2.0; this service uses the Apache 2.0 grant. JSON is parsed and written by [Jackson Databind](https://github.com/FasterXML/jackson-databind) 2.18.3 (Apache License 2.0), including duplicate-key rejection. SLF4J 2.0.20 (MIT) is the logging facade. Apache 2.0 and MIT both allow these libraries to ship with this MIT project. The `/v1` routes and JSON bodies are unchanged.
+
 ## Run
 
 From this directory:
@@ -56,6 +58,39 @@ galleryUrl=http://127.0.0.1:39221
 The same value can be supplied as `COSMETICS_GALLERY_URL` or `-Dcosmetics.galleryUrl=http://127.0.0.1:39221`. No path suffix. Routes start at `/v1`. `client.properties.example` is that one line.
 
 Other clients learn what a player is wearing with `GET /v1/equipment/{uuid}`. `{uuid}` is the Mojang id, hyphens optional. Responses always use the hyphenated lowercase form.
+
+## Two local clients
+
+One gallery process serves every client on the machine. Do not publish port 39221.
+
+1. From this directory, start the service and leave it running:
+
+```bash
+./gradlew run
+```
+
+The process prints `cosmetics-gallery http://127.0.0.1:39221`.
+
+2. Point each game client at that base URL. No `/v1` suffix. Both clients use the same value:
+
+```
+galleryUrl=http://127.0.0.1:39221
+```
+
+`COSMETICS_GALLERY_URL` and `-Dcosmetics.galleryUrl=http://127.0.0.1:39221` set the same thing. `client.properties.example` is that line.
+
+3. Each client signs in on its own. The access token stays in that client and is sent only to Mojang.
+
+- `POST /v1/session/challenges`
+- `POST` the returned `serverId` to `https://sessionserver.mojang.com/session/minecraft/join` with that client's access token and profile id
+- `POST /v1/session` with that client's username and the same `serverId`
+- Keep the returned Bearer token and hyphenated `uuid`
+
+4. Each client publishes with `POST /v1/cosmetics` and equips with `PUT /v1/equipment`, sending its own `Authorization: Bearer` token.
+
+5. Each client reads the other player with `GET /v1/equipment/{uuid}`. That call takes no Bearer token. For each slot that is not null, `GET /v1/cosmetics/{id}` returns the `cosmetics-model-1` model.
+
+Slots are `hat`, `ears`, `shoulder_left`, `shoulder_right`, `back`, and `tail`. A client that signs in again with the same Mojang account gets the same UUID, so the other client's selection is still at `GET /v1/equipment/{uuid}`.
 
 ## Sign in
 

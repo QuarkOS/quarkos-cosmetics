@@ -1,39 +1,35 @@
 package dev.quarkos.cosmetics.gallery;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import dev.quarkos.cosmetics.gallery.auth.MojangSessions;
 import dev.quarkos.cosmetics.gallery.auth.SessionService;
 import dev.quarkos.cosmetics.gallery.catalog.GalleryService;
 import dev.quarkos.cosmetics.gallery.catalog.ModelValidator;
 import dev.quarkos.cosmetics.gallery.store.GalleryStore;
 import dev.quarkos.cosmetics.gallery.store.StoredSession;
+import io.javalin.Javalin;
+import io.javalin.compression.CompressionStrategy;
+import io.javalin.http.Context;
+import io.javalin.http.HttpResponseException;
+import org.eclipse.jetty.http.MimeTypes;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
-import java.util.LinkedHashMap;
-import java.util.Locale;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public final class GalleryServer {
+    private static final String WROTE = "gallery.wrote";
+
     private final GalleryConfig config;
     private final Jsons json;
     private final SessionService sessions;
     private final GalleryService gallery;
     private final byte[] indexHtml;
     private final byte[] openApi;
-    private HttpServer http;
-    private ExecutorService executor;
+    private Javalin app;
 
     public GalleryServer(GalleryConfig config, GalleryStore store, MojangSessions mojang, Clock clock) throws IOException {
         this.config = config;
@@ -52,159 +48,121 @@ public final class GalleryServer {
         return server;
     }
 
-    public void start() throws IOException {
-        http = HttpServer.create(new InetSocketAddress(config.bind(), config.port()), 0);
-        http.createContext("/", this::handle);
-        executor = Executors.newFixedThreadPool(8, runnable -> {
-            Thread thread = new Thread(runnable, "gallery");
-            thread.setDaemon(true);
-            return thread;
+    public void start() {
+        int uploadCap = config.limits().maxUploadBytes();
+        app = Javalin.create(cfg -> {
+            cfg.startup.showJavalinBanner = false;
+            cfg.startup.startupWatcherEnabled = false;
+            cfg.http.generateEtags = false;
+            cfg.http.prefer405over404 = true;
+            cfg.http.strictContentTypes = false;
+            cfg.http.defaultContentType = "application/json; charset=utf-8";
+            cfg.http.maxRequestSize = Math.max(8192L, uploadCap);
+            cfg.http.compressionStrategy = CompressionStrategy.NONE;
+            cfg.router.ignoreTrailingSlashes = false;
+            cfg.router.treatMultipleSlashesAsSingleSlash = false;
+            cfg.router.caseInsensitiveRoutes = false;
+            cfg.jetty.host = config.bind();
+            cfg.jetty.port = config.port();
+
+            cfg.routes.exception(ApiException.class, (ex, ctx) -> writeJson(ctx, ex.status(), ex.body()));
+            cfg.routes.exception(Exception.class, (ex, ctx) -> {
+                ex.printStackTrace(System.err);
+                writeJson(ctx, 500, Map.of(
+                        "error", "internal",
+                        "message", "The gallery failed to handle that request."
+                ));
+            });
+            cfg.routes.error(404, ctx -> {
+                if (knownPath(ctx.path())) {
+                    writeJson(ctx, 405, Map.of(
+                            "error", "method_not_allowed",
+                            "message", "That method is not allowed on this path."
+                    ));
+                } else {
+                    writeJson(ctx, 404, Map.of("error", "not_found", "message", "No such route."));
+                }
+            });
+            cfg.routes.error(405, ctx -> writeJson(ctx, 405, Map.of(
+                    "error", "method_not_allowed",
+                    "message", "That method is not allowed on this path."
+            )));
+
+            cfg.routes.get("/", ctx -> write(ctx, 200, "text/html; charset=utf-8", indexHtml));
+            cfg.routes.get("/index.html", ctx -> write(ctx, 200, "text/html; charset=utf-8", indexHtml));
+            cfg.routes.get("/openapi.yaml", ctx -> write(ctx, 200, "application/yaml; charset=utf-8", openApi));
+            cfg.routes.get("/health", ctx -> writeJson(ctx, 200, Map.of("status", "ok", "service", "cosmetics-gallery")));
+            cfg.routes.get("/v1/info", ctx -> writeJson(ctx, 200, gallery.info()));
+            cfg.routes.post("/v1/session/challenges", this::challenges);
+            cfg.routes.post("/v1/session", ctx -> writeJson(ctx, 200, sessions.complete(jsonBody(ctx, 4096))));
+            cfg.routes.get("/v1/session", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                writeJson(ctx, 200, sessions.whoami(session));
+            });
+            cfg.routes.delete("/v1/session", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                writeJson(ctx, 200, sessions.signOut(session));
+            });
+            cfg.routes.get("/v1/cosmetics", ctx -> writeJson(ctx, 200, gallery.list(
+                    query(ctx, "q"), query(ctx, "slot"), query(ctx, "cursor"), query(ctx, "limit"))));
+            cfg.routes.post("/v1/cosmetics", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                Map<String, Object> created = gallery.publish(session, jsonBody(ctx, uploadCap));
+                ctx.header("Location", String.valueOf(created.get("href")));
+                writeJson(ctx, 201, created);
+            });
+            cfg.routes.get("/v1/cosmetics/{id}", ctx -> writeJson(ctx, 200, gallery.get(ctx.pathParam("id"))));
+            cfg.routes.post("/v1/cosmetics/{id}/reports", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                writeJson(ctx, 201, gallery.report(session, ctx.pathParam("id"), jsonBody(ctx, 8192)));
+            });
+            cfg.routes.post("/v1/cosmetics/{id}/takedown", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                writeJson(ctx, 200, gallery.takedown(session, ctx.pathParam("id"), optionalJson(ctx, 8192)));
+            });
+            cfg.routes.put("/v1/equipment", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                writeJson(ctx, 200, gallery.equip(session, jsonBody(ctx, 8192)));
+            });
+            cfg.routes.get("/v1/equipment", ctx -> {
+                StoredSession session = sessions.require(ctx.header("Authorization"));
+                writeJson(ctx, 200, gallery.equipment(session.uuid()));
+            });
+            cfg.routes.get("/v1/equipment/{uuid}", ctx -> writeJson(ctx, 200, gallery.equipment(ctx.pathParam("uuid"))));
         });
-        http.setExecutor(executor);
-        http.start();
+        app.start(config.bind(), config.port());
     }
 
     public void stop() {
-        if (http != null) {
-            http.stop(0);
-        }
-        if (executor != null) {
-            executor.shutdownNow();
+        if (app != null) {
+            app.stop();
         }
     }
 
     public int port() {
-        return http.getAddress().getPort();
+        return app.port();
     }
 
     public String baseUrl() {
         return "http://" + config.bind() + ":" + port();
     }
 
-    private void handle(HttpExchange exchange) {
-        try {
-            route(exchange);
-        } catch (ApiException ex) {
-            writeJson(exchange, ex.status(), ex.body());
-        } catch (Exception ex) {
-            ex.printStackTrace(System.err);
-            writeJson(exchange, 500, Map.of(
-                    "error", "internal",
-                    "message", "The gallery failed to handle that request."
-            ));
-        }
-    }
-
-    private void route(HttpExchange exchange) throws IOException {
-        String method = exchange.getRequestMethod().toUpperCase(Locale.ROOT);
-        String path = exchange.getRequestURI().getPath();
-        if ("GET".equals(method) && ("/".equals(path) || "/index.html".equals(path))) {
-            write(exchange, 200, "text/html; charset=utf-8", indexHtml);
-            return;
-        }
-        if ("GET".equals(method) && "/openapi.yaml".equals(path)) {
-            write(exchange, 200, "application/yaml; charset=utf-8", openApi);
-            return;
-        }
-        if ("GET".equals(method) && "/health".equals(path)) {
-            writeJson(exchange, 200, Map.of("status", "ok", "service", "cosmetics-gallery"));
-            return;
-        }
-        if ("GET".equals(method) && "/v1/info".equals(path)) {
-            writeJson(exchange, 200, gallery.info());
-            return;
-        }
-        if ("POST".equals(method) && "/v1/session/challenges".equals(path)) {
-            byte[] raw = readLimited(exchange, 4096);
-            if (raw.length > 0) {
-                if (!isJson(exchange.getRequestHeaders().getFirst("Content-Type"))) {
-                    throw new ApiException(415, "unsupported_media_type", "Send application/json.");
-                }
-                JsonNode node = json.parse(raw);
-                if (node != null && node.isObject() && (node.has("accessToken") || node.has("access_token") || node.has("password"))) {
-                    throw new ApiException(400, "access_token_rejected",
-                            "Send the Minecraft access token only to sessionserver join. This service does not accept or store it.");
-                }
-                if (node != null && (!node.isObject() || node.size() > 0)) {
-                    throw new ApiException(400, "validation_failed", "A challenge takes no fields.");
-                }
+    private void challenges(Context ctx) throws IOException {
+        byte[] raw = readLimited(ctx, 4096);
+        if (raw.length > 0) {
+            if (!isJson(ctx.contentType())) {
+                throw new ApiException(415, "unsupported_media_type", "Send application/json.");
             }
-            writeJson(exchange, 201, sessions.issueChallenge());
-            return;
-        }
-        if ("POST".equals(method) && "/v1/session".equals(path)) {
-            JsonNode body = jsonBody(exchange, 4096);
-            writeJson(exchange, 200, sessions.complete(body));
-            return;
-        }
-        if ("/v1/session".equals(path) && ("GET".equals(method) || "DELETE".equals(method))) {
-            StoredSession session = sessions.require(exchange.getRequestHeaders().getFirst("Authorization"));
-            if ("GET".equals(method)) {
-                writeJson(exchange, 200, sessions.whoami(session));
-            } else {
-                writeJson(exchange, 200, sessions.signOut(session));
+            JsonNode node = json.parse(raw);
+            if (node != null && node.isObject() && (node.has("accessToken") || node.has("access_token") || node.has("password"))) {
+                throw new ApiException(400, "access_token_rejected",
+                        "Send the Minecraft access token only to sessionserver join. This service does not accept or store it.");
             }
-            return;
-        }
-        if ("GET".equals(method) && "/v1/cosmetics".equals(path)) {
-            Map<String, String> query = query(exchange.getRequestURI());
-            writeJson(exchange, 200, gallery.list(query.get("q"), query.get("slot"), query.get("cursor"), query.get("limit")));
-            return;
-        }
-        if ("POST".equals(method) && "/v1/cosmetics".equals(path)) {
-            StoredSession session = sessions.require(exchange.getRequestHeaders().getFirst("Authorization"));
-            JsonNode body = jsonBody(exchange, config.limits().maxUploadBytes());
-            Map<String, Object> created = gallery.publish(session, body);
-            exchange.getResponseHeaders().set("Location", String.valueOf(created.get("href")));
-            writeJson(exchange, 201, created);
-            return;
-        }
-        if (path.startsWith("/v1/cosmetics/")) {
-            String rest = path.substring("/v1/cosmetics/".length());
-            if ("GET".equals(method) && !rest.contains("/")) {
-                writeJson(exchange, 200, gallery.get(rest));
-                return;
-            }
-            if ("POST".equals(method) && rest.endsWith("/reports")) {
-                String id = rest.substring(0, rest.length() - "/reports".length());
-                StoredSession session = sessions.require(exchange.getRequestHeaders().getFirst("Authorization"));
-                writeJson(exchange, 201, gallery.report(session, id, jsonBody(exchange, 8192)));
-                return;
-            }
-            if ("POST".equals(method) && rest.endsWith("/takedown")) {
-                String id = rest.substring(0, rest.length() - "/takedown".length());
-                StoredSession session = sessions.require(exchange.getRequestHeaders().getFirst("Authorization"));
-                byte[] raw = readLimited(exchange, 8192);
-                JsonNode body = raw.length == 0 ? null : json.parse(raw);
-                if (raw.length > 0 && !isJson(exchange.getRequestHeaders().getFirst("Content-Type"))) {
-                    throw new ApiException(415, "unsupported_media_type", "Send application/json.");
-                }
-                writeJson(exchange, 200, gallery.takedown(session, id, body));
-                return;
+            if (node != null && (!node.isObject() || node.size() > 0)) {
+                throw new ApiException(400, "validation_failed", "A challenge takes no fields.");
             }
         }
-        if ("PUT".equals(method) && "/v1/equipment".equals(path)) {
-            StoredSession session = sessions.require(exchange.getRequestHeaders().getFirst("Authorization"));
-            writeJson(exchange, 200, gallery.equip(session, jsonBody(exchange, 8192)));
-            return;
-        }
-        if ("GET".equals(method) && "/v1/equipment".equals(path)) {
-            StoredSession session = sessions.require(exchange.getRequestHeaders().getFirst("Authorization"));
-            writeJson(exchange, 200, gallery.equipment(session.uuid()));
-            return;
-        }
-        if ("GET".equals(method) && path.startsWith("/v1/equipment/")) {
-            String uuid = path.substring("/v1/equipment/".length());
-            if (!uuid.isBlank() && !uuid.contains("/")) {
-                writeJson(exchange, 200, gallery.equipment(uuid));
-                return;
-            }
-        }
-        if (knownPath(path)) {
-            writeJson(exchange, 405, Map.of("error", "method_not_allowed", "message", "That method is not allowed on this path."));
-            return;
-        }
-        writeJson(exchange, 404, Map.of("error", "not_found", "message", "No such route."));
+        writeJson(ctx, 201, sessions.issueChallenge());
     }
 
     private boolean knownPath(String path) {
@@ -221,12 +179,12 @@ public final class GalleryServer {
                 || path.startsWith("/v1/equipment/");
     }
 
-    private JsonNode jsonBody(HttpExchange exchange, int maxBytes) throws IOException {
-        if (!isJson(exchange.getRequestHeaders().getFirst("Content-Type"))) {
-            readLimited(exchange, maxBytes);
+    private JsonNode jsonBody(Context ctx, int maxBytes) throws IOException {
+        if (!isJson(ctx.contentType())) {
+            readLimited(ctx, maxBytes);
             throw new ApiException(415, "unsupported_media_type", "Send application/json.");
         }
-        byte[] raw = readLimited(exchange, maxBytes);
+        byte[] raw = readLimited(ctx, maxBytes);
         JsonNode node = json.parse(raw);
         if (node == null) {
             throw new ApiException(400, "validation_failed", "A JSON body is required.");
@@ -234,19 +192,23 @@ public final class GalleryServer {
         return node;
     }
 
-    private byte[] readLimited(HttpExchange exchange, int maxBytes) throws IOException {
-        String declared = exchange.getRequestHeaders().getFirst("Content-Length");
-        if (declared != null) {
-            try {
-                int length = Integer.parseInt(declared.trim());
-                if (length > maxBytes) {
-                    throw new ApiException(413, "payload_too_large", "Upload exceeds " + maxBytes + " bytes.");
-                }
-            } catch (NumberFormatException ex) {
-                throw new ApiException(400, "bad_request", "Content-Length is not a number.");
-            }
+    private JsonNode optionalJson(Context ctx, int maxBytes) throws IOException {
+        byte[] raw = readLimited(ctx, maxBytes);
+        if (raw.length == 0) {
+            return null;
         }
-        try (InputStream in = exchange.getRequestBody()) {
+        if (!isJson(ctx.contentType())) {
+            throw new ApiException(415, "unsupported_media_type", "Send application/json.");
+        }
+        return json.parse(raw);
+    }
+
+    private byte[] readLimited(Context ctx, int maxBytes) throws IOException {
+        long declared = ctx.contentLength();
+        if (declared > maxBytes) {
+            throw new ApiException(413, "payload_too_large", "Upload exceeds " + maxBytes + " bytes.");
+        }
+        try (InputStream in = ctx.bodyInputStream()) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             int read;
@@ -259,64 +221,51 @@ public final class GalleryServer {
                 out.write(buffer, 0, read);
             }
             return out.toByteArray();
+        } catch (HttpResponseException ex) {
+            if (ex.getStatus() == 413) {
+                throw new ApiException(413, "payload_too_large", "Upload exceeds " + maxBytes + " bytes.");
+            }
+            throw ex;
         }
     }
 
+    private static String query(Context ctx, String name) {
+        List<String> values = ctx.queryParams(name);
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        return values.get(values.size() - 1);
+    }
+
+    /**
+     * Jetty parses the media type. Only {@code application/json}, with UTF-8 if a charset is present.
+     */
     private static boolean isJson(String header) {
-        if (header == null) {
+        if (header == null || header.isBlank()) {
             return false;
         }
-        String[] parts = header.split(";");
-        if (!parts[0].trim().equalsIgnoreCase("application/json")) {
+        String mime = MimeTypes.getContentTypeWithoutCharset(header);
+        if (mime == null || !mime.equalsIgnoreCase("application/json")) {
             return false;
         }
-        for (int i = 1; i < parts.length; i++) {
-            String part = parts[i].trim().toLowerCase(Locale.ROOT);
-            if (part.isEmpty()) {
-                continue;
-            }
-            if (!part.equals("charset=utf-8") && !part.equals("charset=\"utf-8\"")) {
-                return false;
-            }
-        }
-        return true;
+        String charset = MimeTypes.getCharsetFromContentType(header);
+        return charset == null || charset.equalsIgnoreCase("utf-8");
     }
 
-    private static Map<String, String> query(URI uri) {
-        Map<String, String> values = new LinkedHashMap<>();
-        String raw = uri.getRawQuery();
-        if (raw == null || raw.isEmpty()) {
-            return values;
-        }
-        for (String part : raw.split("&")) {
-            int split = part.indexOf('=');
-            String key = urlDecode(split < 0 ? part : part.substring(0, split));
-            String value = urlDecode(split < 0 ? "" : part.substring(split + 1));
-            values.put(key, value);
-        }
-        return values;
+    private void writeJson(Context ctx, int status, Object body) {
+        write(ctx, status, "application/json; charset=utf-8", json.write(body));
     }
 
-    private static String urlDecode(String value) {
-        return URLDecoder.decode(value, StandardCharsets.UTF_8);
-    }
-
-    private void writeJson(HttpExchange exchange, int status, Object body) {
-        write(exchange, status, "application/json; charset=utf-8", json.write(body));
-    }
-
-    private void write(HttpExchange exchange, int status, String contentType, byte[] body) {
-        try {
-            exchange.getResponseHeaders().set("Content-Type", contentType);
-            exchange.getResponseHeaders().set("Cache-Control", "no-store");
-            exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
-            exchange.sendResponseHeaders(status, body.length);
-            try (OutputStream out = exchange.getResponseBody()) {
-                out.write(body);
-            }
-        } catch (IOException ex) {
-            System.err.println("Failed to write the gallery response.");
+    private void write(Context ctx, int status, String contentType, byte[] body) {
+        if (Boolean.TRUE.equals(ctx.attribute(WROTE))) {
+            return;
         }
+        ctx.attribute(WROTE, Boolean.TRUE);
+        ctx.status(status);
+        ctx.contentType(contentType);
+        ctx.header("Cache-Control", "no-store");
+        ctx.header("X-Content-Type-Options", "nosniff");
+        ctx.result(body);
     }
 
     private static byte[] resource(String name) throws IOException {
