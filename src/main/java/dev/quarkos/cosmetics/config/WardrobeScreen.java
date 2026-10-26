@@ -242,8 +242,6 @@ public final class WardrobeScreen extends Screen {
             LOGGER.info("wardrobe painted {} item thumbnails", painted);
         }
         if (this.minecraft != null && this.minecraft.player != null) {
-            // Start on a rear three-quarter so a back cosmetic is in frame, then keep turning.
-            spin = (spin + partialTick * 1.4f) % 360f;
             int top = preview.y() + 18;
             int bottom = preview.y() + preview.h() - 8;
             int box = Math.max(24, bottom - top);
@@ -253,6 +251,12 @@ public final class WardrobeScreen extends Screen {
         } else {
             graphics.drawString(this.font, "Join a world to preview.", preview.x() + 6, preview.y() + 28, WardrobeLayout.Palette.PAPER, false);
         }
+    }
+
+    /** Rear three-quarter. A full spin turns the wings edge-on and they read as strips down the front. */
+    private float rearYaw() {
+        spin += 0.02f;
+        return 158f + (float) Math.sin(spin) * 14f;
     }
 
     private void spinPreview(GuiGraphics graphics, WardrobeLayout.Rect preview, int scale, net.minecraft.world.entity.LivingEntity player) {
@@ -267,8 +271,9 @@ public final class WardrobeScreen extends Screen {
         }
         var state = InventoryPreviewAccess.quarkos$extract(player);
         if (state instanceof net.minecraft.client.renderer.entity.state.LivingEntityRenderState living) {
-            living.bodyRot = 180f + spin;
-            living.yRot = spin;
+            float yaw = rearYaw();
+            living.bodyRot = 180f + yaw;
+            living.yRot = yaw;
             living.xRot = 0f;
             float entityScale = living.scale == 0f ? 1f : living.scale;
             living.boundingBoxWidth /= entityScale;
@@ -281,13 +286,18 @@ public final class WardrobeScreen extends Screen {
         Vector3f translation = new Vector3f(0f, state.boundingBoxHeight / 2f + 0.0625f, 0f);
         graphics.submitEntityRenderState(state, scale, translation, pose, camera, x0, y0, x1, y1);
         //?} else {
-        Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).rotateY((float) Math.toRadians(spin));
+        Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).rotateY((float) Math.toRadians(rearYaw()));
         Quaternionf camera = new Quaternionf().rotateX(0.06f);
         Vector3f translation = new Vector3f(0f, player.getBbHeight() / 2f + 0.0625f, 0f);
         float x = (x0 + x1) / 2f;
         float y = y1 - 4f;
         InventoryScreen.renderEntityInInventory(graphics, x, y, scale, translation, pose, camera, player);
         //?}
+    }
+
+    @Override
+    public boolean isPauseScreen() {
+        return false;
     }
 
     @Override

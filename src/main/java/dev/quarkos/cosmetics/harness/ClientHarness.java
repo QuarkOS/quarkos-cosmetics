@@ -39,20 +39,24 @@ public final class ClientHarness {
     /** Third-person distance and look-down used by {@code CameraZoomMixin} while the harness is armed. */
     public static float portraitDistance = 2.55f;
     public static float portraitDrop = 0.42f;
+    /** Degrees added to the player's yaw to swing the harness camera off the back. 0 stays behind. */
+    public static float portraitOrbit;
     private static final List<Shot> SHOTS = List.of(
-            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false),
-            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false),
-            new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, true),
-            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false),
-            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false),
-            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true, false),
-            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false, false),
-            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true, false),
-            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false, false),
-            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false),
-            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false),
-            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false),
-            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false)
+            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, false),
+            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, true, 0f, false),
+            new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, true, 72f, false),
+            new Shot("kite-wings-three-quarter", Slot.BACK, "quarkos:kite_wings", false, true, 38f, false),
+            new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, false, 0f, true),
+            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
+            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, false),
+            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false),
+            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false, false, 0f, false),
+            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true, false, 0f, false),
+            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false, false, 0f, false),
+            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false, 0f, false),
+            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false, 0f, false),
+            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false, 0f, false),
+            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false, 0f, false)
     );
 
     private static List<Shot> active;
@@ -66,6 +70,8 @@ public final class ClientHarness {
     private static int screenAt = -1;
     private static boolean pairStarted;
     private static int pairShot;
+    private static int filmIndex = -1;
+    private static int filmStartTick = -1;
     private static volatile boolean pairReady;
     private static volatile boolean pairFailed;
     private static volatile String pairKey = "";
@@ -193,7 +199,7 @@ public final class ClientHarness {
             return;
         }
         Shot shot = activeShots().get(shotIndex);
-        frame(client, shot.front);
+        frame(client, shot);
         // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
         if (settledAt < 0) {
             if (ticks == 1 || ticks % 10 == 0) {
@@ -210,6 +216,10 @@ public final class ClientHarness {
             return;
         }
         if (ticks - settledAt < 40) {
+            return;
+        }
+        if (shot.film) {
+            film(client, shot);
             return;
         }
         // Flap peaks at 0.8s of a 1.6s clip, which is tick 16 of every 32.
@@ -277,16 +287,82 @@ public final class ClientHarness {
         settings.save(client.gameDirectory.toPath());
     }
 
-    private static void frame(Minecraft client, boolean front) {
-        portraitDistance = 2.55f;
-        portraitDrop = 0.42f;
-        client.options.fov().set(54);
+    private static void frame(Minecraft client, Shot shot) {
+        boolean wide = shot.spread || shot.film || shot.orbit != 0f;
+        portraitDistance = wide ? 4.8f : 2.55f;
+        portraitDrop = wide ? 0.15f : 0.42f;
+        portraitOrbit = shot.front ? 0f : shot.orbit;
+        client.options.fov().set(wide ? 50 : 54);
         client.options.hideGui = true;
-        client.options.setCameraType(front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
+        client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
         client.player.setYRot(180f);
         client.player.setYHeadRot(180f);
+        client.player.yRotO = 180f;
+        client.player.yHeadRotO = 180f;
+        client.player.setYBodyRot(180f);
+        client.player.yBodyRotO = 180f;
         client.player.setXRot(8f);
         client.setCameraEntity(client.player);
+    }
+
+    /** One flap cycle, back view, written as numbered frames for the GIF. */
+    private static void film(Minecraft client, Shot shot) {
+        int phase = Math.floorMod(client.player.tickCount, 32);
+        if (filmIndex < 0) {
+            if (phase != 0) {
+                return;
+            }
+            filmIndex = 0;
+            filmStartTick = ticks;
+            shotQueued = false;
+        }
+        if (filmStartTick >= 0 && ticks - filmStartTick > 20 * 50) {
+            LOGGER.error("flap film stalled at frame {}", filmIndex);
+            state = State.STOP;
+            return;
+        }
+        int target = filmIndex * 2;
+        if (phase != target || shotQueued) {
+            if (shotQueued) {
+                Path path = filmFrame(filmIndex);
+                try {
+                    if (Files.size(path) > 1000L) {
+                        shotQueued = false;
+                        filmIndex++;
+                        LOGGER.info("flap frame {} at phase {}", filmIndex, phase);
+                        if (filmIndex >= 16) {
+                            filmIndex = -1;
+                            shotIndex++;
+                            ticks = 0;
+                            shotQueued = false;
+                            settledAt = -1;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // The frame is still being written.
+                }
+            }
+            return;
+        }
+        Path path = filmFrame(filmIndex);
+        shotQueued = true;
+        try {
+            Files.createDirectories(path.getParent());
+        } catch (Exception e) {
+            LOGGER.error("could not create flap frames", e);
+            state = State.STOP;
+            return;
+        }
+        //? if >=1.21.11 {
+        Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    private static Path filmFrame(int index) {
+        return Path.of("/tmp/kite-flap-frames").resolve(String.format("f%02d.png", index));
     }
 
     private static void pair(Minecraft client) {
@@ -301,6 +377,7 @@ public final class ClientHarness {
         // Looser than the single-cosmetic portraits so the lantern finial stays inside the frame.
         portraitDistance = 3.4f;
         portraitDrop = 0.05f;
+        portraitOrbit = 0f;
         client.options.fov().set(62);
         client.options.hideGui = true;
         if (ticks % 20 == 0) {
@@ -346,6 +423,7 @@ public final class ClientHarness {
             return;
         }
         client.options.hideGui = true;
+        portraitOrbit = 0f;
         if (client.options.guiScale().get() != 1) {
             client.setScreen(null);
             client.options.guiScale().set(1);
@@ -387,7 +465,12 @@ public final class ClientHarness {
             screenAt = ticks;
             return;
         }
-        if (ticks - screenAt < 30) {
+        if (ticks - screenAt < 8) {
+            return;
+        }
+        // Open wings, so the rear three-quarter shows the fan rather than the folded edge.
+        int phase = Math.floorMod(client.player.tickCount, 32);
+        if (phase < 15 || phase > 17) {
             return;
         }
         shootWhenReady(client, "wardrobe", () -> {
@@ -592,6 +675,6 @@ public final class ClientHarness {
         STOP
     }
 
-    private record Shot(String name, Slot slot, String id, boolean front, boolean spread) {
+    private record Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film) {
     }
 }

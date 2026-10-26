@@ -23,7 +23,7 @@ public final class MeshDraw {
             float oz = element.origin()[2] - 8f;
             local.translate(ox, oy, oz);
             local.rotateXYZ(
-                    (float) Math.toRadians(element.rotation()[0] + GeckoMotion.idleDegrees(element.name(), age)),
+                    (float) Math.toRadians(element.rotation()[0] + GeckoMotion.idleDegrees(element.name(), age) + GeckoMotion.flapPitch(element.name(), age)),
                     (float) Math.toRadians(element.rotation()[1]),
                     (float) Math.toRadians(element.rotation()[2] + GeckoMotion.flapDegrees(element.name(), age)));
             local.translate(-ox, -oy, -oz);
@@ -83,6 +83,15 @@ public final class MeshDraw {
         vertex(consumer, view, x1, y1, z1, u1, v1, light, normal);
         vertex(consumer, view, x2, y2, z2, u1, v0, light, normal);
         vertex(consumer, view, x3, y3, z3, u0, v0, light, normal);
+        // 1.21.11 eyes() culls. The wing has to read from both sides, at the texture color.
+        //? if >=1.21.11 {
+        if (element.name() != null && element.name().contains("flap")) {
+            vertex(consumer, view, x0, y0, z0, u0, v1, light, normal);
+            vertex(consumer, view, x3, y3, z3, u0, v0, light, normal);
+            vertex(consumer, view, x2, y2, z2, u1, v0, light, normal);
+            vertex(consumer, view, x1, y1, z1, u1, v1, light, normal);
+        }
+        //?}
     }
 
     public static void voxel(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light,

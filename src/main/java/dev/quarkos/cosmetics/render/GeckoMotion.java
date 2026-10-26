@@ -23,13 +23,45 @@ public final class GeckoMotion {
         if (CosmeticModel.motion(name) != CosmeticModel.Motion.FLAP) {
             return 0f;
         }
-        boolean right = name.toLowerCase(Locale.ROOT).contains("right");
-        Float sampled = sample(right ? "wing_right" : "wing_left", age, true);
+        String key = name.toLowerCase(Locale.ROOT);
+        boolean right = key.contains("right");
+        Float sampled = sample(flapBone(key, right), age, true);
         if (sampled != null) {
             return sampled;
         }
         float sign = right ? -1f : 1f;
         return sign * (float) Math.sin(age * 0.28f) * 20f;
+    }
+
+    /** Spread-only pitch from the same flap clip. Idle stays at the folded element pitch. */
+    public static float flapPitch(String name, float age) {
+        if (CosmeticModel.motion(name) != CosmeticModel.Motion.FLAP) {
+            return 0f;
+        }
+        String key = name.toLowerCase(Locale.ROOT);
+        Float sampled = sample(flapBone(key, key.contains("right")), age, false);
+        return sampled == null ? 0f : sampled;
+    }
+
+    /** Leading edge and each feather are their own bone, so the flap can fan them. */
+    private static String flapBone(String key, boolean right) {
+        String side = right ? "wing_right" : "wing_left";
+        if (key.contains("lead")) {
+            return side + "_lead";
+        }
+        if (key.contains("feather_d")) {
+            return side + "_d";
+        }
+        if (key.contains("feather_c")) {
+            return side + "_c";
+        }
+        if (key.contains("feather_b")) {
+            return side + "_b";
+        }
+        if (key.contains("feather_a")) {
+            return side + "_a";
+        }
+        return side;
     }
 
     public static float idleDegrees(String name, float age) {
