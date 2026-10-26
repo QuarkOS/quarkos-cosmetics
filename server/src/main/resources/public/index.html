@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cosmetics gallery</title>
+</head>
+<body>
+<h1>Cosmetics gallery</h1>
+<p>Free for everyone. Sign-in is a one-time Mojang join issued by this service. This page never asks for an access token. It is an unstyled API console.</p>
+<p>Other players are loaded by UUID. There are no likes, follows, or catalog imports.</p>
+
+<h2>Service</h2>
+<pre id="info">Loading…</pre>
+
+<h2>Gallery</h2>
+<button type="button" id="refresh">Refresh</button>
+<label>Search <input id="q"></label>
+<label>Slot
+<select id="filter-slot">
+<option value="">any</option>
+<option>hat</option>
+<option>shoulder_left</option>
+<option>shoulder_right</option>
+<option>back</option>
+<option>tail</option>
+</select>
+</label>
+<ul id="list"></ul>
+
+<h2>Sign in</h2>
+<p>Request a serverId, then from the game client POST it to https://sessionserver.mojang.com/session/minecraft/join with the Minecraft access token and profile id. Then submit the username and that serverId here.</p>
+<button type="button" id="challenge">Request serverId</button>
+<label>Username <input id="username" autocomplete="off"></label>
+<label>serverId <input id="server-id" size="40" autocomplete="off"></label>
+<button type="button" id="verify">Verify join</button>
+<button type="button" id="whoami">Who am I</button>
+<button type="button" id="signout">Sign out</button>
+<p>Gallery session token (not a Minecraft access token)</p>
+<pre id="token"></pre>
+
+<h2>Publish</h2>
+<label>Name <input id="name" value="Straw hat"></label>
+<label>Description <input id="description" value="A wide brim."></label>
+<label>Slot
+<select id="slot">
+<option>hat</option>
+<option>shoulder_left</option>
+<option>shoulder_right</option>
+<option>back</option>
+<option>tail</option>
+</select>
+</label>
+<label>Model
+<textarea id="model" rows="14" cols="80">{
+  "format": "cosmetics-model-1",
+  "elements": [
+    {
+      "name": "brim",
+      "from": [2, 8, 2],
+      "to": [14, 10, 14],
+      "faces": {
+        "north": {},
+        "south": {},
+        "east": {},
+        "west": {},
+        "up": {},
+        "down": {}
+      }
+    }
+  ]
+}</textarea>
+</label>
+<button type="button" id="publish">Publish</button>
+
+<h2>Equip</h2>
+<label>Slot
+<select id="equip-slot">
+<option>hat</option>
+<option>shoulder_left</option>
+<option>shoulder_right</option>
+<option>back</option>
+<option>tail</option>
+</select>
+</label>
+<label>Cosmetic id <input id="equip-id" size="40"></label>
+<label>Clear <input type="checkbox" id="equip-clear"></label>
+<button type="button" id="equip">Save selection</button>
+<label>Look up UUID <input id="lookup-uuid" size="40"></label>
+<button type="button" id="lookup">Load equipment</button>
+
+<h2>Report</h2>
+<label>Cosmetic id <input id="report-id" size="40"></label>
+<label>Reason
+<select id="reason">
+<option>spam</option>
+<option>stolen</option>
+<option>inappropriate</option>
+<option>malicious</option>
+<option>other</option>
+</select>
+</label>
+<label>Detail <input id="detail"></label>
+<button type="button" id="report">Report</button>
+
+<h2>Takedown</h2>
+<label>Cosmetic id <input id="takedown-id" size="40"></label>
+<label>Note <input id="note"></label>
+<button type="button" id="takedown">Take down</button>
+
+<h2>Last response</h2>
+<pre id="out"></pre>
+
+<script>
+var token = "";
+
+function show(status, text) {
+  document.getElementById("out").textContent = status + "\n" + text;
+}
+
+function api(method, path, body, auth) {
+  var headers = {};
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (auth && token) {
+    headers.Authorization = "Bearer " + token;
+  }
+  return fetch(path, {
+    method: method,
+    headers: headers,
+    body: body === undefined ? undefined : JSON.stringify(body)
+  }).then(function (res) {
+    return res.text().then(function (text) {
+      show(method + " " + path + " -> " + res.status, text);
+      var parsed = null;
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch (e) {
+        parsed = null;
+      }
+      return { status: res.status, json: parsed, text: text };
+    });
+  }).catch(function (err) {
+    show(method + " " + path, String(err));
+  });
+}
+
+function loadInfo() {
+  api("GET", "/v1/info").then(function (res) {
+    if (res && res.json) {
+      document.getElementById("info").textContent = JSON.stringify(res.json, null, 2);
+    }
+  });
+}
+
+function loadGallery() {
+  var path = "/v1/cosmetics?limit=20";
+  var q = document.getElementById("q").value.trim();
+  var slot = document.getElementById("filter-slot").value;
+  if (q) path += "&q=" + encodeURIComponent(q);
+  if (slot) path += "&slot=" + encodeURIComponent(slot);
+  api("GET", path).then(function (res) {
+    var list = document.getElementById("list");
+    list.textContent = "";
+    var items = res && res.json && res.json.items ? res.json.items : [];
+    if (!items.length) {
+      var empty = document.createElement("li");
+      empty.textContent = "No public cosmetics.";
+      list.appendChild(empty);
+      return;
+    }
+    items.forEach(function (item) {
+      var li = document.createElement("li");
+      li.textContent = item.name + " · " + item.slot + " · " + item.id + " · " + (item.author ? item.author.uuid : "");
+      list.appendChild(li);
+    });
+  });
+}
+
+document.getElementById("refresh").onclick = loadGallery;
+document.getElementById("challenge").onclick = function () {
+  api("POST", "/v1/session/challenges").then(function (res) {
+    if (res && res.json && res.json.serverId) {
+      document.getElementById("server-id").value = res.json.serverId;
+    }
+  });
+};
+document.getElementById("verify").onclick = function () {
+  api("POST", "/v1/session", {
+    username: document.getElementById("username").value.trim(),
+    serverId: document.getElementById("server-id").value.trim()
+  }).then(function (res) {
+    if (res && res.json && res.json.token) {
+      token = res.json.token;
+      document.getElementById("token").textContent = token;
+    }
+  });
+};
+document.getElementById("whoami").onclick = function () {
+  api("GET", "/v1/session", undefined, true);
+};
+document.getElementById("signout").onclick = function () {
+  api("DELETE", "/v1/session", undefined, true).then(function () {
+    token = "";
+    document.getElementById("token").textContent = "";
+  });
+};
+document.getElementById("publish").onclick = function () {
+  var model;
+  try {
+    model = JSON.parse(document.getElementById("model").value);
+  } catch (e) {
+    show("model", "Model text is not JSON.");
+    return;
+  }
+  api("POST", "/v1/cosmetics", {
+    name: document.getElementById("name").value,
+    description: document.getElementById("description").value,
+    slot: document.getElementById("slot").value,
+    model: model
+  }, true).then(function (res) {
+    if (res && res.json && res.json.id) {
+      document.getElementById("equip-id").value = res.json.id;
+      document.getElementById("takedown-id").value = res.json.id;
+    }
+    loadGallery();
+  });
+};
+document.getElementById("equip").onclick = function () {
+  api("PUT", "/v1/equipment", {
+    slot: document.getElementById("equip-slot").value,
+    cosmeticId: document.getElementById("equip-clear").checked ? null : document.getElementById("equip-id").value.trim()
+  }, true);
+};
+document.getElementById("lookup").onclick = function () {
+  var uuid = document.getElementById("lookup-uuid").value.trim();
+  api("GET", "/v1/equipment/" + encodeURIComponent(uuid));
+};
+document.getElementById("report").onclick = function () {
+  api("POST", "/v1/cosmetics/" + encodeURIComponent(document.getElementById("report-id").value.trim()) + "/reports", {
+    reason: document.getElementById("reason").value,
+    detail: document.getElementById("detail").value
+  }, true).then(loadGallery);
+};
+document.getElementById("takedown").onclick = function () {
+  api("POST", "/v1/cosmetics/" + encodeURIComponent(document.getElementById("takedown-id").value.trim()) + "/takedown", {
+    note: document.getElementById("note").value
+  }, true).then(loadGallery);
+};
+
+loadInfo();
+loadGallery();
+</script>
+</body>
+</html>
