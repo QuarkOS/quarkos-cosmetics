@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.quarkos.cosmetics.forge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "WingElytraMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
