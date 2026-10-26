@@ -35,18 +35,19 @@ import java.util.UUID;
 public final class ClientHarness {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private static final List<Shot> SHOTS = List.of(
-            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true),
-            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false),
-            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true),
-            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false),
-            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true),
-            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false),
-            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true),
-            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false),
-            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true),
-            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false),
-            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true),
-            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false)
+            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false),
+            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false),
+            new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, true),
+            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false),
+            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false),
+            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true, false),
+            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false, false),
+            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true, false),
+            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false, false),
+            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false),
+            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false),
+            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false),
+            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false)
     );
 
     private static State state = State.WAIT_TITLE;
@@ -57,6 +58,7 @@ public final class ClientHarness {
     private static int shotIndex;
     private static int settledAt = -1;
     private static boolean pairStarted;
+    private static int pairShot;
     private static volatile boolean pairReady;
     private static volatile boolean pairFailed;
     private static volatile String pairKey = "";
@@ -193,6 +195,10 @@ public final class ClientHarness {
         if (ticks - settledAt < 40) {
             return;
         }
+        // The flap clip is 1.6s. Age is in ticks, so the open keyframe at 0.8s lands every 32 ticks.
+        if (shot.flap && Math.floorMod(client.player.tickCount, 32) != 16) {
+            return;
+        }
         shootWhenReady(client, shot.name, () -> {
             shotIndex++;
             ticks = 0;
@@ -217,7 +223,7 @@ public final class ClientHarness {
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
-        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
+        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
         client.player.connection.sendCommand("item replace entity @s armor.chest with air");
         client.player.connection.sendCommand("item replace entity @s armor.legs with air");
@@ -239,10 +245,16 @@ public final class ClientHarness {
 
     private static void frame(Minecraft client, boolean front) {
         client.options.hideGui = true;
+        System.setProperty("quarkos_cosmetics.orbit", "0");
         client.options.setCameraType(front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
         client.player.setYRot(180f);
+        client.player.yRotO = 180f;
+        client.player.setYBodyRot(180f);
+        client.player.yBodyRotO = 180f;
         client.player.setYHeadRot(180f);
-        client.player.setXRot(8f);
+        client.player.yHeadRotO = 180f;
+        client.player.setXRot(0f);
+        client.player.xRotO = 0f;
         client.setCameraEntity(client.player);
     }
 
@@ -256,8 +268,10 @@ public final class ClientHarness {
             publishAda(client);
         }
         client.options.hideGui = true;
-        client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-        client.player.connection.sendCommand("tp @s 0.5 90 0.5 180 0");
+        boolean front = pairShot > 0;
+        System.setProperty("quarkos_cosmetics.orbit", front ? "58" : "0");
+        client.options.setCameraType(front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
+        client.player.connection.sendCommand("tp @s 48 70 48 180 0");
         if (!pairReady) {
             if (pairFailed || ticks > 20 * 40) {
                 LOGGER.error("two-client gallery setup failed");
@@ -265,11 +279,18 @@ public final class ClientHarness {
             }
             return;
         }
-        anchorGuest(client);
+        anchorGuest(client, front);
         if (ticks < 50) {
             return;
         }
-        shootWhenReady(client, "two-client", () -> {
+        String name = front ? "two-client-front" : "two-client";
+        shootWhenReady(client, name, () -> {
+            if (pairShot == 0) {
+                pairShot = 1;
+                ticks = 30;
+                shotQueued = false;
+                return;
+            }
             state = State.STOP;
             ticks = 0;
         });
@@ -337,7 +358,7 @@ public final class ClientHarness {
         worker.start();
     }
 
-    private static void anchorGuest(Minecraft client) {
+    private static void anchorGuest(Minecraft client, boolean front) {
         if (pairId == null || client.level == null) {
             return;
         }
@@ -348,12 +369,16 @@ public final class ClientHarness {
             LOGGER.info("spawned gallery player Ada {}", pairKey);
         }
         guest.setPos(0.5, 101.0, 0.5);
+        float body = 180f;
+        float head = 180f;
         guest.setYRot(180f);
-        guest.setXRot(8f);
-        guest.setYHeadRot(180f);
         guest.yRotO = 180f;
-        guest.xRotO = 8f;
-        guest.yHeadRotO = 180f;
+        guest.setYBodyRot(body);
+        guest.yBodyRotO = body;
+        guest.setYHeadRot(head);
+        guest.yHeadRotO = head;
+        guest.setXRot(0f);
+        guest.xRotO = 0f;
         guest.xo = guest.getX();
         guest.yo = guest.getY();
         guest.zo = guest.getZ();
@@ -469,6 +494,6 @@ public final class ClientHarness {
         STOP
     }
 
-    private record Shot(String name, Slot slot, String id, boolean front) {
+    private record Shot(String name, Slot slot, String id, boolean front, boolean flap) {
     }
 }

@@ -159,7 +159,15 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         }
         exclude("fabric.mod.json")
         exclude("pack.mcmeta")
-        from(forgePack)
+        val packText = node.packMeta
+        doLast {
+            val dest = destinationDir
+            dest.resolve("pack.mcmeta").writeText(packText)
+            // This Mixin build's Forge agent ignores mods.toml, so the config has to be on the manifest.
+            val manifest = dest.resolve("META-INF/MANIFEST.MF")
+            manifest.parentFile.mkdirs()
+            manifest.writeText("Manifest-Version: 1.0\r\nMixinConfigs: quarkos_cosmetics.mixins.json\r\n\r\n")
+        }
     }
 
     tasks.withType<JavaExec>().configureEach {
@@ -181,6 +189,8 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         if (!xauth.isNullOrBlank()) {
             environment("XAUTHORITY", xauth)
         }
+        environment("vblank_mode", "0")
+        environment("__GL_SYNC_TO_VBLANK", "0")
         if (name == "runClient") {
             doFirst {
                 val dir = workingDir
