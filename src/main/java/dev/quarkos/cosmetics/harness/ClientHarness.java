@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -54,6 +55,7 @@ public final class ClientHarness {
             new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false)
     );
 
+    private static List<Shot> active;
     private static State state = State.WAIT_TITLE;
     private static int ticks;
     private static boolean armed;
@@ -177,13 +179,20 @@ public final class ClientHarness {
             }
             return;
         }
-        if (shotIndex >= SHOTS.size()) {
-            state = State.PAIR;
+        if (shotIndex >= activeShots().size()) {
+            String only = System.getProperty("quarkos_cosmetics.only", "");
+            if (!only.isBlank()) {
+                state = only.contains("wardrobe") ? State.WARDROBE : State.STOP;
+            } else {
+                state = State.PAIR;
+            }
             ticks = 0;
             shotQueued = false;
+            settledAt = -1;
+            screenAt = -1;
             return;
         }
-        Shot shot = SHOTS.get(shotIndex);
+        Shot shot = activeShots().get(shotIndex);
         frame(client, shot.front);
         // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
         if (settledAt < 0) {
@@ -217,6 +226,20 @@ public final class ClientHarness {
             settledAt = -1;
             state = State.SHOTS;
         });
+    }
+
+    private static List<Shot> activeShots() {
+        if (active == null) {
+            String only = System.getProperty("quarkos_cosmetics.only", "");
+            if (only.isBlank()) {
+                active = SHOTS;
+            } else {
+                Set<String> names = Set.of(only.split(","));
+                active = SHOTS.stream().filter(shot -> names.contains(shot.name())).toList();
+                LOGGER.info("harness shot filter {}", active.stream().map(Shot::name).toList());
+            }
+        }
+        return active;
     }
 
     private static void prepare(Minecraft client, Shot shot) {

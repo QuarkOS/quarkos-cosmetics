@@ -130,6 +130,10 @@ tasks {
         if (providers.gradleProperty("wardrobeOnly").orNull == "true") {
             systemProperty("quarkos_cosmetics.wardrobeOnly", "true")
         }
+        val only = providers.gradleProperty("only").orNull
+        if (!only.isNullOrBlank()) {
+            systemProperty("quarkos_cosmetics.only", only)
+        }
         val display = providers.gradleProperty("display").orNull
         val xauth = providers.gradleProperty("xauth").orNull
         if (!display.isNullOrBlank()) {

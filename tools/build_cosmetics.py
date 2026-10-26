@@ -487,17 +487,18 @@ def build_bell() -> None:
     save_pair("copper_bell", atlas, mesh)
 
 
-def feather_wing(mesh: Mesh, side: str, origin: tuple[float, float, float], tilt: float) -> None:
-    """A narrow feathered wing. Outward distance is small so the rest pose hugs the back.
+def feather_wing(mesh: Mesh, side: str, origin: tuple[float, float, float]) -> None:
+    """One spread kite, authored in the pose the mid-flap frame actually shows.
 
-    Shared origin keeps every strip on one flap bone. Negative pitch lifts the tips off
-    the torso; yaw fans the trailing edge backward instead of sideways.
+    Every plate shares a zero rotation, so the broad face points at a back camera
+    and a later Z flap spins the whole wing as one rigid shape. The sail, coverts,
+    primaries, leading edge, and rachis overlap into a single tapered membrane.
     """
     direction = 1.0 if side == "left" else -1.0
     ox, oy, oz = origin
     bone = f"wing_{side}_flap"
 
-    def box(suffix: str, x0: float, y0: float, z0: float, x1: float, y1: float, z1: float, tile: str, yaw: float = 0.0, pitch: float = 0.0) -> None:
+    def box(suffix: str, x0: float, y0: float, z0: float, x1: float, y1: float, z1: float, tile: str) -> None:
         mesh.cube(
             f"{bone}_{suffix}",
             ox + direction * x0,
@@ -508,19 +509,29 @@ def feather_wing(mesh: Mesh, side: str, origin: tuple[float, float, float], tilt
             oz + z1,
             tile,
             origin=origin,
-            rotation=(pitch, -direction * yaw, tilt),
+            rotation=(0, 0, 0),
         )
 
-    box("covert_a", 0.15, -2.6, 0.02, 2.05, 0.45, 0.36, "covert", yaw=10, pitch=-4)
-    box("covert_b", 0.55, -5.4, 0.08, 2.45, -2.1, 0.4, "covert", yaw=16, pitch=-6)
-    box("primary_a", 0.3, -11.6, 0.18, 1.85, -4.0, 0.5, "feather", yaw=8, pitch=-8)
-    box("primary_b", 1.35, -14.0, 0.26, 2.85, -5.2, 0.58, "feather", yaw=18, pitch=-10)
-    box("primary_c", 2.15, -12.4, 0.34, 3.45, -6.0, 0.64, "feather", yaw=26, pitch=-12)
-    box("tip", 2.7, -14.6, 0.4, 3.7, -9.0, 0.68, "feather", yaw=32, pitch=-14)
-    box("lead_root", 1.9, -3.8, 0.46, 3.15, 0.65, 0.86, "leading", yaw=6, pitch=-4)
-    box("lead_mid", 2.45, -8.4, 0.5, 3.4, -3.3, 0.82, "leading", yaw=14, pitch=-6)
-    box("lead_tip", 2.9, -13.8, 0.52, 3.5, -7.8, 0.74, "leading", yaw=22, pitch=-8)
-    box("rachis", 1.15, -13.6, 0.6, 1.55, 0.3, 0.88, "rachis", yaw=12, pitch=-6)
+    # Membrane. Overlaps are wide on purpose so the outline cannot split.
+    box("sail_a", 0.10, -2.40, 0.04, 4.70, 2.80, 0.26, "feather")
+    box("sail_b", 3.30, -3.10, 0.06, 7.90, 2.20, 0.28, "feather")
+    box("sail_c", 6.50, -2.60, 0.08, 10.50, 1.20, 0.30, "feather")
+    box("sail_d", 8.70, -1.90, 0.10, 11.30, 0.40, 0.30, "feather")
+    box("sail_e", 0.20, -3.50, 0.07, 4.30, -0.50, 0.28, "feather")
+    # Coverts sit on the leading half. They stay inside the sail's outline.
+    box("covert_a", 0.25, 1.05, 0.28, 4.50, 3.30, 0.48, "covert")
+    box("covert_b", 3.15, 0.45, 0.30, 7.50, 2.50, 0.50, "covert")
+    box("covert_c", 6.10, -0.40, 0.32, 9.90, 1.45, 0.50, "covert")
+    # Primaries lengthen the trailing edge and overlap each other and the sail.
+    box("primary_a", 0.30, -4.20, 0.26, 4.00, -1.15, 0.46, "feather")
+    box("primary_b", 2.80, -4.40, 0.28, 6.70, -1.45, 0.48, "feather")
+    box("primary_c", 5.50, -3.75, 0.30, 8.90, -1.15, 0.48, "feather")
+    box("primary_d", 7.90, -2.75, 0.32, 10.90, -0.45, 0.46, "feather")
+    # Tapered leading edge and the rachis, still on the same plane.
+    box("lead_root", 0.20, 2.10, 0.46, 4.10, 3.55, 0.70, "leading")
+    box("lead_mid", 3.15, 1.10, 0.48, 7.30, 2.75, 0.70, "leading")
+    box("lead_tip", 6.30, -0.20, 0.50, 10.70, 1.35, 0.68, "leading")
+    box("rachis", 0.40, -0.40, 0.52, 10.70, 0.34, 0.74, "rachis")
 
 
 def build_wings() -> None:
@@ -565,9 +576,9 @@ def build_wings() -> None:
     atlas.stamp("mark", ["kk", "kk"])
     mesh = Mesh(atlas)
     mesh.cube("clasp", 7.35, 5.55, 10.3, 8.65, 7.2, 11.0, "mark")
-    # Shoulder-blade pivots. A short Z tilt plus the downward feathers keeps them on the back.
-    feather_wing(mesh, "left", (10.2, 6.4, 10.35), -12)
-    feather_wing(mesh, "right", (5.8, 6.4, 10.35), 12)
+    # Shoulder-blade pivots. The mesh is the open kite; the flap clip folds it.
+    feather_wing(mesh, "left", (9.20, 6.60, 10.48))
+    feather_wing(mesh, "right", (6.80, 6.60, 10.48))
     save_pair("kite_wings", atlas, mesh)
 
 

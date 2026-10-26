@@ -247,7 +247,8 @@ public final class WardrobeScreen extends Screen {
             int top = preview.y() + 18;
             int bottom = preview.y() + preview.h() - 8;
             int box = Math.max(24, bottom - top);
-            int scale = Math.max(22, Math.round(box * 0.36f));
+            // Leave a clear margin above the head and below the feet at every turn.
+            int scale = Math.max(18, Math.round(box * 0.24f));
             spinPreview(graphics, preview, scale, this.minecraft.player);
         } else {
             graphics.drawString(this.font, "Join a world to preview.", preview.x() + 6, preview.y() + 28, WardrobeLayout.Palette.PAPER, false);
@@ -268,20 +269,20 @@ public final class WardrobeScreen extends Screen {
         if (state instanceof net.minecraft.client.renderer.entity.state.LivingEntityRenderState living) {
             living.bodyRot = 180f + spin;
             living.yRot = spin;
-            living.xRot = 8f;
+            living.xRot = 0f;
             float entityScale = living.scale == 0f ? 1f : living.scale;
             living.boundingBoxWidth /= entityScale;
             living.boundingBoxHeight /= entityScale;
             living.scale = 1f;
             living.shadowRadius = 0f;
         }
-        Quaternionf camera = new Quaternionf().rotateX(0.18f);
+        Quaternionf camera = new Quaternionf().rotateX(0.06f);
         Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).mul(camera);
         Vector3f translation = new Vector3f(0f, state.boundingBoxHeight / 2f + 0.0625f, 0f);
         graphics.submitEntityRenderState(state, scale, translation, pose, camera, x0, y0, x1, y1);
         //?} else {
         Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).rotateY((float) Math.toRadians(spin));
-        Quaternionf camera = new Quaternionf().rotateX(0.18f);
+        Quaternionf camera = new Quaternionf().rotateX(0.06f);
         Vector3f translation = new Vector3f(0f, player.getBbHeight() / 2f + 0.0625f, 0f);
         float x = (x0 + x1) / 2f;
         float y = y1 - 4f;
