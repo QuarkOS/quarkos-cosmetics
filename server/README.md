@@ -149,7 +149,7 @@ If a request includes `accessToken`, `access_token`, or `password`, the response
 }
 ```
 
-Slots are `hat`, `shoulder_left`, `shoulder_right`, `back`, and `tail`. `back` is wings or bling. The author stored on the cosmetic is the session UUID.
+Slots are `hat`, `ears`, `shoulder_left`, `shoulder_right`, `back`, and `tail`. `back` is wings or bling. The author stored on the cosmetic is the session UUID.
 
 `201` returns the summary and a `Location` of `/v1/cosmetics/{id}`. The id is 32 hex characters.
 

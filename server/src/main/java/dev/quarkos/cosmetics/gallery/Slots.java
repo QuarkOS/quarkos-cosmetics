@@ -10,6 +10,7 @@ import java.util.Set;
 public final class Slots {
     public static final List<String> ALL = List.of(
             "hat",
+            "ears",
             "shoulder_left",
             "shoulder_right",
             "back",

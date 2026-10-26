@@ -63,6 +63,7 @@ class GalleryServerTest {
         assertTrue(info.json.get("free").asBoolean());
         assertEquals("uuid", info.json.get("playerKey").asText());
         assertEquals("hat", info.json.get("slots").get(0).asText());
+        assertEquals("ears", info.json.get("slots").get(1).asText());
         assertFalse(info.json.get("slots").toString().contains("cape"));
 
         Response html = send("GET", "/", null, null);
@@ -72,6 +73,7 @@ class GalleryServerTest {
         assertTrue(html.raw.contains("/v1/equipment"));
         assertTrue(html.raw.contains("/reports"));
         assertTrue(html.raw.contains("/takedown"));
+        assertTrue(html.raw.contains(">ears</option>"));
         assertFalse(html.raw.toLowerCase().contains("<style"));
         assertFalse(html.raw.contains("accessToken"));
 
@@ -109,6 +111,10 @@ class GalleryServerTest {
         Response wings = send("POST", "/v1/cosmetics", modelBody("Paper wings", "back"), ada);
         assertEquals(201, wings.status);
         String wingId = wings.json.get("id").asText();
+
+        Response ears = send("POST", "/v1/cosmetics", modelBody("Fox ears", "ears"), ada);
+        assertEquals(201, ears.status);
+        assertEquals("ears", ears.json.get("slot").asText());
 
         Response listed = send("GET", "/v1/cosmetics?slot=hat&q=straw", null, null);
         assertEquals(200, listed.status);
