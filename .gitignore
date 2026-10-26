@@ -20,3 +20,6 @@ replay_*.log
 *.jfr
 .stonecutter/
 agent-tools/
+versions/
+forge/src/
+forge/versions/

@@ -15,6 +15,10 @@ repositories {
         forRepository { maven("https://repo.unascribed.com") { name = "Unascribed" } }
         filter { includeGroup("com.unascribed") }
     }
+    exclusiveContent {
+        forRepository { maven("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/") { name = "GeckoLib" } }
+        filter { includeGroup("software.bernie.geckolib") }
+    }
 }
 
 dependencies {
@@ -24,6 +28,16 @@ dependencies {
     modImplementation("net.fabricmc.fabric-api:fabric-api:${sc.properties.get<String>("deps.fabric_api")}")
     modCompileOnly("maven.modrinth:modmenu:${sc.properties.get<String>("deps.modmenu")}")
     compileOnly("com.unascribed:ears-api:1.4.5")
+    val geckoVersion = if (sc.current.version == "1.21.1") "4.9.3" else "5.4.5"
+    modImplementation("software.bernie.geckolib:geckolib-fabric-${sc.current.version}:$geckoVersion")
+
+    val jackson = "2.18.3"
+    modImplementation("com.fasterxml.jackson.core:jackson-databind:$jackson")
+    modImplementation("com.fasterxml.jackson.core:jackson-core:$jackson")
+    modImplementation("com.fasterxml.jackson.core:jackson-annotations:$jackson")
+    include("com.fasterxml.jackson.core:jackson-databind:$jackson")
+    include("com.fasterxml.jackson.core:jackson-core:$jackson")
+    include("com.fasterxml.jackson.core:jackson-annotations:$jackson")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -50,6 +64,17 @@ java {
     }
 }
 
+val chiseledMain = layout.buildDirectory.dir("generated/stonecutter/main")
+gradle.projectsEvaluated {
+    val main = sourceSets.named("main").get()
+    val generated = chiseledMain.get()
+    main.java.setSrcDirs(listOf(generated.dir("java").asFile))
+    main.resources.setSrcDirs(listOf(generated.dir("resources").asFile))
+}
+tasks.named("compileJava") { dependsOn("stonecutterGenerate") }
+tasks.named("processResources") { dependsOn("stonecutterGenerate") }
+tasks.named("compileTestJava") { dependsOn("stonecutterGenerate") }
+
 val writePack = tasks.register("writePackMeta") {
     val out = layout.buildDirectory.file("generated/pack/pack.mcmeta")
     outputs.file(out)
@@ -74,6 +99,7 @@ tasks {
             "name" to sc.properties.get<String>("mod.name"),
             "version" to "${sc.properties.get<String>("mod.version")}+$minecraftVersion",
             "minecraft" to sc.properties.get<String>("mod.mc_compat"),
+            "geckolib" to if (sc.current.version == "1.21.1") "4.9.3" else "5.4.5",
         )
         inputs.properties(props)
         exclude("META-INF/mods.toml")
@@ -86,6 +112,9 @@ tasks {
 
     test {
         useJUnitPlatform()
+        if (providers.gradleProperty("liveGallery").orNull == "true") {
+            systemProperty("quarkos.liveGallery", "true")
+        }
     }
 
     withType<JavaExec>().configureEach {
@@ -93,6 +122,7 @@ tasks {
             ?: "/cursor/stores/bc-1243ce51-36c9-58c7-8fa4-153844455530/media/fabric"
         systemProperty("quarkos_cosmetics.shots", shots)
         systemProperty("quarkos_cosmetics.loader", "fabric")
+        systemProperty("cosmetics.galleryUrl", "http://127.0.0.1:39221")
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
             args("--width", "960", "--height", "540")

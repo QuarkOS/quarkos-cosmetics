@@ -10,16 +10,23 @@
   "license": "MIT",
   "icon": "assets/quarkos_cosmetics/icon.png",
   "environment": "client",
+  "mixins": [
+    "quarkos_cosmetics.mixins.json"
+  ],
   "entrypoints": {
     "client": [
       "dev.quarkos.cosmetics.FabricQuarkosCosmetics"
+    ],
+    "modmenu": [
+      "dev.quarkos.cosmetics.ModMenuIntegration"
     ]
   },
   "depends": {
     "fabricloader": ">=0.16.0",
     "minecraft": "${minecraft}",
     "java": ">=21",
-    "fabric-api": "*"
+    "fabric-api": "*",
+    "geckolib": ">=${geckolib}"
   },
   "suggests": {
     "modmenu": "*"

@@ -75,6 +75,11 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     val sourceSets = extensions.getByType(org.gradle.api.tasks.SourceSetContainer::class.java)
     val mainSource = sourceSets.named("main")
     val chiseledMain = layout.buildDirectory.dir("generated/stonecutter/main")
+    val syncBranchSources = tasks.register<Sync>("syncBranchSources") {
+        from(rootProject.file("src"))
+        into(rootProject.file("forge/src"))
+    }
+    tasks.named("stonecutterPrepare") { dependsOn(syncBranchSources) }
     gradle.projectsEvaluated {
         val main = mainSource.get()
         main.java.setSrcDirs(listOf(chiseledMain.get().dir("java").asFile))
@@ -101,11 +106,29 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             forRepository { maven("https://repo.unascribed.com") { name = "Unascribed" } }
             filter { includeGroup("com.unascribed") }
         }
+        maven("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/") {
+            content { includeGroup("software.bernie.geckolib") }
+        }
     }
 
     dependencies {
         add("implementation", forgeMinecraft.dependency("net.minecraftforge:forge:${node.forgeCoordinate}"))
         add("compileOnly", "com.unascribed:ears-api:1.4.5")
+        add("implementation", "com.fasterxml.jackson.core:jackson-databind:2.18.3")
+        add("implementation", "com.fasterxml.jackson.core:jackson-core:2.18.3")
+        add("implementation", "com.fasterxml.jackson.core:jackson-annotations:2.18.3")
+        val geckoVersion = if (minecraftVersion == "1.21.1") "4.9.3" else "5.4.5"
+        add("implementation", "software.bernie.geckolib:geckolib-forge-$minecraftVersion:$geckoVersion")
+    }
+
+    tasks.named<Jar>("jar") {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+        from({
+            configurations.getByName("runtimeClasspath")
+                .filter { it.name.startsWith("jackson-") }
+                .map { zipTree(it) }
+        })
     }
 
     val forgePack = layout.buildDirectory.dir("generated/forge-pack")
@@ -124,6 +147,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             "version" to "1.0.0+$minecraftVersion",
             "forge_dep" to node.forgeDep,
             "minecraft" to minecraftVersion,
+            "geckolib" to if (minecraftVersion == "1.21.1") "4.9.3" else "5.4.5",
         )
         inputs.property("forge_dep", node.forgeDep)
         inputs.property("minecraft", minecraftVersion)
@@ -140,6 +164,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             ?: "/cursor/stores/bc-1243ce51-36c9-58c7-8fa4-153844455530/media/fabric"
         systemProperty("quarkos_cosmetics.shots", shots)
         systemProperty("quarkos_cosmetics.loader", "forge")
+        systemProperty("cosmetics.galleryUrl", "http://127.0.0.1:39221")
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
         }

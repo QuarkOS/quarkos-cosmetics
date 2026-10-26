@@ -2,45 +2,36 @@
 
 Free Minecraft Java client cosmetics by Emilio Schwaiger. The mod id is `quarkos_cosmetics`. It is client-only, MIT licensed, and does not depend on `quarkos_capes`.
 
-Hats, shoulders, a back slot (idle wings or bling), a tail, and ears can be equipped locally with no server. An optional gallery URL talks only to this project's own server API. Account proof is Mojang `join`, then the service calls `hasJoined`. The client stores the UUID and never stores the access token.
+Hats, ears, both shoulders, a back slot, and a tail can be equipped from the packed wardrobe with no server. The gallery is optional. The client stores a player UUID and never stores a Minecraft access token.
 
 ## Run
 
-Java 21 compiles the mod. Current Fabric Loom needs a Java 25 Gradle JVM (`JAVA_HOME`) on top of that.
+Java 21 compiles the mod. Fabric Loom in this tree needs a Java 25 Gradle JVM (`JAVA_HOME`).
 
-```
+```bash
 JAVA_HOME=/path/to/jdk-25 ./gradlew :1.21.11:runClient
-```
-
-Versions in this tree: Fabric and Forge for 1.21.1 and 1.21.11. The active Fabric client is `:1.21.11`.
-
-```
-./gradlew :1.21.11:runClient
 ./gradlew :1.21.1:runClient
-./gradlew :forge:1.21.11:compileJava
-./gradlew :forge:1.21.1:compileJava
+./gradlew :forge:1.21.11:runClient
+./gradlew :forge:1.21.1:runClient
+./gradlew :1.21.11:test
 ```
+
+Open the wardrobe with `K`, the pause-screen Cosmetics button, or Mod Menu on Fabric. The default gallery base URL is `http://127.0.0.1:39221` with no `/v1` suffix. Override it with `galleryUrl` in `config/quarkos_cosmetics.properties`, `COSMETICS_GALLERY_URL`, or `-Dcosmetics.galleryUrl`. `client.properties.example` is the same line.
 
 A screenshot harness is off unless you pass `-Pharness=true`. It writes PNGs to `-Pshots=...`.
 
 ## Gallery
 
-Leave `galleryBaseUrl` empty and the client stays local. When it is set, the client calls only that base URL:
+The game client owns the base URL. Routes start at `/v1`. Sign-in is:
 
-- `POST /v1/session` returns a one-time `serverId`
-- the client posts that id to `https://sessionserver.mojang.com/session/minecraft/join`
-- `POST /v1/session/complete` with `{username, serverId}` returns the UUID to store
-- `GET /v1/cosmetics` browses
-- `POST /v1/cosmetics` publishes
-- `POST /v1/equip` equips
-- `POST /v1/report` reports
+1. `POST /v1/session/challenges` with an empty body.
+2. `POST` the access token only to the returned `mojangJoinUrl`.
+3. `POST /v1/session` with `{username, serverId}`.
 
-The access token is a parameter of the join call and is not written to config.
+The Bearer token stays in memory. Browse is `GET /v1/cosmetics`. Publish is `POST /v1/cosmetics`. Equip is `PUT /v1/equipment`. Another player's loadout is `GET /v1/equipment/{uuid}`, then `GET /v1/cosmetics/{id}` for each id. Report is `POST /v1/cosmetics/{id}/reports`.
 
-## Models
+Packed `quarkos:` cosmetics equip locally. Publishing one creates a gallery id the other client can read. The wardrobe buttons are Sign in, Refresh, the gallery row (equip), Publish packed, and Report.
 
-Player models are Blockbench free models (`.bbmodel`) plus a PNG at most 64×64. Keep the JSON under 48KB, at most 48 cubes, and coordinates between -48 and 80. Do not embed `http` URLs. Groups may set `quarkos_animation` to `flap`, `idle`, or `none`.
+## Slots
 
-## Ears
-
-If Ears is installed, the mod calls `com.unascribed:ears-api` so Ears can hide ears, a tail, or wings that this mod is drawing. Ears is not vendored. See `NOTICE`.
+Packed cosmetics use `cosmetics-model-1`. Element names containing `flap` or `idle` animate. The back slot hides while elytra is equipped. A loaded Tails mod leaves the tail slot empty. Ears, when present, is asked to hide ears, tail, and wings for slots this mod is drawing. The second-skin shell is an original per-pixel extrusion of the 64×64 overlay, culled past the configured distance (default 16 blocks).

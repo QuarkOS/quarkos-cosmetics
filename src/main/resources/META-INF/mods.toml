@@ -24,5 +24,12 @@ versionRange = "[${minecraft}]"
 ordering = "NONE"
 side = "CLIENT"
 
+[[dependencies.quarkos_cosmetics]]
+modId = "geckolib"
+mandatory = true
+versionRange = "[${geckolib},)"
+ordering = "AFTER"
+side = "CLIENT"
+
 [[mixins]]
 config = "quarkos_cosmetics.mixins.json"

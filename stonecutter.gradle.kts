@@ -9,9 +9,9 @@ stonecutter parameters {
     constants.match(loaderName, "fabric", "forge")
     replacements {
         string(current.parsed < "1.21.11") {
-            replace("net.minecraft.client.renderer.rendertype.", "net.minecraft.client.renderer.")
             replace("net.minecraft.resources.Identifier", "net.minecraft.resources.ResourceLocation")
             replace("Identifier", "ResourceLocation")
+            replace("AvatarRenderer", "PlayerRenderer")
         }
     }
 }

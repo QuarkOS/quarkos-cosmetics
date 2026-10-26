@@ -3,8 +3,11 @@
   "minVersion": "0.8",
   "package": "dev.quarkos.cosmetics.mixin",
   "compatibilityLevel": "JAVA_21",
-  "client": [
-    "PlayerModelMixin"
+    "client": [
+    "PlayerCosmeticsMixin",
+    "PauseScreenMixin",
+    "ClientTickMixin",
+    "CameraZoomMixin"
   ],
   "injectors": {
     "defaultRequire": 1
