@@ -3,6 +3,7 @@ package dev.quarkos.cosmetics.harness;
 import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.quarkos.cosmetics.config.ClientSettings;
+import dev.quarkos.cosmetics.config.WardrobeScreen;
 import dev.quarkos.cosmetics.gallery.EquipmentMirror;
 import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.model.ModelException;
@@ -26,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -57,6 +59,8 @@ public final class ClientHarness {
     private static boolean studio;
     private static int shotIndex;
     private static int settledAt = -1;
+    private static int screenAt = -1;
+    private static List<Shot> active;
     private static boolean pairStarted;
     private static int pairShot;
     private static volatile boolean pairReady;
@@ -93,6 +97,7 @@ public final class ClientHarness {
                 case WAIT_TITLE -> waitTitle(client);
                 case WAIT_WORLD -> waitWorld(client);
                 case SHOTS -> shots(client);
+                case WARDROBE -> wardrobe(client);
                 case PAIR -> pair(client);
                 case STOP -> stop(client);
             }
@@ -108,6 +113,12 @@ public final class ClientHarness {
                 LOGGER.error("title screen did not appear, screen={}", client.screen);
                 state = State.STOP;
             }
+            return;
+        }
+        if (Boolean.getBoolean("quarkos_cosmetics.launchCheck")) {
+            LOGGER.info("cosmetics launch check reached the title");
+            state = State.STOP;
+            ticks = 0;
             return;
         }
         state = State.WAIT_WORLD;
@@ -169,13 +180,20 @@ public final class ClientHarness {
             }
             return;
         }
-        if (shotIndex >= SHOTS.size()) {
-            state = State.PAIR;
+        if (shotIndex >= activeShots().size()) {
+            String only = System.getProperty("quarkos_cosmetics.only", "");
+            if (!only.isBlank()) {
+                state = only.contains("wardrobe") ? State.WARDROBE : State.STOP;
+            } else {
+                state = State.PAIR;
+            }
             ticks = 0;
             shotQueued = false;
+            settledAt = -1;
+            screenAt = -1;
             return;
         }
-        Shot shot = SHOTS.get(shotIndex);
+        Shot shot = activeShots().get(shotIndex);
         frame(client, shot.front);
         // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
         if (settledAt < 0) {
@@ -205,6 +223,62 @@ public final class ClientHarness {
             shotQueued = false;
             settledAt = -1;
             state = State.SHOTS;
+        });
+    }
+
+    private static List<Shot> activeShots() {
+        if (active == null) {
+            String only = System.getProperty("quarkos_cosmetics.only", "");
+            if (only.isBlank()) {
+                active = SHOTS;
+            } else {
+                Set<String> names = Set.of(only.split(","));
+                active = SHOTS.stream().filter(shot -> names.contains(shot.name())).toList();
+                LOGGER.info("harness shot filter {}", active.stream().map(Shot::name).toList());
+            }
+        }
+        return active;
+    }
+
+    /** Opens the existing wardrobe. The layout stays as authored. */
+    private static void wardrobe(Minecraft client) {
+        if (client.player == null || client.level == null) {
+            if (ticks > 20 * 30) {
+                LOGGER.error("wardrobe world did not load, screen={}", client.screen);
+                state = State.STOP;
+            }
+            return;
+        }
+        if (!(client.screen instanceof WardrobeScreen)) {
+            if (settledAt < 0) {
+                if (ticks == 1 || ticks % 10 == 0) {
+                    client.setScreen(null);
+                    client.player.connection.sendCommand("gamemode creative");
+                    client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
+                }
+                if (client.player.getY() >= 100.0) {
+                    settledAt = ticks;
+                } else if (ticks > 20 * 20) {
+                    LOGGER.error("wardrobe player never reached the studio, y={}", client.player.getY());
+                    state = State.STOP;
+                }
+                return;
+            }
+            if (ticks - settledAt < 10) {
+                return;
+            }
+            client.setScreen(new WardrobeScreen(null));
+            screenAt = ticks;
+            shotQueued = false;
+            return;
+        }
+        if (screenAt < 0 || ticks - screenAt < 40) {
+            return;
+        }
+        shootWhenReady(client, "wardrobe", () -> {
+            state = State.STOP;
+            ticks = 0;
+            shotQueued = false;
         });
     }
 
@@ -490,6 +564,7 @@ public final class ClientHarness {
         WAIT_TITLE,
         WAIT_WORLD,
         SHOTS,
+        WARDROBE,
         PAIR,
         STOP
     }

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Harness-only third-person framing. Far enough that a tall hat and the feet both stay inside the frame. */
+/** Harness-only third-person framing. Far enough that the head, a tall hat, and the feet all stay inside the frame. */
 @Mixin(Camera.class)
 public abstract class CameraZoomMixin {
     @Shadow
@@ -31,7 +31,7 @@ public abstract class CameraZoomMixin {
     @ModifyVariable(method = "getMaxZoom", at = @At("HEAD"), argsOnly = true)
     private float quarkos$portraitDistance(float zoom) {
         if (Boolean.getBoolean("quarkos_cosmetics.harness")) {
-            return 3.35f;
+            return 4.15f;
         }
         return zoom;
     }
@@ -53,7 +53,7 @@ public abstract class CameraZoomMixin {
             return;
         }
         Vec3 pos = this.position;
-        double y = pos.y - 0.32;
+        double y = pos.y - 0.55;
         float orbit = 0f;
         try {
             orbit = Float.parseFloat(System.getProperty("quarkos_cosmetics.orbit", "0"));

@@ -29,7 +29,7 @@ val forgeNode = when (minecraftVersion) {
         "1.21.11-61.2.4",
         "61.2.4",
         "5.4.5",
-        """{"pack":{"description":"Quarkos Cosmetics","min_format":[75,0],"max_format":[75,0]}}""" + "\n",
+        """{"pack":{"description":"Quarkos Cosmetics","min_format":[94,0],"max_format":[94,1]}}""" + "\n",
     )
     else -> null
 }
@@ -83,6 +83,21 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         into(rootProject.file("forge/src"))
     }
     tasks.named("stonecutterPrepare") { dependsOn(syncBranchSources) }
+    // Both Forge versions sync the shared tree into forge/src. Order the writes
+    // and the reads so a combined compile does not race that directory.
+    gradle.projectsEvaluated {
+        val thisSync = syncBranchSources.get()
+        rootProject.subprojects.forEach { other ->
+            val otherSync = other.tasks.findByName("syncBranchSources") ?: return@forEach
+            if (otherSync == thisSync) {
+                return@forEach
+            }
+            tasks.named("stonecutterPrepare").configure { mustRunAfter(otherSync) }
+            if (project.path > other.path) {
+                thisSync.mustRunAfter(otherSync)
+            }
+        }
+    }
     gradle.projectsEvaluated {
         val main = mainSource.get()
         main.java.setSrcDirs(listOf(chiseledMain.get().dir("java").asFile))
@@ -180,6 +195,13 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
             args("--width", "960", "--height", "540")
+        }
+        val only = providers.gradleProperty("only").orNull
+        if (!only.isNullOrBlank()) {
+            systemProperty("quarkos_cosmetics.only", only)
+        }
+        if (providers.gradleProperty("launchCheck").orNull == "true") {
+            systemProperty("quarkos_cosmetics.launchCheck", "true")
         }
         val display = providers.gradleProperty("display").orNull
         val xauth = providers.gradleProperty("xauth").orNull
