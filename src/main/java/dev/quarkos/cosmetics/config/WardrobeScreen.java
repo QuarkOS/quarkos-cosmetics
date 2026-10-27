@@ -266,7 +266,7 @@ public final class WardrobeScreen extends Screen {
         int y1 = preview.y() + preview.h() - 8;
         graphics.fill(x0, y0, x1, y1, 0xFF100E0C);
         //? if >=1.21.11 {
-        for (int guard = 0; guard < 8 && graphics.scissorStack.peek() != null; guard++) {
+        for (int guard = 0; guard < 8 && previewScissorOpen(graphics); guard++) {
             graphics.disableScissor();
         }
         var state = InventoryPreviewAccess.quarkos$extract(player);
@@ -392,6 +392,17 @@ public final class WardrobeScreen extends Screen {
             height = pixels.height();
         }
     }
+
+    //? if >=1.21.11 {
+    /** Forge keeps the stack private and exposes a getter. Fabric leaves the field public. */
+    private static boolean previewScissorOpen(GuiGraphics graphics) {
+        //? if forge {
+        return graphics.getScissorStack().peek() != null;
+        //?} else {
+        return graphics.scissorStack.peek() != null;
+        //?}
+    }
+    //?}
 
     private static String trim(String value, int max) {
         if (value == null) {

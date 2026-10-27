@@ -80,6 +80,21 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         into(rootProject.file("forge/src"))
     }
     tasks.named("stonecutterPrepare") { dependsOn(syncBranchSources) }
+    // Both Forge versions sync the shared tree into forge/src. Order the writes
+    // and the reads so a combined compile does not race that directory.
+    gradle.projectsEvaluated {
+        val thisSync = syncBranchSources.get()
+        rootProject.subprojects.forEach { other ->
+            val otherSync = other.tasks.findByName("syncBranchSources") ?: return@forEach
+            if (otherSync == thisSync) {
+                return@forEach
+            }
+            tasks.named("stonecutterPrepare").configure { mustRunAfter(otherSync) }
+            if (project.path > other.path) {
+                thisSync.mustRunAfter(otherSync)
+            }
+        }
+    }
     gradle.projectsEvaluated {
         val main = mainSource.get()
         main.java.setSrcDirs(listOf(chiseledMain.get().dir("java").asFile))
