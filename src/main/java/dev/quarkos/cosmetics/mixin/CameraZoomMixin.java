@@ -31,6 +31,14 @@ public abstract class CameraZoomMixin {
     @ModifyVariable(method = "getMaxZoom", at = @At("HEAD"), argsOnly = true)
     private float quarkos$portraitDistance(float zoom) {
         if (Boolean.getBoolean("quarkos_cosmetics.harness")) {
+            String configured = System.getProperty("quarkos_cosmetics.zoom");
+            if (configured != null && !configured.isBlank()) {
+                try {
+                    return Float.parseFloat(configured);
+                } catch (NumberFormatException ignored) {
+                    return 4.15f;
+                }
+            }
             return 4.15f;
         }
         return zoom;

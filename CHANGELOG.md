@@ -2,7 +2,7 @@
 
 ## 1.0.0
 
-- Packed cosmetics are tapered pixel-art meshes with shaded 16×16 textures. Kite wings stay about torso height, folded at rest, and flap from a GeckoLib clip.
+- Packed cosmetics are tapered pixel-art meshes with shaded textures. Kite wings use the delivered GeckoLib geometry: folded on the back at rest, and flapping while sprinting or flying.
 - Packed wardrobe for hat, ears, left shoulder, right shoulder, back, and tail, with a live player preview.
 - Gallery browse, equip, publish, and report against `http://127.0.0.1:39221` (no `/v1` suffix).
 - Other players render from `GET /v1/equipment/{uuid}` and `GET /v1/cosmetics/{id}`.

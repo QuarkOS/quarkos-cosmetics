@@ -38,7 +38,7 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
             var type = translucent ? RenderTypes.entityTranslucent(texture) : RenderTypes.entityCutoutNoCull(texture);
             collector.submitCustomGeometry(stack, type, (entry, consumer) -> draw.accept(consumer));
         };
-        CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
+        CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, CosmeticAttach.wingFlap(entity), model.head, model.body, model.leftArm, model.rightArm,
                 CosmeticAttach.placements(entity == null ? null : entity.getUUID(), self, elytra, helmet, chest, legs));
         if (CosmeticAttach.showSkin(self, state.distanceToCameraSq) && state.skin != null && state.skin.body() != null) {
             Identifier skin = state.skin.body().texturePath();
@@ -85,7 +85,7 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
             RenderType type = translucent ? RenderType.entityTranslucent(texture) : RenderType.entityCutoutNoCull(texture);
             draw.accept(buffer.getBuffer(type));
         };
-        CosmeticAttach.draw(pose, submitter, light, ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
+        CosmeticAttach.draw(pose, submitter, light, ageInTicks, CosmeticAttach.wingFlap(player), model.head, model.body, model.leftArm, model.rightArm,
                 CosmeticAttach.placements(player.getUUID(), self, elytra, helmet, chest, legs));
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
         double distance = player.distanceToSqr(camera.x, camera.y, camera.z);

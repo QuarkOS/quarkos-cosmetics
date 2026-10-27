@@ -61,6 +61,11 @@ class PackedCosmeticTest {
             assertTrue(names.size() >= 4, modelPath);
             try (InputStream stream = resource(texturePath)) {
                 BufferedImage image = ImageIO.read(stream);
+                if ("textures/cosmetics/kite_wings.png".equals(texturePath)) {
+                    assertEquals(64, image.getWidth(), texturePath);
+                    assertEquals(32, image.getHeight(), texturePath);
+                    continue;
+                }
                 assertEquals(16, image.getWidth(), texturePath);
                 assertEquals(16, image.getHeight(), texturePath);
                 int wanted = Integer.parseInt(marker, 16);

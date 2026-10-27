@@ -93,7 +93,7 @@
     {
       "id": "quarkos:kite_wings",
       "name": "Kite wings",
-      "description": "Idle kite wings that flap while you stand.",
+      "description": "Kite wings folded on the back, opening into a flap while you sprint or fly.",
       "slot": "back",
       "texture": "textures/cosmetics/kite_wings.png",
       "model": "cosmetics/kite_wings.json",

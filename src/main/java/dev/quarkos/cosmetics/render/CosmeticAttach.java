@@ -6,6 +6,8 @@ import dev.quarkos.cosmetics.gallery.EquipmentMirror;
 import dev.quarkos.cosmetics.model.Slot;
 import dev.quarkos.cosmetics.model.Worn;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.List;
 import java.util.Map;
@@ -15,10 +17,17 @@ final class CosmeticAttach {
     private CosmeticAttach() {
     }
 
-    static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age,
+    static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age, boolean wingFlap,
                      ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
                      List<Worn.Placement> placements) {
-        CosmeticDrawer.cosmetics(pose, submitter, light, age, head, body, leftArm, rightArm, placements);
+        CosmeticDrawer.cosmetics(pose, submitter, light, age, wingFlap, head, body, leftArm, rightArm, placements);
+    }
+
+    static boolean wingFlap(Entity entity) {
+        if (!(entity instanceof Player player)) {
+            return false;
+        }
+        return player.isSprinting() || player.isFallFlying() || player.getAbilities().flying;
     }
 
     static List<Worn.Placement> placements(UUID uuid, boolean self, boolean elytra, boolean helmet, boolean chest, boolean legs) {

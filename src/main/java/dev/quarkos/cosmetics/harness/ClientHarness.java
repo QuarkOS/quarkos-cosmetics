@@ -19,6 +19,7 @@ import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,19 +38,22 @@ import java.util.UUID;
 public final class ClientHarness {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private static final List<Shot> SHOTS = List.of(
-            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false),
-            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false),
-            new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, true),
-            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false),
-            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false),
-            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true, false),
-            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false, false),
-            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true, false),
-            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false, false),
-            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false),
-            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false),
-            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false),
-            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false)
+            new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, ""),
+            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, "open"),
+            new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, false, 90f, "open"),
+            new Shot("kite-wings-three-quarter", Slot.BACK, "quarkos:kite_wings", false, false, 40f, "open"),
+            new Shot("kite-wings-flying", Slot.BACK, "quarkos:kite_wings", false, false, 55f, "fly"),
+            new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, true, 0f, "open"),
+            new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, ""),
+            new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, ""),
+            new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true, false, 0f, ""),
+            new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false, false, 0f, ""),
+            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true, false, 0f, ""),
+            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false, false, 0f, ""),
+            new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false, 0f, ""),
+            new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false, 0f, ""),
+            new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false, 0f, ""),
+            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false, 0f, "")
     );
 
     private static State state = State.WAIT_TITLE;
@@ -194,7 +198,7 @@ public final class ClientHarness {
             return;
         }
         Shot shot = activeShots().get(shotIndex);
-        frame(client, shot.front);
+        frame(client, shot);
         // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
         if (settledAt < 0) {
             if (ticks == 1 || ticks % 10 == 0) {
@@ -215,6 +219,10 @@ public final class ClientHarness {
         }
         // The flap clip is 1.6s. Age is in ticks, so the open keyframe at 0.8s lands every 32 ticks.
         if (shot.flap && Math.floorMod(client.player.tickCount, 32) != 16) {
+            return;
+        }
+        // Flap is a 1.0s loop. The upstroke peak is 0.25s, which is tick 5 of every 20.
+        if ("fly".equals(shot.wing) && Math.floorMod(client.player.tickCount, 20) != 5) {
             return;
         }
         shootWhenReady(client, shot.name, () -> {
@@ -303,8 +311,11 @@ public final class ClientHarness {
         client.player.connection.sendCommand("item replace entity @s armor.legs with air");
         client.player.connection.sendCommand("clear @s");
         client.player.setShiftKeyDown(false);
+        client.player.setSprinting(false);
         client.player.setSwimming(false);
         client.player.stopFallFlying();
+        client.player.getAbilities().flying = false;
+        client.player.setNoGravity(false);
         ClientSettings settings = ClientSettings.get();
         settings.skinLayers = false;
         settings.hideOthers = false;
@@ -317,18 +328,43 @@ public final class ClientHarness {
         settings.save(client.gameDirectory.toPath());
     }
 
-    private static void frame(Minecraft client, boolean front) {
+    private static void frame(Minecraft client, Shot shot) {
         client.options.hideGui = true;
-        System.setProperty("quarkos_cosmetics.orbit", "0");
-        client.options.setCameraType(front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
+        System.setProperty("quarkos_cosmetics.orbit", Float.toString(shot.orbit));
+        if (shot.wing.isEmpty()) {
+            System.clearProperty("quarkos_cosmetics.zoom");
+            System.clearProperty("quarkos_cosmetics.wingPose");
+        } else {
+            System.setProperty("quarkos_cosmetics.zoom", "5.4");
+            System.setProperty("quarkos_cosmetics.wingPose", shot.wing);
+        }
+        client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
         client.player.setYRot(180f);
         client.player.yRotO = 180f;
         client.player.setYBodyRot(180f);
         client.player.yBodyRotO = 180f;
         client.player.setYHeadRot(180f);
         client.player.yHeadRotO = 180f;
-        client.player.setXRot(0f);
-        client.player.xRotO = 0f;
+        boolean flying = "fly".equals(shot.wing);
+        client.player.setXRot(flying ? -12f : 0f);
+        client.player.xRotO = client.player.getXRot();
+        client.player.setSprinting(flying);
+        client.player.getAbilities().mayfly = true;
+        client.player.getAbilities().flying = flying;
+        client.player.setNoGravity(flying);
+        if (flying) {
+            client.player.setPose(Pose.FALL_FLYING);
+            if (client.player.tickCount % 5 == 0) {
+                client.player.connection.sendCommand("tp @s 0.5 104 0.5 180 -12");
+            }
+            client.player.setPos(0.5, 104.0, 0.5);
+            client.player.setDeltaMovement(0.0, 0.0, 0.0);
+            client.player.xo = client.player.getX();
+            client.player.yo = client.player.getY();
+            client.player.zo = client.player.getZ();
+        } else {
+            client.player.setPose(Pose.STANDING);
+        }
         client.setCameraEntity(client.player);
     }
 
@@ -569,6 +605,6 @@ public final class ClientHarness {
         STOP
     }
 
-    private record Shot(String name, Slot slot, String id, boolean front, boolean flap) {
+    private record Shot(String name, Slot slot, String id, boolean front, boolean flap, float orbit, String wing) {
     }
 }
