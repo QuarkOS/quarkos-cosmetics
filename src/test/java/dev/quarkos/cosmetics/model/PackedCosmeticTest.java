@@ -61,10 +61,15 @@ class PackedCosmeticTest {
             assertTrue(names.size() >= 4, modelPath);
             try (InputStream stream = resource(texturePath)) {
                 BufferedImage image = ImageIO.read(stream);
-                assertEquals(16, image.getWidth(), texturePath);
-                assertEquals(16, image.getHeight(), texturePath);
-                int wanted = Integer.parseInt(marker, 16);
-                assertTrue(contains(image, wanted), texturePath + " is missing marker " + marker);
+                if ("quarkos:kite_wings".equals(item.path("id").asText())) {
+                    assertEquals(64, image.getWidth(), texturePath);
+                    assertEquals(32, image.getHeight(), texturePath);
+                } else {
+                    assertEquals(16, image.getWidth(), texturePath);
+                    assertEquals(16, image.getHeight(), texturePath);
+                    int wanted = Integer.parseInt(marker, 16);
+                    assertTrue(contains(image, wanted), texturePath + " is missing marker " + marker);
+                }
             }
         }
         assertEquals(16, count);

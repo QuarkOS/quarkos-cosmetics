@@ -8,6 +8,7 @@ import dev.quarkos.cosmetics.gallery.EquipmentMirror;
 import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.model.ModelException;
 import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.KiteWings;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
@@ -43,9 +44,11 @@ public final class ClientHarness {
     public static float portraitOrbit;
     private static final List<Shot> SHOTS = List.of(
             new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, false),
-            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, true, 0f, false),
-            new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, true, 72f, false),
-            new Shot("kite-wings-three-quarter", Slot.BACK, "quarkos:kite_wings", false, true, 38f, false),
+            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
+            new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, false, 72f, false),
+            new Shot("kite-wings-three-quarter", Slot.BACK, "quarkos:kite_wings", false, false, 38f, false),
+            new Shot("kite-wings-folded-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
+            new Shot("kite-wings-flying", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
             new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, false, 0f, true),
             new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
             new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, false),
@@ -188,7 +191,13 @@ public final class ClientHarness {
         if (shotIndex >= activeShots().size()) {
             String only = System.getProperty("quarkos_cosmetics.only", "");
             if (!only.isBlank()) {
-                state = only.contains("wardrobe") ? State.WARDROBE : State.STOP;
+                if (only.contains("wardrobe")) {
+                    state = State.WARDROBE;
+                } else if (only.contains("two-client")) {
+                    state = State.PAIR;
+                } else {
+                    state = State.STOP;
+                }
             } else {
                 state = State.PAIR;
             }
@@ -288,10 +297,26 @@ public final class ClientHarness {
     }
 
     private static void frame(Minecraft client, Shot shot) {
-        boolean wide = shot.spread || shot.film || shot.orbit != 0f;
-        portraitDistance = wide ? 4.8f : 2.55f;
-        portraitDrop = wide ? 0.15f : 0.42f;
+        boolean kite = shot.name.startsWith("kite-wings");
+        boolean wide = kite || shot.spread || shot.film || shot.orbit != 0f;
+        boolean fly = shot.name.equals("kite-wings-flying") || shot.film;
+        portraitDistance = kite ? 3.35f : wide ? 4.8f : 2.55f;
+        portraitDrop = kite ? 0.55f : wide ? 0.15f : 0.42f;
         portraitOrbit = shot.front ? 0f : shot.orbit;
+        boolean open = shot.name.equals("kite-wings-back") || shot.name.equals("kite-wings-side") || shot.name.equals("kite-wings-three-quarter");
+        boolean folded = shot.name.equals("kite-wings-folded-back");
+        if (open) {
+            KiteWings.hold("flap", 0f);
+        } else if (folded) {
+            KiteWings.hold("idle", 0f);
+        } else if (fly) {
+            KiteWings.hold("flap", null);
+        } else {
+            KiteWings.hold(null, null);
+        }
+        client.player.setSprinting(fly);
+        client.player.getAbilities().mayfly = true;
+        client.player.getAbilities().flying = fly;
         client.options.fov().set(wide ? 50 : 54);
         client.options.hideGui = true;
         client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
@@ -370,6 +395,9 @@ public final class ClientHarness {
             state = State.STOP;
             return;
         }
+        KiteWings.hold(null, null);
+        client.player.setSprinting(false);
+        client.player.getAbilities().flying = false;
         if (!pairStarted) {
             pairStarted = true;
             publishAda(client);
@@ -401,6 +429,11 @@ public final class ClientHarness {
                 pairShot = 1;
                 ticks = 0;
                 shotQueued = false;
+                return;
+            }
+            String only = System.getProperty("quarkos_cosmetics.only", "");
+            if (!only.isBlank() && !only.contains("wardrobe")) {
+                state = State.STOP;
                 return;
             }
             ClientSettings.get().equip(Slot.BACK, "quarkos:kite_wings");

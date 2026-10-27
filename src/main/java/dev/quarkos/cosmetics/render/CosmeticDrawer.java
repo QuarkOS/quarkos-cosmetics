@@ -21,18 +21,23 @@ public final class CosmeticDrawer {
 
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
-                                 List<Worn.Placement> placed) {
+                                 List<Worn.Placement> placed, boolean wingsFlap) {
         for (Worn.Placement placement : placed) {
-            ModelLibrary.Resolved resolved = ModelLibrary.resolve(placement.id());
-            if (resolved == null) {
-                continue;
-            }
             ModelPart part = switch (placement.anchor()) {
                 case HEAD -> head;
                 case BODY -> body;
                 case LEFT_ARM -> leftArm;
                 case RIGHT_ARM -> rightArm;
             };
+            if ("quarkos:kite_wings".equals(placement.id())) {
+                KiteWings.draw(pose, submitter, light, age, wingsFlap, part,
+                        placement.offsetX(), placement.offsetY(), placement.offsetZ());
+                continue;
+            }
+            ModelLibrary.Resolved resolved = ModelLibrary.resolve(placement.id());
+            if (resolved == null) {
+                continue;
+            }
             pose.pushPose();
             part.translateAndRotate(pose);
             pose.scale(1f / 16f, -1f / 16f, 1f / 16f);

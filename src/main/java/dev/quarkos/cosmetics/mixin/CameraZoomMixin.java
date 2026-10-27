@@ -18,6 +18,12 @@ public abstract class CameraZoomMixin {
     private Vec3 position;
 
     @Shadow
+    private float xRot;
+
+    @Shadow
+    private float yRot;
+
+    @Shadow
     protected abstract void setPosition(double x, double y, double z);
 
     @Shadow
@@ -47,18 +53,20 @@ public abstract class CameraZoomMixin {
         if (!detached || !Boolean.getBoolean("quarkos_cosmetics.harness")) {
             return;
         }
+        Vec3 pos = this.position;
+        double y = pos.y - ClientHarness.portraitDrop;
         float orbit = ClientHarness.portraitOrbit;
-        if (orbit == 0f) {
-            Vec3 pos = this.position;
-            this.setPosition(pos.x, pos.y - ClientHarness.portraitDrop, pos.z);
+        if (orbit != 0f && entity != null) {
+            Vec3 eye = entity.getEyePosition(partialTick);
+            double dx = pos.x - eye.x;
+            double dz = pos.z - eye.z;
+            double rad = Math.toRadians(orbit);
+            double cos = Math.cos(rad);
+            double sin = Math.sin(rad);
+            this.setPosition(eye.x + dx * cos - dz * sin, y, eye.z + dx * sin + dz * cos);
+            this.setRotation(this.yRot + orbit, this.xRot);
             return;
         }
-        double x = entity.xo + (entity.getX() - entity.xo) * partialTick;
-        double y = entity.yo + (entity.getY() - entity.yo) * partialTick + entity.getBbHeight() * 0.5;
-        double z = entity.zo + (entity.getZ() - entity.zo) * partialTick;
-        double yaw = Math.toRadians(entity.getYRot() + orbit);
-        double dist = ClientHarness.portraitDistance;
-        this.setPosition(x + Math.sin(yaw) * dist, y - ClientHarness.portraitDrop, z - Math.cos(yaw) * dist);
-        this.setRotation(entity.getYRot() + orbit, 4f);
+        this.setPosition(pos.x, y, pos.z);
     }
 }
