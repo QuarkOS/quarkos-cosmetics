@@ -8,6 +8,7 @@ import dev.quarkos.cosmetics.gallery.EquipmentMirror;
 import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.model.ModelException;
 import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.KiteWings;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
@@ -39,10 +40,11 @@ public final class ClientHarness {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private static final List<Shot> SHOTS = List.of(
             new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, ""),
-            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, "open"),
-            new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, false, 90f, "open"),
-            new Shot("kite-wings-three-quarter", Slot.BACK, "quarkos:kite_wings", false, false, 40f, "open"),
-            new Shot("kite-wings-flying", Slot.BACK, "quarkos:kite_wings", false, false, 55f, "fly"),
+            new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, ""),
+            new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, false, 72f, ""),
+            new Shot("kite-wings-three-quarter", Slot.BACK, "quarkos:kite_wings", false, false, 38f, ""),
+            new Shot("kite-wings-folded-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, ""),
+            new Shot("kite-wings-flying", Slot.BACK, "quarkos:kite_wings", false, false, 0f, ""),
             new Shot("kite-wings-flap", Slot.BACK, "quarkos:kite_wings", false, true, 0f, "open"),
             new Shot("lantern-cap-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, ""),
             new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, ""),
@@ -221,10 +223,6 @@ public final class ClientHarness {
         if (shot.flap && Math.floorMod(client.player.tickCount, 32) != 16) {
             return;
         }
-        // Flap is a 1.0s loop. The upstroke peak is 0.25s, which is tick 5 of every 20.
-        if ("fly".equals(shot.wing) && Math.floorMod(client.player.tickCount, 20) != 5) {
-            return;
-        }
         shootWhenReady(client, shot.name, () -> {
             shotIndex++;
             ticks = 0;
@@ -330,13 +328,29 @@ public final class ClientHarness {
 
     private static void frame(Minecraft client, Shot shot) {
         client.options.hideGui = true;
+        boolean kite = shot.name.startsWith("kite-wings");
+        boolean fly = shot.name.equals("kite-wings-flying");
+        boolean open = shot.name.equals("kite-wings-back")
+                || shot.name.equals("kite-wings-side")
+                || shot.name.equals("kite-wings-three-quarter");
+        boolean folded = shot.name.equals("kite-wings-folded-back");
         System.setProperty("quarkos_cosmetics.orbit", Float.toString(shot.orbit));
-        if (shot.wing.isEmpty()) {
-            System.clearProperty("quarkos_cosmetics.zoom");
-            System.clearProperty("quarkos_cosmetics.wingPose");
+        System.clearProperty("quarkos_cosmetics.wingPose");
+        if (kite) {
+            System.setProperty("quarkos_cosmetics.zoom", "3.35");
+            client.options.fov().set(50);
         } else {
-            System.setProperty("quarkos_cosmetics.zoom", "5.4");
-            System.setProperty("quarkos_cosmetics.wingPose", shot.wing);
+            System.clearProperty("quarkos_cosmetics.zoom");
+            client.options.fov().set(54);
+        }
+        if (open) {
+            KiteWings.hold("flap", 0f);
+        } else if (folded) {
+            KiteWings.hold("idle", 0f);
+        } else if (fly) {
+            KiteWings.hold("flap", null);
+        } else {
+            KiteWings.hold(null, null);
         }
         client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
         client.player.setYRot(180f);
@@ -345,26 +359,14 @@ public final class ClientHarness {
         client.player.yBodyRotO = 180f;
         client.player.setYHeadRot(180f);
         client.player.yHeadRotO = 180f;
-        boolean flying = "fly".equals(shot.wing);
-        client.player.setXRot(flying ? -12f : 0f);
-        client.player.xRotO = client.player.getXRot();
-        client.player.setSprinting(flying);
+        client.player.setXRot(kite ? 8f : 0f);
+        client.player.xRotO = kite ? 8f : 0f;
+        client.player.setSprinting(fly);
         client.player.getAbilities().mayfly = true;
-        client.player.getAbilities().flying = flying;
-        client.player.setNoGravity(flying);
-        if (flying) {
-            client.player.setPose(Pose.FALL_FLYING);
-            if (client.player.tickCount % 5 == 0) {
-                client.player.connection.sendCommand("tp @s 0.5 104 0.5 180 -12");
-            }
-            client.player.setPos(0.5, 104.0, 0.5);
-            client.player.setDeltaMovement(0.0, 0.0, 0.0);
-            client.player.xo = client.player.getX();
-            client.player.yo = client.player.getY();
-            client.player.zo = client.player.getZ();
-        } else {
-            client.player.setPose(Pose.STANDING);
-        }
+        client.player.getAbilities().flying = fly;
+        client.player.setNoGravity(false);
+        client.player.setPose(Pose.STANDING);
+        client.player.stopFallFlying();
         client.setCameraEntity(client.player);
     }
 

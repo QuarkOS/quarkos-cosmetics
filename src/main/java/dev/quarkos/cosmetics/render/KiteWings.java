@@ -28,15 +28,23 @@ import java.util.Map;
 public final class KiteWings {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/cosmetics/kite_wings.png");
+    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/cosmetics/wings.png");
     private static final String GEO = "/assets/quarkos_cosmetics/geckolib/models/wings.geo.json";
     private static final String ANIMATION = "/assets/quarkos_cosmetics/geckolib/animations/wings.animation.json";
 
     private static Model model;
     private static boolean failed;
     private static boolean announced;
+    private static String heldClip;
+    private static Float heldSeconds;
 
     private KiteWings() {
+    }
+
+    /** Harness hold. A null clip follows flying and sprinting. A null time plays the clip. */
+    public static void hold(String clip, Float seconds) {
+        heldClip = clip;
+        heldSeconds = seconds;
     }
 
     public static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age, boolean flap,
@@ -46,12 +54,13 @@ public final class KiteWings {
             return;
         }
         String forced = System.getProperty("quarkos_cosmetics.wingPose", "");
-        boolean open = "open".equals(forced);
-        boolean flying = flap || "fly".equals(forced);
-        String clip = flying || open ? "flap" : "idle";
+        boolean open = heldClip == null && "open".equals(forced);
+        String clip = heldClip != null ? heldClip : (flap || open || "fly".equals(forced) ? "flap" : "idle");
         Clip animation = loaded.clips.get(clip);
         double time = 0;
-        if (animation != null && !open) {
+        if (heldSeconds != null) {
+            time = heldSeconds;
+        } else if (animation != null && !open) {
             time = animation.length <= 0.0001 ? 0 : (age / 20.0) % animation.length;
         }
         if (!announced) {
