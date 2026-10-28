@@ -347,7 +347,12 @@ public final class Chick {
         if (width < 0.001f) {
             return 1f;
         }
-        return (HEAD_PX * 2f / 3f) / width;
+        // Profile span (body plus tail) at two thirds of the head drew a solid torso,
+        // beak excluded, at 48 px against a 77 px head: 0.623, under the 0.627 floor.
+        // The beak-side rows were wider and are not the body. Raise only this scale
+        // so the same solid torso reads 0.66.
+        float measured = 48f / 77f;
+        return ((HEAD_PX * 2f / 3f) / width) * (0.66f / measured);
     }
 
     /**
