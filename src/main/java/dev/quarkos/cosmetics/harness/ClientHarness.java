@@ -664,6 +664,7 @@ public final class ClientHarness {
             client.player.setNoGravity(false);
             client.player.setOnGround(false);
             client.player.setPose(Pose.STANDING);
+            client.options.fov().set(40);
             if (filmIndex < 0) {
                 fallReleased = false;
                 System.clearProperty("quarkos_cosmetics.fall");

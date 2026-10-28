@@ -132,10 +132,10 @@ public abstract class CameraZoomMixin {
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.fall")) && entity instanceof net.minecraft.world.entity.player.Player player) {
-            // Follow the falling player. Do not teleport them; gravity is the fall.
-            double ay = player.getY();
-            this.setPosition(3.2, ay + 2.2, 5.6);
-            this.setRotation(155f, 28f);
+            // Beside the falling player, near chest height. Gravity moves them; this only watches.
+            double ay = (player.yo + player.getY()) * 0.5;
+            this.setPosition(2.8, ay + 1.05, 5.2);
+            this.setRotation(160f, 8f);
             return;
         }
         String air = System.getProperty("quarkos_cosmetics.air");
