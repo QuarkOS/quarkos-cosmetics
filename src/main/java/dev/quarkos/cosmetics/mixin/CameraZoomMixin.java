@@ -47,16 +47,16 @@ public abstract class CameraZoomMixin {
     //? if >=1.21.11 {
     @Inject(method = "setup", at = @At("TAIL"))
     private void quarkos$centerBody(net.minecraft.world.level.Level level, Entity entity, boolean detached, boolean reverse, float partialTick, CallbackInfo ci) {
-        quarkos$frame(detached, entity);
+        quarkos$frame(detached, entity, partialTick);
     }
     //?} else {
     @Inject(method = "setup", at = @At("TAIL"))
     private void quarkos$centerBody(net.minecraft.world.level.BlockGetter level, Entity entity, boolean detached, boolean reverse, float partialTick, CallbackInfo ci) {
-        quarkos$frame(detached, entity);
+        quarkos$frame(detached, entity, partialTick);
     }
     //?}
 
-    private void quarkos$frame(boolean detached, Entity entity) {
+    private void quarkos$frame(boolean detached, Entity entity, float partialTick) {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
             return;
         }
@@ -133,9 +133,9 @@ public abstract class CameraZoomMixin {
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.fall")) && entity instanceof net.minecraft.world.entity.player.Player player) {
             // Beside the falling player, near chest height. Gravity moves them; this only watches.
-            double ay = (player.yo + player.getY()) * 0.5;
-            this.setPosition(2.8, ay + 1.05, 5.2);
-            this.setRotation(160f, 8f);
+            double ay = player.yo + (player.getY() - player.yo) * partialTick;
+            this.setPosition(2.6, ay + 1.35, 4.6);
+            this.setRotation(158f, 6f);
             return;
         }
         String air = System.getProperty("quarkos_cosmetics.air");
