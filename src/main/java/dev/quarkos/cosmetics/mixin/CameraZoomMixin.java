@@ -101,9 +101,10 @@ public abstract class CameraZoomMixin {
                 this.setPosition(2.05, 102.70, 4.05);
                 this.setRotation(178f, 28f);
             } else if ("face".equals(sit)) {
-                // South of the chest, looking north. The beak points south, at the lens.
-                this.setPosition(0.50, 102.18, 3.02);
-                this.setRotation(180f, 16f);
+                // South of the chest, far enough that the near plane misses the player and the chick.
+                // The beak points south, toward the lens.
+                this.setPosition(0.55, 102.90, 4.20);
+                this.setRotation(180f, 20f);
             } else {
                 // Close, west of the chest, looking east. Upright profile, beak toward the pillow.
                 this.setPosition(-0.42, 102.16, 2.22);
@@ -128,6 +129,13 @@ public abstract class CameraZoomMixin {
             // East of the pillow, looking down the length of the mattress so the whole body and the chick stay in frame.
             this.setPosition(3.1, 103.0, 2.6);
             this.setRotation(105f, 21f);
+            return;
+        }
+        if ("1".equals(System.getProperty("quarkos_cosmetics.fall")) && entity instanceof net.minecraft.world.entity.player.Player player) {
+            // Follow the falling player. Do not teleport them; gravity is the fall.
+            double ay = player.getY();
+            this.setPosition(3.2, ay + 2.2, 5.6);
+            this.setRotation(155f, 28f);
             return;
         }
         String air = System.getProperty("quarkos_cosmetics.air");

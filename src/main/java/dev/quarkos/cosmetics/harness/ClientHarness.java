@@ -116,6 +116,7 @@ public final class ClientHarness {
     private static int filmStartTick = -1;
     private static int sleepSeenAt = -1;
     private static int asleepSeenAt = -1;
+    private static boolean fallReleased;
     private static double airY = 108;
     private static RemotePlayer guest;
 
@@ -611,7 +612,7 @@ public final class ClientHarness {
             }
             client.options.hideGui = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            client.options.fov().set(28);
+            client.options.fov().set(30);
         } else {
             System.clearProperty("quarkos_cosmetics.sit");
         }
@@ -656,13 +657,30 @@ public final class ClientHarness {
                 client.player.connection.sendCommand("kill @e[type=!player]");
             }
         }
-        if (shot.name.contains("scared")) {
-            if (shot.name.equals("chick-scared-film")) {
-                airY = 108.0;
-            } else if (ticks <= 1) {
+        if (shot.name.equals("chick-scared-film")) {
+            // A real fall from the top of the world, well over 6 blocks. Gravity moves the
+            // body. The camera follows. They are sent back up before their feet reach the floor.
+            client.player.getAbilities().flying = false;
+            client.player.setNoGravity(false);
+            client.player.setOnGround(false);
+            client.player.setPose(Pose.STANDING);
+            if (filmIndex < 0) {
+                fallReleased = false;
+                System.clearProperty("quarkos_cosmetics.fall");
+                System.setProperty("quarkos_cosmetics.air", "310");
+            } else {
+                System.clearProperty("quarkos_cosmetics.air");
+                System.setProperty("quarkos_cosmetics.fall", "1");
+                if (!fallReleased || client.player.getY() < 118.0) {
+                    fallReleased = true;
+                    placeFalling(client.player, 310.0);
+                }
+            }
+        } else if (shot.name.contains("scared")) {
+            if (ticks <= 1) {
                 airY = 112.0;
             }
-            if (shot.name.equals("chick-scared-film") || !shot.name.endsWith("-clip")) {
+            if (!shot.name.endsWith("-clip")) {
                 airY = 108.0;
             } else {
                 airY -= 0.45;
@@ -675,6 +693,20 @@ public final class ClientHarness {
             client.player.setOnGround(false);
             client.player.setPose(Pose.STANDING);
         }
+    }
+
+    /** Drop the local player from the top of the overworld. Old positions match so the camera does not smear. */
+    private static void placeFalling(net.minecraft.world.entity.player.Player player, double y) {
+        player.setPos(0.5, y, 0.5);
+        player.xo = 0.5;
+        player.yo = y;
+        player.zo = 0.5;
+        player.xOld = 0.5;
+        player.yOld = y;
+        player.zOld = 0.5;
+        player.setDeltaMovement(0.0, 0.0, 0.0);
+        player.fallDistance = 0f;
+        player.setOnGround(false);
     }
 
     private static void holdSleepTimer(net.minecraft.world.entity.player.Player player) {
