@@ -316,7 +316,9 @@ public final class ClientHarness {
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
-        if (!shot.name.contains("scared")) {
+        if (shot.name.contains("sleep")) {
+            client.player.connection.sendCommand("tp @s 0.5 102.2 0.5 180 8");
+        } else if (!shot.name.contains("scared")) {
             client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
         } else {
             client.player.connection.sendCommand("tp @s 0.5 116 0.5 180 12");
@@ -333,10 +335,14 @@ public final class ClientHarness {
         }
         if (shot.name.contains("sleep")) {
             client.player.connection.sendCommand("time set 6000");
-            client.player.connection.sendCommand("setblock 0 100 0 red_bed[facing=east,part=foot]");
-            client.player.connection.sendCommand("setblock 1 100 0 red_bed[facing=east,part=head]");
+            client.player.connection.sendCommand("setblock 0 100 0 white_concrete");
+            client.player.connection.sendCommand("setblock 1 100 0 white_concrete");
+            client.player.connection.sendCommand("setblock 0 101 0 red_bed[facing=east,part=foot]");
+            client.player.connection.sendCommand("setblock 1 101 0 red_bed[facing=east,part=head]");
         } else {
             client.player.connection.sendCommand("time set 6000");
+            client.player.connection.sendCommand("setblock 0 101 0 air");
+            client.player.connection.sendCommand("setblock 1 101 0 air");
             client.player.connection.sendCommand("setblock 0 100 0 white_concrete");
             client.player.connection.sendCommand("setblock 1 100 0 white_concrete");
             client.player.connection.sendCommand("kill @e[type=!player]");
@@ -405,7 +411,7 @@ public final class ClientHarness {
         client.options.fov().set(50);
         if (shot.name.contains("sleep")) {
             if (!client.player.isSleeping()) {
-                client.player.startSleepInBed(new BlockPos(1, 100, 0));
+                client.player.startSleepInBed(new BlockPos(1, 101, 0));
             }
             clearSleepFade(client.player);
             if (client.screen != null) {
@@ -413,13 +419,13 @@ public final class ClientHarness {
             }
             client.options.hideGui = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            // East bed: foot (0,100,0), head (1,100,0). Camera sits south of it, above the mattress, so the lying body fills the frame.
+            // Bed sits on the platform: foot (0,101,0), head (1,101,0). Close side view, same field of view as the standing portraits.
             portraitLock = true;
-            lockX = 0.9;
-            lockY = 104.2;
-            lockZ = 3.3;
+            lockX = 1.0;
+            lockY = 102.15;
+            lockZ = 2.45;
             lockYaw = 180f;
-            lockPitch = 50f;
+            lockPitch = 14f;
         }
         if (shot.name.contains("scared")) {
             client.player.connection.sendCommand("tp @s 0.5 116 0.5 180 12");
