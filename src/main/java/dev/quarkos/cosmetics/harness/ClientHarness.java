@@ -322,7 +322,7 @@ public final class ClientHarness {
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
         if (shot.name.equals("chick-to-chest")) {
-            client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
+            client.player.connection.sendCommand("tp @s -0.5 101 0.5 180 8");
         } else if (shot.name.contains("sleep")) {
             client.player.connection.sendCommand("tp @s 0.5 102.2 0.5 180 8");
         } else if (!shot.name.contains("scared")) {
@@ -421,7 +421,7 @@ public final class ClientHarness {
         client.player.getAbilities().flying = false;
         client.options.fov().set(50);
         if (shot.name.equals("chick-to-chest")) {
-            if (filmIndex >= 6 && !client.player.isSleeping()) {
+            if (filmIndex >= 8 && !client.player.isSleeping()) {
                 client.player.startSleepInBed(new BlockPos(1, 101, 0));
             }
             if (client.player.isSleeping()) {
@@ -434,10 +434,10 @@ public final class ClientHarness {
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             portraitLock = true;
             lockX = 1.0;
-            lockY = 102.9;
-            lockZ = 3.35;
+            lockY = 103.15;
+            lockZ = 2.9;
             lockYaw = 180f;
-            lockPitch = 20f;
+            lockPitch = 18f;
         }
         if (shot.name.contains("sleep")) {
             if (!client.player.isSleeping()) {
