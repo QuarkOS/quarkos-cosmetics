@@ -57,7 +57,15 @@ public abstract class CameraZoomMixin {
     //?}
 
     private void quarkos$frame(boolean detached, Entity entity) {
-        if (!detached || !Boolean.getBoolean("quarkos_cosmetics.harness")) {
+        if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
+            return;
+        }
+        if ("1".equals(System.getProperty("quarkos_cosmetics.bed")) && entity != null) {
+            this.setPosition(0.5 + 5.2, 102.6, 1.5);
+            this.setRotation(90f, 16f);
+            return;
+        }
+        if (!detached) {
             return;
         }
         Vec3 pos = this.position;
