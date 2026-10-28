@@ -61,8 +61,12 @@ class PackedCosmeticTest {
             assertTrue(names.size() >= 4, modelPath);
             try (InputStream stream = resource(texturePath)) {
                 BufferedImage image = ImageIO.read(stream);
-                if ("quarkos:kite_wings".equals(item.path("id").asText())) {
+                String id = item.path("id").asText();
+                if ("quarkos:kite_wings".equals(id)) {
                     assertEquals(64, image.getWidth(), texturePath);
+                    assertEquals(32, image.getHeight(), texturePath);
+                } else if ("quarkos:chick".equals(id)) {
+                    assertEquals(32, image.getWidth(), texturePath);
                     assertEquals(32, image.getHeight(), texturePath);
                 } else {
                     assertEquals(16, image.getWidth(), texturePath);
@@ -72,7 +76,7 @@ class PackedCosmeticTest {
                 }
             }
         }
-        assertEquals(16, count);
+        assertEquals(17, count);
     }
 
     private static boolean contains(BufferedImage image, int rgb) {

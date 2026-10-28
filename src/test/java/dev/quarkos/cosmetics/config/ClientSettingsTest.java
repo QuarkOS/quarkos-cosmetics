@@ -40,6 +40,7 @@ class ClientSettingsTest {
         assertTrue(settings.hideOthers);
         assertFalse(settings.skinLayers);
         assertEquals(32, settings.skinDistance);
+        assertEquals("hat", settings.chickPerch);
         assertEquals("quarkos:lantern_cap", settings.equippedId(Slot.HAT));
         assertFalse(settings.categoryOn.get(Slot.TAIL));
         assertTrue(settings.disabled.contains("quarkos:paper_boat"));
@@ -47,6 +48,7 @@ class ClientSettingsTest {
         assertFalse(saved.contains("accessToken"));
         assertFalse(saved.contains("should-not-survive"));
         assertFalse(saved.contains("password"));
+        assertTrue(saved.contains("chickPerch=hat"));
     }
 
     @Test

@@ -4,6 +4,7 @@ import dev.quarkos.cosmetics.config.ClientSettings;
 import dev.quarkos.cosmetics.config.WardrobeScreen;
 import dev.quarkos.cosmetics.model.ModelException;
 import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.Chick;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.Minecraft;
 
@@ -197,6 +198,61 @@ public final class GalleryWork {
                 GalleryClient.Report report = client().report(token, cosmeticId, reason, "Reported from the wardrobe.");
                 onClient(() -> {
                     status = "Report " + report.status() + " (" + reason + ").";
+                    refreshScreen();
+                });
+            } catch (Exception ex) {
+                fail(ex);
+            }
+        });
+    }
+
+    /** Publishes the one chick into the perch slot when signed in. The slot is the sync field. */
+    public static void syncChick(Slot perch) {
+        if (perch != Slot.HAT && perch != Slot.SHOULDER_LEFT && perch != Slot.SHOULDER_RIGHT) {
+            return;
+        }
+        ClientSettings settings = ClientSettings.get();
+        settings.setChickPerch(perch);
+        save();
+        if (!signedIn()) {
+            status = "Chick on " + perch.wire + ".";
+            refreshScreen();
+            return;
+        }
+        String token = bearer;
+        String cached = settings.chickGallery.get(perch);
+        EXEC.execute(() -> {
+            try {
+                GalleryClient client = client();
+                String id = cached;
+                if (id == null || id.isBlank()) {
+                    ModelLibrary.Resolved resolved = ModelLibrary.resolve(Chick.ID);
+                    if (resolved == null || resolved.png() == null) {
+                        throw new GalleryException(400, "validation_failed", "The chick model is not loaded.");
+                    }
+                    String body = resolved.model().publishBody(resolved.name(), resolved.description(), perch, "texture", resolved.png());
+                    id = client.publish(token, body).id();
+                }
+                client.equip(token, perch, id);
+                for (Slot other : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
+                    if (other != perch && settings.chickGallery.get(other) != null) {
+                        client.equip(token, other, null);
+                    }
+                }
+                GalleryClient.Detail detail = client.cosmetic(id);
+                String equippedId = id;
+                onClient(() -> {
+                    settings.chickGallery.put(perch, equippedId);
+                    remember(detail);
+                    settings.setChickPerch(perch);
+                    settings.equip(perch, equippedId);
+                    for (Slot other : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
+                        if (other != perch && settings.isChickGallery(settings.equippedId(other))) {
+                            settings.equip(other, "");
+                        }
+                    }
+                    save();
+                    status = "Chick on " + perch.wire + ".";
                     refreshScreen();
                 });
             } catch (Exception ex) {

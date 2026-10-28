@@ -35,6 +35,7 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
         boolean legs = !state.legsEquipment.isEmpty();
         boolean wingsFlap = entity instanceof net.minecraft.world.entity.player.Player player
                 && (player.isSprinting() || player.isFallFlying() || player.getAbilities().flying);
+        Chick.bind(entity instanceof net.minecraft.world.entity.player.Player player ? player : null, helmet, state.showHat);
         PlayerModel model = this.getParentModel();
         CosmeticDrawer.Submitter submitter = (stack, texture, translucent, draw) -> {
             var type = translucent ? RenderTypes.entityTranslucent(texture) : RenderTypes.entityCutoutNoCull(texture);
@@ -83,6 +84,7 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
         boolean legs = !player.getItemBySlot(EquipmentSlot.LEGS).isEmpty();
         boolean self = Minecraft.getInstance().player == player;
         boolean wingsFlap = player.isSprinting() || player.isFallFlying() || player.getAbilities().flying;
+        Chick.bind(player, helmet, player.isModelPartShown(PlayerModelPart.HAT));
         PlayerModel<AbstractClientPlayer> model = this.getParentModel();
         CosmeticDrawer.Submitter submitter = (stack, texture, translucent, draw) -> {
             RenderType type = translucent ? RenderType.entityTranslucent(texture) : RenderType.entityCutoutNoCull(texture);

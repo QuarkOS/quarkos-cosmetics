@@ -34,6 +34,10 @@ public final class CosmeticDrawer {
                         placement.offsetX(), placement.offsetY(), placement.offsetZ());
                 continue;
             }
+            if (Chick.draws(placement.id()) && Chick.isPerch(placement.slot())) {
+                Chick.draw(pose, submitter, light, age, placement.slot(), head, body);
+                continue;
+            }
             ModelLibrary.Resolved resolved = ModelLibrary.resolve(placement.id());
             if (resolved == null) {
                 continue;

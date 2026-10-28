@@ -31,6 +31,9 @@ public final class ClientSettings {
     public final Map<Slot, String> equipped = new EnumMap<>(Slot.class);
     public final Map<Slot, Boolean> categoryOn = new EnumMap<>(Slot.class);
     public final Set<String> disabled = new LinkedHashSet<>();
+    /** hat, shoulder_left, or shoulder_right. The equipped slot is what other players see. */
+    public String chickPerch = Slot.HAT.wire;
+    public final Map<Slot, String> chickGallery = new EnumMap<>(Slot.class);
 
     public ClientSettings() {
         for (Slot slot : Slot.values()) {
@@ -79,6 +82,16 @@ public final class ClientSettings {
             settings.equipped.put(slot, properties.getProperty("equipped." + slot.wire, slot == Slot.BACK ? "quarkos:kite_wings" : ""));
             settings.categoryOn.put(slot, Boolean.parseBoolean(properties.getProperty("category." + slot.wire, "true")));
         }
+        settings.chickPerch = properties.getProperty("chickPerch", Slot.HAT.wire);
+        if (Slot.parse(settings.chickPerch).filter(slot -> slot == Slot.HAT || slot == Slot.SHOULDER_LEFT || slot == Slot.SHOULDER_RIGHT).isEmpty()) {
+            settings.chickPerch = Slot.HAT.wire;
+        }
+        for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
+            String published = properties.getProperty("chickGallery." + slot.wire, "");
+            if (!published.isBlank()) {
+                settings.chickGallery.put(slot, published.trim());
+            }
+        }
         settings.disabled.clear();
         String disabled = properties.getProperty("disabled", "");
         if (!disabled.isBlank()) {
@@ -108,6 +121,10 @@ public final class ClientSettings {
             properties.setProperty("category." + slot.wire, Boolean.toString(categoryOn.getOrDefault(slot, true)));
         }
         properties.setProperty("disabled", String.join(",", disabled));
+        properties.setProperty("chickPerch", chickPerch == null || chickPerch.isBlank() ? Slot.HAT.wire : chickPerch);
+        for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
+            properties.setProperty("chickGallery." + slot.wire, chickGallery.getOrDefault(slot, ""));
+        }
         Path file = configFile(gameDir);
         try {
             Files.createDirectories(file.getParent());
@@ -178,6 +195,28 @@ public final class ClientSettings {
 
     public void equip(Slot slot, String id) {
         equipped.put(slot, id == null ? "" : id);
+    }
+
+    public boolean isChickGallery(String id) {
+        return id != null && chickGallery.containsValue(id);
+    }
+
+    /** Moves the packed chick onto the perch slot and remembers the choice. */
+    public void setChickPerch(Slot perch) {
+        if (perch != Slot.HAT && perch != Slot.SHOULDER_LEFT && perch != Slot.SHOULDER_RIGHT) {
+            return;
+        }
+        chickPerch = perch.wire;
+        for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
+            if (slot == perch) {
+                continue;
+            }
+            String equippedId = equippedId(slot);
+            if ("quarkos:chick".equals(equippedId) || (chickGallery.get(slot) != null && chickGallery.get(slot).equals(equippedId))) {
+                equip(slot, "");
+            }
+        }
+        equip(perch, "quarkos:chick");
     }
 
     public static String hyphenate(String raw) {
