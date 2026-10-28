@@ -92,6 +92,17 @@ public final class Chick {
         heldSeconds = seconds;
     }
 
+    /** Drop a carried-over bed trip so the next shot starts on the perch. */
+    public static void resetBed() {
+        for (Mood mood : MOODS.values()) {
+            mood.bed = Bed.PERCH;
+            mood.trip = 0f;
+            mood.lastBedTick = -1;
+            mood.phaseTick = -1;
+            mood.bedLogged = "";
+        }
+    }
+
     /** True once the in-bed settle has finished and the sleep loop is playing. */
     public static boolean asleep() {
         if (bound == null) {
@@ -158,7 +169,8 @@ public final class Chick {
     /**
      * Head and shoulder stay on their parts. Once the player is in bed the chick leaves that
      * rotated standing frame: it walks in world space onto the top of the chest, feet down,
-     * body up along world up, beak toward the head, then settle and sleep.
+     * body up along world up, beak toward the head. Settle and sleep then pitch the body
+     * flat. The bed rotation never rides along.
      */
     private static Place place(PoseStack pose, Slot slot, ModelPart head, ModelPart body,
                                float scale, float contact) {
@@ -171,7 +183,7 @@ public final class Chick {
             }
             return alongBody(pose, slot, head, body, perch, mood, scale, contact);
         }
-        return onChest(pose, part, body, perch, mood);
+        return onChest(pose, part, body, perch, mood, scale);
     }
 
     /** Awake return trip. The player model is standing again, so body space is the perch frame. */
@@ -224,9 +236,10 @@ public final class Chick {
     /**
      * In bed, the player renderer has already turned the standing model onto its side.
      * Put the chick on the chest in world space so that turn does not ride along.
-     * Translate-space +Y is world down after the bedrock flip, so the facing up vector is world down.
+     * Translate-space +Y is world down after the bedrock flip, so a standing up vector is world down.
+     * The walk keeps that upright facing. Settle and sleep pitch the spine along the bed and the beak down.
      */
-    private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood) {
+    private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood, float scale) {
         Vector3f start = anchor(pose, part, perch[0], perch[1], perch[2]);
         Vector3f chest = anchor(pose, body, 0f, -4.5f, -2f);
         chest.y += 0.2f / 16f;
@@ -236,13 +249,19 @@ public final class Chick {
             towardHead.set(0f, 0f, -1f);
         }
         towardHead.normalize();
-        boolean settled = mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP;
-        float s = settled ? 1f : smooth(mood.trip);
+        float lay = layAmount(mood);
+        boolean arrived = mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP;
+        float s = arrived ? 1f : smooth(mood.trip);
         Vector3f control = new Vector3f(start).lerp(chest, 0.5f);
         control.y += 8f / 16f;
-        Vector3f pos = settled ? new Vector3f(chest) : bezier(start, control, chest, s);
+        Vector3f pos = arrived ? new Vector3f(chest) : bezier(start, control, chest, s);
+        if (lay > 0f) {
+            pos.lerp(layRest(pose, body, towardHead, scale), lay);
+        }
+        // Standing: spine world up, beak toward the head. Flat: spine along the bed, beak world down.
+        Vector3f up = new Vector3f(0f, -1f, 0f);
         Vector3f dir = new Vector3f(towardHead);
-        if (!settled) {
+        if (!arrived) {
             Vector3f tangent = bezierTangent(start, control, chest, Math.max(0.001f, Math.min(0.999f, s)));
             if (mood.bed == Bed.TO_PERCH) {
                 tangent.negate();
@@ -256,8 +275,56 @@ public final class Chick {
                 dir.lerp(towardHead, align).normalize();
             }
         }
-        Vector3f up = new Vector3f(0f, -1f, 0f);
+        if (lay > 0f) {
+            up.lerp(towardHead, lay);
+            dir.lerp(new Vector3f(0f, 1f, 0f), lay);
+        }
         return new Place(body, 0f, 0f, 0f, facing(up, dir), pos);
+    }
+
+    /** 0 while walking onto the chest, then 0→1 across settle, then 1 for the sleep loop. */
+    private static float layAmount(Mood mood) {
+        if (mood.bed == Bed.ASLEEP) {
+            return 1f;
+        }
+        if (mood.bed != Bed.SETTLE || mood.phaseTick < 0) {
+            return 0f;
+        }
+        float elapsed = Math.max(0f, mood.lastBedTick - mood.phaseTick);
+        return smooth(elapsed / 16f);
+    }
+
+    /**
+     * Body center over the middle of the chest, lifted so the lowest corner — the beak, once pitched —
+     * sits on the shirt. Translate-space only; the bed rotation is not copied onto the chick.
+     */
+    private static Vector3f layRest(PoseStack pose, ModelPart body, Vector3f towardHead, float scale) {
+        Vector3f mid = anchor(pose, body, 0f, -6f, -2f);
+        Quaternionf flat = facing(new Vector3f(towardHead), new Vector3f(0f, 1f, 0f));
+        Vector3f rest = new Vector3f(mid).sub(modelPoint(flat, scale, 0f, 3f, 0f));
+        float minY = Float.POSITIVE_INFINITY;
+        float[][] low = {
+                {0f, 5.5f, -3.5f},
+                {-2f, 1f, -2f},
+                {2f, 1f, -2f},
+                {0f, 3f, 3f},
+                {0f, 9f, -1.5f},
+                {-3f, 2.5f, -1.5f},
+                {3f, 2.5f, -1.5f}
+        };
+        for (float[] point : low) {
+            minY = Math.min(minY, modelPoint(flat, scale, point[0], point[1], point[2]).y);
+        }
+        rest.y = mid.y + (0.15f / 16f) - minY;
+        return rest;
+    }
+
+    /** Model pixels through the chick rotation and the bedrock flip, relative to the feet anchor. */
+    private static Vector3f modelPoint(Quaternionf turn, float scale, float x, float y, float z) {
+        Vector3f point = new Vector3f(x * scale, y * scale, z * scale);
+        turn.transform(point);
+        point.mul(1f / 16f, -1f / 16f, 1f / 16f);
+        return point;
     }
 
     /** Feet stay 0.1 px clear. Sit tucks the belly to {@code contact}; scale would lift it, so Y comes back down. */
