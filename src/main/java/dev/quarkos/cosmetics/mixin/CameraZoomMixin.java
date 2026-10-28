@@ -90,6 +90,23 @@ public abstract class CameraZoomMixin {
             }
             return;
         }
+        String sit = System.getProperty("quarkos_cosmetics.sit");
+        if (sit != null && !sit.isBlank() && entity != null) {
+            if ("three".equals(sit)) {
+                // Southeast of the chest. The upright face and the tipped head stay in view.
+                this.setPosition(1.05, 102.30, 2.90);
+                this.setRotation(147f, 14f);
+            } else if ("light".equals(sit)) {
+                // Wide enough for the chick on the chest and a chicken standing beside the bed.
+                this.setPosition(2.55, 102.95, 4.05);
+                this.setRotation(150f, 26f);
+            } else {
+                // West of the chest, looking east. Profile of the upright body, beak toward the pillow.
+                this.setPosition(-1.20, 102.22, 1.90);
+                this.setRotation(270f, 6f);
+            }
+            return;
+        }
         if ("1".equals(System.getProperty("quarkos_cosmetics.flat")) && entity != null) {
             // South of the pillow, looking north along the mattress, so a chick lying
             // across the chest reads low and flat instead of end-on.
@@ -98,7 +115,7 @@ public abstract class CameraZoomMixin {
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.chest")) && entity != null) {
-            // South of the bed: the walk in, then the chick pitched flat on the chest.
+            // South of the bed: the walk in, then the chick sitting upright on the chest.
             this.setPosition(1.15, 102.7, 3.55);
             this.setRotation(168f, 22f);
             return;
