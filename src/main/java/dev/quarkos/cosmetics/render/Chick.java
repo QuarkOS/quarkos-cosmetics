@@ -24,9 +24,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -63,7 +66,17 @@ public final class Chick {
     private static boolean boundHelmet;
     private static boolean boundHat;
     private static final Map<UUID, Mood> MOODS = new LinkedHashMap<>();
+    private static final Set<String> POSE_DET = new HashSet<>();
+    private static final Set<String> BONE_DET = new HashSet<>();
     private static String logged = "";
+    private static UUID drawPlayer;
+    private static float drawAge = Float.NaN;
+    private static int drawSubmits;
+    private static int drawPaints;
+    private static int drawTick = -1;
+    private static String drawSlot = "";
+    private static boolean drawChest;
+    private static boolean loggedSecond;
 
     private Chick() {
     }
@@ -149,6 +162,7 @@ public final class Chick {
                     CHICK_TALL_PX * scale, CHICK_WIDE_PX * scale, CHICK_LONG_PX * scale, HEAD_PX);
         }
         Place place = place(pose, slot, head, body, scale, contact);
+        noteSubmit(slot, age, place.world != null);
         pose.pushPose();
         if (place.world != null) {
             // The bed rotation is already on this stack. Drop it. Feet sit in world space.
@@ -157,24 +171,97 @@ public final class Chick {
         } else {
             place.part.translateAndRotate(pose);
         }
-        pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        // Bedrock +Y is up. A 180° roll stands the chick up. A negative Y scale would
+        // mirror it, flip the winding, and draw the inside faces.
+        bedrock(pose);
         if (place.world == null) {
-            pose.translate(place.x, place.y, place.z);
+            // The roll negates X compared with a Y mirror. The perch stays on the same side.
+            pose.translate(-place.x, place.y, place.z);
         }
         if (place.turn != null) {
             pose.mulPose(place.turn);
         }
         pose.scale(scale, scale, scale);
         Matrix4f view = new Matrix4f(pose.last().pose());
-        // The bedrock flip is a negative Y scale. PoseStack.normal() takes a cube root of that
-        // product and comes back unusable, so the chest and the perches shade in patches.
-        // Rebuild the normal matrix from the pose. The world-space facing rotation is already
-        // on this stack, and the inverse transpose is what a vanilla mob uses for face shading.
+        logPoseDet(slot, view);
+        // Rebuild the normal matrix from the pose. PoseStack.normal() cube-roots the
+        // determinant, and a negative product (the old Y mirror) came back unusable.
         // `light` is the player's packed light. The overlay is the normal white one.
         Matrix3f normals = new Matrix3f();
         view.normal(normals);
-        submitter.submit(pose, TEXTURE, false, true, consumer -> render(consumer, view, normals, light, loaded, sample));
+        submitter.submit(pose, TEXTURE, false, true, consumer -> {
+            int quads = render(consumer, view, normals, light, loaded, sample);
+            notePaint(quads);
+        });
         pose.popPose();
+    }
+
+    /** Bedrock pixels, upright, no mirror. Uniform and positive on every axis. */
+    private static void bedrock(PoseStack pose) {
+        pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
+        pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
+    }
+
+    private static void noteSubmit(Slot slot, float age, boolean chest) {
+        UUID id = bound == null ? null : bound.getUUID();
+        int tick = bound == null ? -1 : bound.tickCount;
+        if (drawPaints > 0 && (id == null || drawPlayer == null || !id.equals(drawPlayer) || drawAge != age)) {
+            logDraws();
+            drawSubmits = 0;
+            drawPaints = 0;
+            loggedSecond = false;
+        }
+        if (drawSubmits == 0) {
+            drawPlayer = id;
+            drawAge = age;
+            drawTick = tick;
+            drawSlot = slot.wire;
+            drawChest = chest;
+        }
+        drawSubmits++;
+        if (drawSubmits == 2 && !loggedSecond) {
+            loggedSecond = true;
+            LOGGER.info("chick second submit slot={} chest={} firstSlot={} firstChest={} tick={}",
+                    slot.wire, chest, drawSlot, drawChest, tick);
+            int shown = 0;
+            for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
+                if (!frame.getClassName().startsWith("dev.quarkos")) {
+                    continue;
+                }
+                LOGGER.info("chick second at {}", frame);
+                if (++shown >= 8) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void notePaint(int quads) {
+        drawPaints++;
+        if (drawPaints == 2) {
+            LOGGER.info("chick second paint quads={} submits={} tick={}", quads, drawSubmits, drawTick);
+        }
+    }
+
+    private static void logDraws() {
+        LOGGER.info("chick draws {} player {} tick {}", drawPaints, drawPlayer, drawTick);
+    }
+
+    /** One line each for the head perch, the shoulder perch, the walk, and the chest. */
+    private static void logPoseDet(Slot slot, Matrix4f view) {
+        Mood mood = bound == null ? null : MOODS.get(bound.getUUID());
+        Bed bed = mood == null ? Bed.PERCH : mood.bed;
+        String state = switch (bed) {
+            case TO_CHEST -> "walk";
+            case SETTLE, ASLEEP -> "chest";
+            case PERCH -> slot == Slot.HAT ? "head" : "shoulder";
+            default -> null;
+        };
+        if (state == null || !POSE_DET.add(state)) {
+            return;
+        }
+        float det = view.determinant();
+        LOGGER.info("chick pose det {} = {}", state, String.format(Locale.ROOT, "%.8g", det));
     }
 
     /**
@@ -247,7 +334,7 @@ public final class Chick {
     /**
      * In bed, the player renderer has already turned the standing model onto its side.
      * Put the chick on the chest in world space so that turn does not ride along.
-     * Translate-space +Y is world down after the bedrock flip, so a standing up vector is world down.
+     * The aim is pre-rolled: translate-space +Y is world down once the 180° roll lands.
      * The body stays level for the whole trip. The beak turns toward the pillow as it arrives.
      * Settle and sleep are the clips themselves: no extra bone pitch or position on top.
      */
@@ -282,7 +369,10 @@ public final class Chick {
                 dir.lerp(towardHead, align).normalize();
             }
         }
-        return new Place(body, 0f, 0f, 0f, facing(up, dir), pos);
+        // The roll is applied after this aim. Pre-roll X and Y so the beak still
+        // points at the pillow and the feet still point down, without a mirror.
+        Vector3f aim = new Vector3f(-dir.x, -dir.y, dir.z);
+        return new Place(body, 0f, 0f, 0f, facing(up, aim), pos);
     }
 
     /**
@@ -434,8 +524,8 @@ public final class Chick {
     private static Vector3f anchor(PoseStack pose, ModelPart part, float x, float y, float z) {
         pose.pushPose();
         part.translateAndRotate(pose);
-        pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
-        pose.translate(x, y, z);
+        bedrock(pose);
+        pose.translate(-x, y, z);
         Vector3f point = new Vector3f();
         pose.last().pose().transformPosition(point);
         pose.popPose();
@@ -445,7 +535,7 @@ public final class Chick {
     private static Matrix4f bodyPixels(PoseStack pose, ModelPart body) {
         pose.pushPose();
         body.translateAndRotate(pose);
-        pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        bedrock(pose);
         Matrix4f inverse = new Matrix4f(pose.last().pose()).invert();
         pose.popPose();
         return inverse;
@@ -683,9 +773,10 @@ public final class Chick {
         return false;
     }
 
-    private static void render(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Sample sample) {
+    private static int render(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Sample sample) {
         Map<String, Matrix4f> worlds = new LinkedHashMap<>();
         Map<String, Matrix3f> turns = new LinkedHashMap<>();
+        int quads = 0;
         for (Bone bone : loaded.bones.values()) {
             world(loaded, bone, sample, worlds, turns);
         }
@@ -697,9 +788,10 @@ public final class Chick {
             }
             Matrix4f combined = new Matrix4f(view).mul(local);
             for (Cube cube : bone.cubes) {
-                cube(consumer, combined, normals, turn, light, loaded, cube);
+                quads += cube(consumer, combined, normals, turn, light, loaded, cube);
             }
         }
+        return quads;
     }
 
     private static Matrix4f world(Model loaded, Bone bone, Sample sample, Map<String, Matrix4f> worlds, Map<String, Matrix3f> turns) {
@@ -727,6 +819,9 @@ public final class Chick {
         matrix.scale(scale[0], scale[1], scale[2]);
         matrix.translate(-bone.pivot[0], -bone.pivot[1], -bone.pivot[2]);
         worlds.put(bone.name, matrix);
+        if (matrix.determinant() < 0f && BONE_DET.add(bone.name)) {
+            LOGGER.info("chick bone det {} = {}", bone.name, String.format(Locale.ROOT, "%.8g", matrix.determinant()));
+        }
         Matrix3f turn = new Matrix3f(matrix);
         if (Math.abs(turn.determinant()) > 0.0001f) {
             turn.invert().transpose();
@@ -740,7 +835,7 @@ public final class Chick {
      * beak and eyes were only visible from behind, and the side strips were swapped.
      * Geometry stays in bedrock space: beak on −Z, the player's look, left wing on +X. No X mirror.
      */
-    private static void cube(VertexConsumer consumer, Matrix4f view, Matrix3f poseNormals, Matrix3f turn, int light,
+    private static int cube(VertexConsumer consumer, Matrix4f view, Matrix3f poseNormals, Matrix3f turn, int light,
                              Model loaded, Cube cube) {
         float inf = cube.inflate;
         float x0 = cube.ox - inf;
@@ -782,6 +877,7 @@ public final class Chick {
         quad(consumer, view, poseNormals, turn, light, loaded, mirror,
                 cube.u + d + w, cube.v + d, w, -d,
                 x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
+        return 6;
     }
 
     private static void quad(VertexConsumer consumer, Matrix4f view, Matrix3f poseNormals, Matrix3f turn, int light,
