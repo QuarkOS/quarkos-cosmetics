@@ -85,7 +85,13 @@ public final class ClientHarness {
             new Shot("chick-chest-sit-side", Slot.HAT, Chick.ID, false, false, 0f, ""),
             new Shot("chick-chest-sit-three-quarter", Slot.HAT, Chick.ID, false, false, 0f, ""),
             new Shot("chick-chest-light", Slot.HAT, Chick.ID, false, false, 0f, ""),
-            new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, "")
+            new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-compare-head", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-compare-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-compare-sleep", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-head-idle-alert", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-shoulder-film", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-scared-film", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, "")
     );
 
     private static State state = State.WAIT_TITLE;
@@ -109,6 +115,7 @@ public final class ClientHarness {
     private static int filmIndex = -1;
     private static int filmStartTick = -1;
     private static int sleepSeenAt = -1;
+    private static int asleepSeenAt = -1;
     private static double airY = 108;
     private static RemotePlayer guest;
 
@@ -250,6 +257,7 @@ public final class ClientHarness {
                     || client.level.getBlockState(new BlockPos(0, 101, 2)).is(net.minecraft.world.level.block.Blocks.RED_BED);
             if (client.player.getY() >= 100.0 && bedPlaced) {
                 settledAt = ticks;
+                asleepSeenAt = -1;
                 LOGGER.info("studio ready at y={}", client.player.getY());
             } else if (ticks > 20 * 30) {
                 LOGGER.error("player never reached the studio, y={}", client.player.getY());
@@ -264,11 +272,7 @@ public final class ClientHarness {
         if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
             return;
         }
-        if (shot.name.equals("chick-to-chest")) {
-            chickClip(client, shot);
-            return;
-        }
-        if (shot.name.startsWith("chick-") && shot.name.endsWith("-clip")) {
+        if (filmShot(shot.name) || (shot.name.startsWith("chick-") && shot.name.endsWith("-clip"))) {
             chickClip(client, shot);
             return;
         }
@@ -409,11 +413,12 @@ public final class ClientHarness {
         }
         if (shot.name.contains("sleep") || shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep")
                 || chestSit(shot.name)) {
-            boolean day = shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep") || chestSit(shot.name);
+            boolean day = shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep")
+                    || chestSit(shot.name) || shot.name.equals("chick-compare-sleep");
             client.player.connection.sendCommand(day ? "time set 6000" : "time set 18000");
             client.player.connection.sendCommand("setblock 0 101 1 red_bed[facing=south,part=foot]");
             client.player.connection.sendCommand("setblock 0 101 2 red_bed[facing=south,part=head]");
-            if (chestSit(shot.name)) {
+            if (chestSit(shot.name) || shot.name.equals("chick-compare-sleep")) {
                 // Vanilla daylight, shared with the chicken beside the bed.
                 client.player.connection.sendCommand("setblock 2 102 1 air");
                 client.player.connection.sendCommand("setblock 2 102 2 air");
@@ -511,9 +516,25 @@ public final class ClientHarness {
         client.options.fov().set(50);
         String clip = chickClipName(shot.name);
         boolean side = shot.name.equals("chick-head-side") || shot.name.equals("chick-shoulder-side");
+        boolean shoulderView = shot.name.equals("chick-shoulder-front")
+                || shot.name.equals("chick-compare-shoulder")
+                || shot.name.equals("chick-shoulder-film");
         boolean front = shot.name.equals("chick-head-front") || shot.name.equals("chick-head-three-quarter")
-                || shot.name.equals("chick-shoulder-front");
-        if (shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep") || chestSit(shot.name)) {
+                || shoulderView
+                || shot.name.equals("chick-compare-head")
+                || shot.name.equals("chick-head-idle-alert");
+        if (shot.name.equals("chick-head-idle-alert")) {
+            // Eight seconds of idle, then alert. A null time plays the clip instead of freezing a frame.
+            Chick.hold(filmIndex >= 80 ? "alert" : "idle", null);
+        } else if (shot.name.equals("chick-shoulder-film")) {
+            Chick.hold("idle", null);
+        } else if (shot.name.equals("chick-scared-film")) {
+            Chick.hold("scared", null);
+        } else if (shot.name.equals("chick-compare-head") || shot.name.equals("chick-compare-shoulder")) {
+            // Idle at 0s is the identity scale, so the body is the geo cube and the reference matches.
+            Chick.hold("idle", 0f);
+        } else if (shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep")
+                || shot.name.equals("chick-compare-sleep") || chestSit(shot.name)) {
             Chick.hold(null, null);
         } else if (side) {
             Chick.hold(clip, 0f);
@@ -538,11 +559,11 @@ public final class ClientHarness {
         }
         if (front) {
             String which = shot.name.equals("chick-head-three-quarter") ? "three"
-                    : shot.name.equals("chick-shoulder-front") ? "shoulder" : "head";
+                    : shoulderView ? "shoulder" : "head";
             System.setProperty("quarkos_cosmetics.front", which);
             client.options.hideGui = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            client.options.fov().set(shot.name.equals("chick-shoulder-front") ? 32 : 30);
+            client.options.fov().set(shoulderView ? 32 : 30);
         } else {
             System.clearProperty("quarkos_cosmetics.front");
         }
@@ -578,6 +599,19 @@ public final class ClientHarness {
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             client.options.fov().set(shot.name.equals("chick-chest-light") ? 50
                     : shot.name.equals("chick-chest-sit-side") ? 22 : 28);
+        } else if (shot.name.equals("chick-compare-sleep")) {
+            System.setProperty("quarkos_cosmetics.sit", "face");
+            if (!client.player.isSleeping()) {
+                client.player.startSleepInBed(new BlockPos(0, 101, 2));
+            }
+            if (client.player.isSleeping()) {
+                System.setProperty("quarkos_cosmetics.bed", "1");
+                client.screen = null;
+                holdSleepTimer(client.player);
+            }
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            client.options.fov().set(28);
         } else {
             System.clearProperty("quarkos_cosmetics.sit");
         }
@@ -623,10 +657,12 @@ public final class ClientHarness {
             }
         }
         if (shot.name.contains("scared")) {
-            if (ticks <= 1) {
+            if (shot.name.equals("chick-scared-film")) {
+                airY = 108.0;
+            } else if (ticks <= 1) {
                 airY = 112.0;
             }
-            if (!shot.name.endsWith("-clip")) {
+            if (shot.name.equals("chick-scared-film") || !shot.name.endsWith("-clip")) {
                 airY = 108.0;
             } else {
                 airY -= 0.45;
@@ -652,6 +688,21 @@ public final class ClientHarness {
     }
 
     private static boolean chickReady(Minecraft client, Shot shot) {
+        if (shot.name.equals("chick-compare-sleep")) {
+            if (!client.player.isSleeping() || !Chick.asleep()) {
+                asleepSeenAt = -1;
+                if (ticks - settledAt > 20 * 20) {
+                    LOGGER.error("chick never reached sleep for the compare still, sleeping={}", client.player.isSleeping());
+                    state = State.STOP;
+                }
+                return false;
+            }
+            if (asleepSeenAt < 0) {
+                asleepSeenAt = ticks;
+            }
+            // A few ticks so the saved frame is the sleep clip, not the last settle frame.
+            return ticks - asleepSeenAt >= 8;
+        }
         if (shot.name.equals("chick-chest-asleep") || chestSit(shot.name)) {
             if (!client.player.isSleeping() || !Chick.asleep()) {
                 if (ticks - settledAt > 20 * 20) {
@@ -716,13 +767,37 @@ public final class ClientHarness {
         };
     }
 
-    /** Plays one chick clip and writes a short mp4 next to the stills. */
+    /** Fifteen seconds at ten frames a second. The camera stays put for the whole take. */
+    private static boolean filmShot(String name) {
+        return name.equals("chick-to-chest")
+                || name.equals("chick-head-idle-alert")
+                || name.equals("chick-shoulder-film")
+                || name.equals("chick-scared-film");
+    }
+
+    /** Plays one chick clip and writes an mp4 next to the stills. */
     private static void chickClip(Minecraft client, Shot shot) {
-        int frames = shot.name.equals("chick-to-chest") ? 48 : 20;
+        int frames = filmShot(shot.name) ? 150 : 20;
         if (filmIndex < 0) {
             filmIndex = 0;
             filmStartTick = ticks;
             shotQueued = false;
+            try {
+                Path dir = chickFrame(shot.name, 0).getParent();
+                if (Files.isDirectory(dir)) {
+                    try (var listing = Files.list(dir)) {
+                        listing.forEach(path -> {
+                            try {
+                                Files.deleteIfExists(path);
+                            } catch (Exception ignored) {
+                                // A leftover frame must not be encoded into this take.
+                            }
+                        });
+                    }
+                }
+            } catch (Exception ignored) {
+                // The directory is created on the first frame.
+            }
         }
         if (ticks - filmStartTick < filmIndex * 2) {
             return;
@@ -765,13 +840,24 @@ public final class ClientHarness {
     }
 
     private static Path chickFrame(String name, int index) {
-        return Path.of("/tmp/chick-frames").resolve(name).resolve(String.format("f%02d.png", index));
+        String pattern = filmShot(name) ? "f%03d.png" : "f%02d.png";
+        return Path.of("/tmp/chick-frames").resolve(name).resolve(String.format(pattern, index));
+    }
+
+    private static Path chickFilmOutput(String shotName) {
+        return switch (shotName) {
+            case "chick-shoulder-film" -> shots().resolve("chick-shoulder.mp4");
+            case "chick-scared-film" -> shots().resolve("chick-scared.mp4");
+            default -> shots().resolve(shotName + ".mp4");
+        };
     }
 
     private static void encodeChickClip(String shotName, int frames) {
-        String clip = chickClipName(shotName);
-        Path mp4 = shots().resolve("chick-" + clip + ".mp4");
-        Path pattern = chickFrame(shotName, 0).getParent().resolve("f%02d.png");
+        Path mp4 = filmShot(shotName)
+                ? chickFilmOutput(shotName)
+                : shots().resolve("chick-" + chickClipName(shotName) + ".mp4");
+        String digits = filmShot(shotName) ? "f%03d.png" : "f%02d.png";
+        Path pattern = chickFrame(shotName, 0).getParent().resolve(digits);
         try {
             Files.createDirectories(mp4.getParent());
             Process process = new ProcessBuilder(

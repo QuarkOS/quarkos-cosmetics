@@ -194,7 +194,9 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         systemProperty("cosmetics.galleryUrl", gallery)
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
-            args("--width", "960", "--height", "540")
+            val width = providers.gradleProperty("width").orNull ?: "960"
+            val height = providers.gradleProperty("height").orNull ?: "540"
+            args("--width", width, "--height", height)
         }
         val only = providers.gradleProperty("only").orNull
         if (!only.isNullOrBlank()) {

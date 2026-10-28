@@ -100,6 +100,10 @@ public abstract class CameraZoomMixin {
                 // The chick on the chest and a chicken standing east of the bed, in one daylight.
                 this.setPosition(2.05, 102.70, 4.05);
                 this.setRotation(178f, 28f);
+            } else if ("face".equals(sit)) {
+                // South of the chest, looking north. The beak points south, at the lens.
+                this.setPosition(0.50, 102.18, 3.02);
+                this.setRotation(180f, 16f);
             } else {
                 // Close, west of the chest, looking east. Upright profile, beak toward the pillow.
                 this.setPosition(-0.42, 102.16, 2.22);
