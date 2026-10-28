@@ -60,6 +60,23 @@ public abstract class CameraZoomMixin {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
             return;
         }
+        String front = System.getProperty("quarkos_cosmetics.front");
+        if (front != null && !front.isBlank() && entity != null) {
+            if ("three".equals(front)) {
+                // Northwest of the face, about 45° off the look direction, so the beak stays in view.
+                this.setPosition(-1.48, 102.55, -1.48);
+                this.setRotation(-45f, -6f);
+            } else if ("shoulder".equals(front)) {
+                // North of the player, looking south. The beak on −Z points at the lens.
+                this.setPosition(0.72, 102.40, -2.45);
+                this.setRotation(5f, 2f);
+            } else {
+                // Due north of the player, looking south at the face.
+                this.setPosition(0.5, 102.55, -2.30);
+                this.setRotation(0f, -6f);
+            }
+            return;
+        }
         String side = System.getProperty("quarkos_cosmetics.side");
         if (side != null && !side.isBlank() && entity != null) {
             if ("shoulder".equals(side)) {

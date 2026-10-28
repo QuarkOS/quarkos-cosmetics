@@ -78,6 +78,9 @@ public final class ClientHarness {
             new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
             new Shot("chick-head-side", Slot.HAT, Chick.ID, false, false, 0f, ""),
             new Shot("chick-shoulder-side", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-head-front", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-head-three-quarter", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-shoulder-front", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, ""),
             new Shot("chick-chest-asleep", Slot.HAT, Chick.ID, false, false, 0f, ""),
             new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, "")
     );
@@ -487,10 +490,14 @@ public final class ClientHarness {
         client.options.fov().set(50);
         String clip = chickClipName(shot.name);
         boolean side = shot.name.equals("chick-head-side") || shot.name.equals("chick-shoulder-side");
+        boolean front = shot.name.equals("chick-head-front") || shot.name.equals("chick-head-three-quarter")
+                || shot.name.equals("chick-shoulder-front");
         if (shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep")) {
             Chick.hold(null, null);
         } else if (side) {
             Chick.hold(clip, 0f);
+        } else if (front) {
+            Chick.hold(clip, chickStill(clip));
         } else {
             Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
         }
@@ -507,6 +514,16 @@ public final class ClientHarness {
             client.options.fov().set(shot.name.equals("chick-shoulder-side") ? 22 : 32);
         } else {
             System.clearProperty("quarkos_cosmetics.side");
+        }
+        if (front) {
+            String which = shot.name.equals("chick-head-three-quarter") ? "three"
+                    : shot.name.equals("chick-shoulder-front") ? "shoulder" : "head";
+            System.setProperty("quarkos_cosmetics.front", which);
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            client.options.fov().set(shot.name.equals("chick-shoulder-front") ? 32 : 30);
+        } else {
+            System.clearProperty("quarkos_cosmetics.front");
         }
         if (shot.name.equals("chick-chest-asleep")) {
             System.setProperty("quarkos_cosmetics.flat", "1");
@@ -629,8 +646,8 @@ public final class ClientHarness {
             body = body.substring(0, body.length() - "-clip".length());
         }
         return switch (body) {
-            case "head", "head-side" -> "sit";
-            case "shoulder", "shoulder-side" -> "idle";
+            case "head", "head-side", "head-front", "head-three-quarter" -> "sit";
+            case "shoulder", "shoulder-side", "shoulder-front" -> "idle";
             default -> body;
         };
     }
