@@ -48,6 +48,10 @@ public final class Chick {
     /** 1.25 s from the perch to the chest, inside the 1–1.5 s window. */
     private static final float TRAVEL_TICKS = 25f;
     private static final float HEAD_PX = 8f;
+    /** Run6 bounds of the whole chick: wings, feet to tuft, beak to tail. */
+    private static final float CHICK_WIDE_PX = 6f;
+    private static final float CHICK_TALL_PX = 9f;
+    private static final float CHICK_LONG_PX = 6.5f;
     private static boolean loggedScale;
 
     private static Model model;
@@ -140,8 +144,8 @@ public final class Chick {
         float contact = sitContact(loaded);
         if (!loggedScale) {
             loggedScale = true;
-            float profile = profileWidth(loaded);
-            LOGGER.info("chick profile {} px scaled by {} to {} px (head {} px)", profile, scale, profile * scale, HEAD_PX);
+            LOGGER.info("chick scale {} ({} px tall, {} px wide, {} px long, head {} px)", scale,
+                    CHICK_TALL_PX * scale, CHICK_WIDE_PX * scale, CHICK_LONG_PX * scale, HEAD_PX);
         }
         Place place = place(pose, slot, head, body, scale, contact);
         pose.pushPose();
@@ -327,7 +331,11 @@ public final class Chick {
         return point;
     }
 
-    /** Feet stay 0.1 px clear. Sit tucks the belly to {@code contact}; scale would lift it, so Y comes back down. */
+    /**
+     * Feet stay 0.1 px clear of the part. Sit tucks the belly to {@code contact}.
+     * The contact point is {@code contact * scale} above the anchor, so Y moves with the
+     * scale and the belly stays flush when the chick shrinks.
+     */
     private static float[] perch(Slot slot, float scale, float contact) {
         float x = slot == Slot.SHOULDER_RIGHT ? -7f : slot == Slot.SHOULDER_LEFT ? 7f : 0f;
         float y = slot == Slot.HAT ? 32.1f : 24.1f;
@@ -342,35 +350,9 @@ public final class Chick {
         return new float[] {x, y - 24f, 0f};
     }
 
+    /** One uniform scale. The whole chick (9 px tall) becomes two thirds of the 8 px head. */
     private static float chickScale(Model loaded) {
-        float width = profileWidth(loaded);
-        if (width < 0.001f) {
-            return 1f;
-        }
-        // Profile span (body plus tail) at two thirds of the head drew a solid torso,
-        // beak excluded, at 48 px against a 77 px head: 0.623, under the 0.627 floor.
-        // The beak-side rows were wider and are not the body. Raise only this scale
-        // so the same solid torso reads 0.66.
-        float measured = 48f / 77f;
-        return ((HEAD_PX * 2f / 3f) / width) * (0.66f / measured);
-    }
-
-    /**
-     * Side-on width. The body cube is 4 px on X, but the tail cube on the same bone
-     * sticks out on Z, and a profile camera measures that Z span against the head.
-     */
-    private static float profileWidth(Model loaded) {
-        Bone body = loaded.bones.get("body");
-        if (body == null) {
-            return 4f;
-        }
-        float min = Float.POSITIVE_INFINITY;
-        float max = Float.NEGATIVE_INFINITY;
-        for (Cube cube : body.cubes) {
-            min = Math.min(min, cube.oz);
-            max = Math.max(max, cube.oz + cube.sz);
-        }
-        return max - min;
+        return (HEAD_PX * 2f / 3f) / CHICK_TALL_PX;
     }
 
     /** Lowest body corner once the sit tuck is applied. Measured from the body cubes and the sit clip. */
@@ -774,8 +756,9 @@ public final class Chick {
         float[] position = sample.position(loaded, bone.name);
         float[] rotation = sample.rotation(loaded, bone.name);
         float[] scale = sample.scale(loaded, bone.name);
-        float rx = (float) Math.toRadians(bone.rotation[0] + rotation[0]);
-        float ry = (float) Math.toRadians(bone.rotation[1] + rotation[1]);
+        // Bedrock pitch and yaw are the opposite sign from this pose stack. Z (wing flap) is not.
+        float rx = (float) Math.toRadians(-(bone.rotation[0] + rotation[0]));
+        float ry = (float) Math.toRadians(-(bone.rotation[1] + rotation[1]));
         float rz = (float) Math.toRadians(bone.rotation[2] + rotation[2]);
         matrix.translate(position[0], position[1], position[2]);
         matrix.translate(bone.pivot[0], bone.pivot[1], bone.pivot[2]);
@@ -791,6 +774,11 @@ public final class Chick {
         return matrix;
     }
 
+    /**
+     * Box UVs and vertex order follow GeckoLib. The previous winding faced the other way, so the
+     * beak and eyes were only visible from behind, and the side strips were swapped.
+     * Geometry stays in bedrock space: beak on −Z, the player's look, left wing on +X. No X mirror.
+     */
     private static void cube(VertexConsumer consumer, Matrix4f view, Matrix3f poseNormals, Matrix3f turn, int light,
                              Model loaded, Cube cube) {
         float inf = cube.inflate;
@@ -800,71 +788,46 @@ public final class Chick {
         float y1 = cube.oy + cube.sy + inf;
         float z0 = cube.oz - inf;
         float z1 = cube.oz + cube.sz + inf;
-        boolean mirror = cube.mirror;
-        face(consumer, view, poseNormals, turn, light, loaded, cube, mirror, mirror ? "negX" : "posX",
-                x1, y0, z0, x1, y0, z1, x1, y1, z1, x1, y1, z0, 1, 0, 0);
-        face(consumer, view, poseNormals, turn, light, loaded, cube, mirror, mirror ? "posX" : "negX",
-                x0, y0, z1, x0, y0, z0, x0, y1, z0, x0, y1, z1, -1, 0, 0);
-        face(consumer, view, poseNormals, turn, light, loaded, cube, mirror, "negZ",
-                x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0, 0, 0, -1);
-        face(consumer, view, poseNormals, turn, light, loaded, cube, mirror, "posZ",
-                x1, y0, z1, x0, y0, z1, x0, y1, z1, x1, y1, z1, 0, 0, 1);
-        face(consumer, view, poseNormals, turn, light, loaded, cube, mirror, "posY",
-                x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
-        face(consumer, view, poseNormals, turn, light, loaded, cube, mirror, "negY",
-                x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
-    }
-
-    private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f poseNormals, Matrix3f turn, int light,
-                             Model loaded, Cube cube, boolean mirror, String side,
-                             float x0, float y0, float z0, float x1, float y1, float z1,
-                             float x2, float y2, float z2, float x3, float y3, float z3,
-                             float nx, float ny, float nz) {
         double w = Math.floor(cube.sx);
         double h = Math.floor(cube.sy);
         double d = Math.floor(cube.sz);
-        double u;
-        double v;
-        double uw;
-        double vh;
-        switch (side) {
-            case "posX" -> {
-                u = cube.u + d + w;
-                v = cube.v + d;
-                uw = d;
-                vh = h;
-            }
-            case "negX" -> {
-                u = cube.u;
-                v = cube.v + d;
-                uw = d;
-                vh = h;
-            }
-            case "negZ" -> {
-                u = cube.u + d;
-                v = cube.v + d;
-                uw = w;
-                vh = h;
-            }
-            case "posZ" -> {
-                u = cube.u + d + w + d;
-                v = cube.v + d;
-                uw = w;
-                vh = h;
-            }
-            case "posY" -> {
-                u = cube.u + d;
-                v = cube.v;
-                uw = w;
-                vh = d;
-            }
-            default -> {
-                u = cube.u + d + w;
-                v = cube.v + d;
-                uw = w;
-                vh = -d;
-            }
+        boolean mirror = cube.mirror;
+        // East (+X) and west (−X). A mirrored cube exchanges those two quads.
+        if (!mirror) {
+            quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                    cube.u, cube.v + d, d, h,
+                    x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
+            quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                    cube.u + d + w, cube.v + d, d, h,
+                    x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
+        } else {
+            quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                    cube.u, cube.v + d, d, h,
+                    x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
+            quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                    cube.u + d + w, cube.v + d, d, h,
+                    x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
         }
+        // North (−Z) is the beak and the face. South is the tail side.
+        quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                cube.u + d, cube.v + d, w, h,
+                x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
+        quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                cube.u + d + w + d, cube.v + d, w, h,
+                x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
+        quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                cube.u + d, cube.v, w, d,
+                x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
+        quad(consumer, view, poseNormals, turn, light, loaded, mirror,
+                cube.u + d + w, cube.v + d, w, -d,
+                x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
+    }
+
+    private static void quad(VertexConsumer consumer, Matrix4f view, Matrix3f poseNormals, Matrix3f turn, int light,
+                             Model loaded, boolean mirror, double u, double v, double uw, double vh,
+                             float x0, float y0, float z0, float x1, float y1, float z1,
+                             float x2, float y2, float z2, float x3, float y3, float z3,
+                             float nx, float ny, float nz) {
         float u0 = (float) (u / loaded.textureWidth);
         float v0 = (float) (v / loaded.textureHeight);
         float u1 = (float) ((u + uw) / loaded.textureWidth);
@@ -874,7 +837,7 @@ public final class Chick {
             u0 = u1;
             u1 = swap;
         }
-        Vector3f normal = new Vector3f(nx, ny, nz);
+        Vector3f normal = new Vector3f(mirror ? -nx : nx, ny, nz);
         if (turn != null) {
             turn.transform(normal);
         }
