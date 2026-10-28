@@ -97,13 +97,13 @@ public abstract class CameraZoomMixin {
                 this.setPosition(1.05, 102.30, 2.90);
                 this.setRotation(147f, 14f);
             } else if ("light".equals(sit)) {
-                // Wide enough for the chick on the chest and a chicken standing beside the bed.
-                this.setPosition(2.55, 102.95, 4.05);
-                this.setRotation(150f, 26f);
+                // The chick on the chest and a chicken standing east of the bed, in one daylight.
+                this.setPosition(2.05, 102.70, 4.05);
+                this.setRotation(178f, 28f);
             } else {
-                // West of the chest, looking east. Profile of the upright body, beak toward the pillow.
-                this.setPosition(-1.20, 102.22, 1.90);
-                this.setRotation(270f, 6f);
+                // Close, west of the chest, looking east. Upright profile, beak toward the pillow.
+                this.setPosition(-0.42, 102.16, 2.22);
+                this.setRotation(270f, 12f);
             }
             return;
         }

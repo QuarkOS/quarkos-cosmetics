@@ -403,7 +403,7 @@ public final class ClientHarness {
         if (shot.name.equals("chick-chest-light")) {
             client.player.connection.sendCommand("kill @e[type=!player]");
             client.player.connection.sendCommand(
-                    "summon chicken 2.35 101 1.55 {NoAI:1b,Silent:1b,PersistenceRequired:1b,Rotation:[180f,0f]}");
+                    "summon chicken 3.4 101 2.3 {NoAI:1b,Silent:1b,PersistenceRequired:1b,Rotation:[180f,0f]}");
         } else {
             client.player.connection.sendCommand("kill @e[type=!player]");
         }
@@ -576,11 +576,15 @@ public final class ClientHarness {
             }
             client.options.hideGui = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            client.options.fov().set(shot.name.equals("chick-chest-light") ? 42 : 28);
+            client.options.fov().set(shot.name.equals("chick-chest-light") ? 50
+                    : shot.name.equals("chick-chest-sit-side") ? 22 : 28);
         } else {
             System.clearProperty("quarkos_cosmetics.sit");
         }
         if (shot.name.equals("chick-to-chest")) {
+            if (filmIndex < 0 && ticks % 5 == 0) {
+                client.player.connection.sendCommand("kill @e[type=chicken]");
+            }
             System.setProperty("quarkos_cosmetics.chest", "1");
             if (!client.player.isSleeping()) {
                 client.player.setYRot(270f);
