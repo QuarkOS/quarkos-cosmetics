@@ -92,6 +92,15 @@ public final class Chick {
         heldSeconds = seconds;
     }
 
+    /** True once the in-bed settle has finished and the sleep loop is playing. */
+    public static boolean asleep() {
+        if (bound == null) {
+            return false;
+        }
+        Mood mood = MOODS.get(bound.getUUID());
+        return mood != null && mood.bed == Bed.ASLEEP;
+    }
+
     public static void bind(Player player, boolean helmet, boolean hatLayer) {
         bound = player;
         boundHelmet = helmet;
@@ -120,14 +129,22 @@ public final class Chick {
         float contact = sitContact(loaded);
         if (!loggedScale) {
             loggedScale = true;
-            float width = bodyWidth(loaded);
-            LOGGER.info("chick body {} px scaled by {} to {} px", width, scale, width * scale);
+            float profile = profileWidth(loaded);
+            LOGGER.info("chick profile {} px scaled by {} to {} px (head {} px)", profile, scale, profile * scale, HEAD_PX);
         }
-        Place place = place(pose, loaded, slot, head, body, scale, contact);
+        Place place = place(pose, slot, head, body, scale, contact);
         pose.pushPose();
-        place.part.translateAndRotate(pose);
+        if (place.world != null) {
+            // The bed rotation is already on this stack. Drop it. Feet sit in world space.
+            pose.setIdentity();
+            pose.translate(place.world.x, place.world.y, place.world.z);
+        } else {
+            place.part.translateAndRotate(pose);
+        }
         pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
-        pose.translate(place.x, place.y, place.z);
+        if (place.world == null) {
+            pose.translate(place.x, place.y, place.z);
+        }
         if (place.turn != null) {
             pose.mulPose(place.turn);
         }
@@ -139,17 +156,28 @@ public final class Chick {
     }
 
     /**
-     * Head and shoulder stay on their parts. In bed the chick walks in body space from that perch
-     * to the chest, faces its travel, then lies on the chest for settle and sleep.
+     * Head and shoulder stay on their parts. Once the player is in bed the chick leaves that
+     * rotated standing frame: it walks in world space onto the top of the chest, feet down,
+     * body up along world up, beak toward the head, then settle and sleep.
      */
-    private static Place place(PoseStack pose, Model loaded, Slot slot, ModelPart head, ModelPart body,
+    private static Place place(PoseStack pose, Slot slot, ModelPart head, ModelPart body,
                                float scale, float contact) {
         float[] perch = perch(slot, scale, contact);
         ModelPart part = slot == Slot.HAT ? head : body;
         Mood mood = bound == null ? null : MOODS.get(bound.getUUID());
-        if (heldClip != null || mood == null || mood.bed == Bed.PERCH) {
-            return new Place(part, perch[0], perch[1], perch[2], null);
+        if (heldClip != null || mood == null || mood.bed == Bed.PERCH || bound == null || !bound.isSleeping()) {
+            if (heldClip != null || mood == null || mood.bed == Bed.PERCH) {
+                return new Place(part, perch[0], perch[1], perch[2], null, null);
+            }
+            return alongBody(pose, slot, head, body, perch, mood, scale, contact);
         }
+        return onChest(pose, part, body, perch, mood);
+    }
+
+    /** Awake return trip. The player model is standing again, so body space is the perch frame. */
+    private static Place alongBody(PoseStack pose, Slot slot, ModelPart head, ModelPart body, float[] perch,
+                                   Mood mood, float scale, float contact) {
+        ModelPart part = slot == Slot.HAT ? head : body;
         Matrix4f toBody = bodyPixels(pose, body);
         Vector3f start = toBody(toBody, anchor(pose, part, perch[0], perch[1], perch[2]));
         Vector3f startUp = axis(pose, toBody, part, perch, 0f, 1f, 0f);
@@ -190,7 +218,46 @@ public final class Chick {
                 }
             }
         }
-        return new Place(body, pos.x, pos.y, pos.z, facing(up, beak));
+        return new Place(body, pos.x, pos.y, pos.z, facing(up, beak), null);
+    }
+
+    /**
+     * In bed, the player renderer has already turned the standing model onto its side.
+     * Put the chick on the chest in world space so that turn does not ride along.
+     * Translate-space +Y is world down after the bedrock flip, so the facing up vector is world down.
+     */
+    private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood) {
+        Vector3f start = anchor(pose, part, perch[0], perch[1], perch[2]);
+        Vector3f chest = anchor(pose, body, 0f, -4.5f, -2f);
+        chest.y += 0.2f / 16f;
+        Vector3f towardHead = new Vector3f(anchor(pose, body, 0f, 0f, 0f)).sub(anchor(pose, body, 0f, -8f, 0f));
+        towardHead.y = 0f;
+        if (towardHead.lengthSquared() < 1.0e-6f) {
+            towardHead.set(0f, 0f, -1f);
+        }
+        towardHead.normalize();
+        boolean settled = mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP;
+        float s = settled ? 1f : smooth(mood.trip);
+        Vector3f control = new Vector3f(start).lerp(chest, 0.5f);
+        control.y += 8f / 16f;
+        Vector3f pos = settled ? new Vector3f(chest) : bezier(start, control, chest, s);
+        Vector3f dir = new Vector3f(towardHead);
+        if (!settled) {
+            Vector3f tangent = bezierTangent(start, control, chest, Math.max(0.001f, Math.min(0.999f, s)));
+            if (mood.bed == Bed.TO_PERCH) {
+                tangent.negate();
+            }
+            tangent.y = 0f;
+            if (tangent.lengthSquared() > 1.0e-4f) {
+                dir.set(tangent).normalize();
+            }
+            float align = s <= 0.65f ? 0f : (s - 0.65f) / 0.35f;
+            if (align > 0f) {
+                dir.lerp(towardHead, align).normalize();
+            }
+        }
+        Vector3f up = new Vector3f(0f, -1f, 0f);
+        return new Place(body, 0f, 0f, 0f, facing(up, dir), pos);
     }
 
     /** Feet stay 0.1 px clear. Sit tucks the belly to {@code contact}; scale would lift it, so Y comes back down. */
@@ -209,14 +276,18 @@ public final class Chick {
     }
 
     private static float chickScale(Model loaded) {
-        float width = bodyWidth(loaded);
+        float width = profileWidth(loaded);
         if (width < 0.001f) {
             return 1f;
         }
         return (HEAD_PX * 2f / 3f) / width;
     }
 
-    private static float bodyWidth(Model loaded) {
+    /**
+     * Side-on width. The body cube is 4 px on X, but the tail cube on the same bone
+     * sticks out on Z, and a profile camera measures that Z span against the head.
+     */
+    private static float profileWidth(Model loaded) {
         Bone body = loaded.bones.get("body");
         if (body == null) {
             return 4f;
@@ -224,8 +295,8 @@ public final class Chick {
         float min = Float.POSITIVE_INFINITY;
         float max = Float.NEGATIVE_INFINITY;
         for (Cube cube : body.cubes) {
-            min = Math.min(min, cube.ox);
-            max = Math.max(max, cube.ox + cube.sx);
+            min = Math.min(min, cube.oz);
+            max = Math.max(max, cube.oz + cube.sz);
         }
         return max - min;
     }
@@ -835,13 +906,16 @@ public final class Chick {
         final float y;
         final float z;
         final Quaternionf turn;
+        /** Camera-space feet position. Set only while the player is in bed, so the bed rotation is not inherited. */
+        final Vector3f world;
 
-        Place(ModelPart part, float x, float y, float z, Quaternionf turn) {
+        Place(ModelPart part, float x, float y, float z, Quaternionf turn, Vector3f world) {
             this.part = part;
             this.x = x;
             this.y = y;
             this.z = z;
             this.turn = turn;
+            this.world = world;
         }
     }
 

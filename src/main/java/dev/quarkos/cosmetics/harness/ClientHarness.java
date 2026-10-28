@@ -87,6 +87,9 @@ public final class ClientHarness {
             new Shot("chick-shake-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, true),
             new Shot("chick-head", Slot.HAT, Chick.ID, false, false, 0f, false),
             new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, false),
+            new Shot("chick-head-side", Slot.HAT, Chick.ID, false, false, 0f, false),
+            new Shot("chick-shoulder-side", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, false),
+            new Shot("chick-chest-asleep", Slot.HAT, Chick.ID, false, false, 0f, false),
             new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, false)
     );
 
@@ -258,7 +261,11 @@ public final class ClientHarness {
             }
             return;
         }
-        if (ticks - settledAt < (shot.name.contains("sleep") || shot.name.contains("scared") ? 60 : 40)) {
+        int settleWait = shot.name.contains("sleep") || shot.name.contains("scared") ? 60 : 40;
+        if (shot.name.equals("chick-chest-asleep")) {
+            settleWait = 100;
+        }
+        if (ticks - settledAt < settleWait) {
             return;
         }
         if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
@@ -323,6 +330,8 @@ public final class ClientHarness {
         }
         if (shot.name.equals("chick-to-chest")) {
             client.player.connection.sendCommand("tp @s -0.5 101 0.5 180 8");
+        } else if (shot.name.equals("chick-chest-asleep")) {
+            client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
         } else if (shot.name.contains("sleep")) {
             client.player.connection.sendCommand("tp @s 0.5 102.2 0.5 180 8");
         } else if (!shot.name.contains("scared")) {
@@ -337,10 +346,11 @@ public final class ClientHarness {
         client.player.setShiftKeyDown(false);
         client.player.setSwimming(false);
         client.player.stopFallFlying();
-        if (!shot.name.contains("sleep") && !shot.name.equals("chick-to-chest") && client.player.isSleeping()) {
+        boolean bedShot = shot.name.contains("sleep") || shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep");
+        if (!bedShot && client.player.isSleeping()) {
             client.player.stopSleeping();
         }
-        if (shot.name.contains("sleep") || shot.name.equals("chick-to-chest")) {
+        if (bedShot) {
             client.player.connection.sendCommand("time set 6000");
             client.player.connection.sendCommand("setblock 0 100 0 white_concrete");
             client.player.connection.sendCommand("setblock 1 100 0 white_concrete");
@@ -412,14 +422,47 @@ public final class ClientHarness {
         portraitDrop = 0.55f;
         portraitOrbit = shot.orbit;
         String clip = chickClipName(shot.name);
-        if (shot.name.equals("chick-to-chest")) {
+        boolean side = shot.name.equals("chick-head-side") || shot.name.equals("chick-shoulder-side");
+        if (shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep")) {
             Chick.hold(null, null);
+        } else if (side) {
+            Chick.hold(clip, 0f);
         } else {
             Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
         }
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
         client.options.fov().set(50);
+        if (side) {
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            portraitLock = true;
+            // West of the player, looking east. Profile, so head depth and chick depth share the screen width.
+            lockX = -3.6;
+            lockY = shot.name.equals("chick-shoulder-side") ? 102.2 : 102.5;
+            lockZ = 0.5;
+            lockYaw = 270f;
+            lockPitch = 2f;
+            client.options.fov().set(32);
+        }
+        if (shot.name.equals("chick-chest-asleep")) {
+            if (!client.player.isSleeping()) {
+                client.player.startSleepInBed(new BlockPos(1, 101, 0));
+            }
+            clearSleepFade(client.player);
+            if (client.screen != null) {
+                client.setScreen(null);
+            }
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            portraitLock = true;
+            lockX = 1.15;
+            lockY = 102.35;
+            lockZ = 2.15;
+            lockYaw = 180f;
+            lockPitch = 20f;
+            client.options.fov().set(36);
+        }
         if (shot.name.equals("chick-to-chest")) {
             if (filmIndex >= 8 && !client.player.isSleeping()) {
                 client.player.startSleepInBed(new BlockPos(1, 101, 0));
@@ -433,11 +476,12 @@ public final class ClientHarness {
             client.options.hideGui = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             portraitLock = true;
-            lockX = 1.0;
-            lockY = 103.15;
-            lockZ = 2.9;
+            lockX = 0.5;
+            lockY = 102.55;
+            lockZ = 3.35;
             lockYaw = 180f;
-            lockPitch = 18f;
+            lockPitch = 8f;
+            client.options.fov().set(48);
         }
         if (shot.name.contains("sleep")) {
             if (!client.player.isSleeping()) {
@@ -485,6 +529,13 @@ public final class ClientHarness {
     }
 
     private static boolean chickReady(Minecraft client, Shot shot) {
+        if (shot.name.equals("chick-chest-asleep") && (!client.player.isSleeping() || client.screen != null || !Chick.asleep())) {
+            if (ticks - settledAt > 20 * 15) {
+                LOGGER.error("chick never settled on the chest, sleeping={} screen={}", client.player.isSleeping(), client.screen);
+                state = State.STOP;
+            }
+            return false;
+        }
         if (shot.name.contains("sleep") && (!client.player.isSleeping() || client.screen != null)) {
             if (ticks - settledAt > 20 * 12) {
                 LOGGER.error("player never slept, y={} screen={}", client.player.getY(), client.screen);
@@ -508,8 +559,8 @@ public final class ClientHarness {
             body = body.substring(0, body.length() - "-clip".length());
         }
         return switch (body) {
-            case "head" -> "sit";
-            case "shoulder" -> "idle";
+            case "head", "head-side" -> "sit";
+            case "shoulder", "shoulder-side" -> "idle";
             default -> body;
         };
     }
