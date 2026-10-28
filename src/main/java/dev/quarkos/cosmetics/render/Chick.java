@@ -47,6 +47,10 @@ public final class Chick {
     private static final String SETTLE_CLIP = "settle";
     /** 1.25 s from the perch to the chest, inside the 1–1.5 s window. */
     private static final float TRAVEL_TICKS = 25f;
+    /** Bedrock pitch added to the head bone, on top of sit, once the chick is on the chest. */
+    private static final float DOZE_PITCH = 22f;
+    private static final String HEAD_BONE = "head";
+    private static final String EYES_BONE = "eyes";
     private static final float HEAD_PX = 8f;
     /** Run6 bounds of the whole chick: wings, feet to tuft, beak to tail. */
     private static final float CHICK_WIDE_PX = 6f;
@@ -165,16 +169,22 @@ public final class Chick {
         }
         pose.scale(scale, scale, scale);
         Matrix4f view = new Matrix4f(pose.last().pose());
-        Matrix3f normals = new Matrix3f(pose.last().normal());
-        submitter.submit(pose, TEXTURE, false, consumer -> render(consumer, view, normals, light, loaded, sample));
+        // The bedrock flip is a negative Y scale. PoseStack.normal() takes a cube root of that
+        // product and comes back unusable, so the chest and the perches shade in patches.
+        // Rebuild the normal matrix from the pose. The world-space facing rotation is already
+        // on this stack, and the inverse transpose is what a vanilla mob uses for face shading.
+        // `light` is the player's packed light. The overlay is the normal white one.
+        Matrix3f normals = new Matrix3f();
+        view.normal(normals);
+        submitter.submit(pose, TEXTURE, false, true, consumer -> render(consumer, view, normals, light, loaded, sample));
         pose.popPose();
     }
 
     /**
      * Head and shoulder stay on their parts. Once the player is in bed the chick leaves that
      * rotated standing frame: it walks in world space onto the top of the chest, feet down,
-     * body up along world up, beak toward the head. Settle and sleep then pitch the body
-     * flat. The bed rotation never rides along.
+     * body level with world up, beak toward the pillow. After it arrives it sits. The bed
+     * rotation never rides along.
      */
     private static Place place(PoseStack pose, Slot slot, ModelPart head, ModelPart body,
                                float scale, float contact) {
@@ -187,7 +197,7 @@ public final class Chick {
             }
             return alongBody(pose, slot, head, body, perch, mood, scale, contact);
         }
-        return onChest(pose, part, body, perch, mood, scale);
+        return onChest(pose, part, body, perch, mood);
     }
 
     /** Awake return trip. The player model is standing again, so body space is the perch frame. */
@@ -241,9 +251,10 @@ public final class Chick {
      * In bed, the player renderer has already turned the standing model onto its side.
      * Put the chick on the chest in world space so that turn does not ride along.
      * Translate-space +Y is world down after the bedrock flip, so a standing up vector is world down.
-     * The walk keeps that upright facing. Settle and sleep pitch the spine along the bed and the beak down.
+     * The body stays level for the whole trip. The beak turns toward the pillow as it arrives.
+     * The doze is a head-bone pitch on the sit clip, not a tilt of this facing.
      */
-    private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood, float scale) {
+    private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood) {
         Vector3f start = anchor(pose, part, perch[0], perch[1], perch[2]);
         Vector3f chest = anchor(pose, body, 0f, -4.5f, -2f);
         chest.y += 0.2f / 16f;
@@ -253,16 +264,11 @@ public final class Chick {
             towardHead.set(0f, 0f, -1f);
         }
         towardHead.normalize();
-        float lay = layAmount(mood);
         boolean arrived = mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP;
         float s = arrived ? 1f : smooth(mood.trip);
         Vector3f control = new Vector3f(start).lerp(chest, 0.5f);
         control.y += 8f / 16f;
         Vector3f pos = arrived ? new Vector3f(chest) : bezier(start, control, chest, s);
-        if (lay > 0f) {
-            pos.lerp(layRest(pose, body, towardHead, scale), lay);
-        }
-        // Standing: spine world up, beak toward the head. Flat: spine along the bed, beak world down.
         Vector3f up = new Vector3f(0f, -1f, 0f);
         Vector3f dir = new Vector3f(towardHead);
         if (!arrived) {
@@ -279,56 +285,7 @@ public final class Chick {
                 dir.lerp(towardHead, align).normalize();
             }
         }
-        if (lay > 0f) {
-            up.lerp(towardHead, lay);
-            dir.lerp(new Vector3f(0f, 1f, 0f), lay);
-        }
         return new Place(body, 0f, 0f, 0f, facing(up, dir), pos);
-    }
-
-    /** 0 while walking onto the chest, then 0→1 across settle, then 1 for the sleep loop. */
-    private static float layAmount(Mood mood) {
-        if (mood.bed == Bed.ASLEEP) {
-            return 1f;
-        }
-        if (mood.bed != Bed.SETTLE || mood.phaseTick < 0) {
-            return 0f;
-        }
-        float elapsed = Math.max(0f, mood.lastBedTick - mood.phaseTick);
-        return smooth(elapsed / 16f);
-    }
-
-    /**
-     * Body center over the middle of the chest, lifted so the lowest corner — the beak, once pitched —
-     * sits on the shirt. Translate-space only; the bed rotation is not copied onto the chick.
-     */
-    private static Vector3f layRest(PoseStack pose, ModelPart body, Vector3f towardHead, float scale) {
-        Vector3f mid = anchor(pose, body, 0f, -6f, -2f);
-        Quaternionf flat = facing(new Vector3f(towardHead), new Vector3f(0f, 1f, 0f));
-        Vector3f rest = new Vector3f(mid).sub(modelPoint(flat, scale, 0f, 3f, 0f));
-        float minY = Float.POSITIVE_INFINITY;
-        float[][] low = {
-                {0f, 5.5f, -3.5f},
-                {-2f, 1f, -2f},
-                {2f, 1f, -2f},
-                {0f, 3f, 3f},
-                {0f, 9f, -1.5f},
-                {-3f, 2.5f, -1.5f},
-                {3f, 2.5f, -1.5f}
-        };
-        for (float[] point : low) {
-            minY = Math.min(minY, modelPoint(flat, scale, point[0], point[1], point[2]).y);
-        }
-        rest.y = mid.y + (0.15f / 16f) - minY;
-        return rest;
-    }
-
-    /** Model pixels through the chick rotation and the bedrock flip, relative to the feet anchor. */
-    private static Vector3f modelPoint(Quaternionf turn, float scale, float x, float y, float z) {
-        Vector3f point = new Vector3f(x * scale, y * scale, z * scale);
-        turn.transform(point);
-        point.mul(1f / 16f, -1f / 16f, 1f / 16f);
-        return point;
     }
 
     /**
@@ -439,18 +396,21 @@ public final class Chick {
         }
     }
 
-    private static Sample bedSample(Model loaded, Mood mood, float age) {
-        if (mood.bed == Bed.SETTLE) {
-            Clip clip = loaded.clips.get(SETTLE_CLIP);
-            double length = clip == null || clip.length <= 0.0001 ? 0.8 : clip.length;
-            double time = Math.min(length, Math.max(0.0, (age - mood.phaseAge) / 20.0));
-            return new Sample(SETTLE_CLIP, time, null, 0, 1f);
-        }
+    /** 0 while walking, then 0→1 across settle, then 1 while dozing. The settle clip itself is not played. */
+    private static float dozeAmount(Mood mood) {
         if (mood.bed == Bed.ASLEEP) {
-            Clip clip = loaded.clips.get("sleep");
-            double length = clip == null || clip.length <= 0.0001 ? 4 : clip.length;
-            double time = Math.max(0.0, (age - mood.phaseAge) / 20.0) % length;
-            return new Sample("sleep", time, null, 0, 1f);
+            return 1f;
+        }
+        if (mood.bed != Bed.SETTLE || mood.phaseTick < 0) {
+            return 0f;
+        }
+        float elapsed = Math.max(0f, mood.lastBedTick - mood.phaseTick);
+        return smooth(elapsed / 16f);
+    }
+
+    private static Sample bedSample(Model loaded, Mood mood, float age) {
+        if (mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP) {
+            return new Sample("sit", 0, null, 0, 1f, dozeAmount(mood));
         }
         Clip clip = loaded.clips.get(TRAVEL_CLIP);
         double length = clip == null || clip.length <= 0.0001 ? 0.6 : clip.length;
@@ -856,7 +816,7 @@ public final class Chick {
         consumer.addVertex(view, x, y, z)
                 .setColor(255, 255, 255, 255)
                 .setUv(u, v)
-                .setOverlay(OverlayTexture.NO_OVERLAY)
+                .setOverlay(OverlayTexture.pack(0, 10))
                 .setLight(light)
                 .setNormal(normal.x, normal.y, normal.z);
     }
@@ -880,13 +840,20 @@ public final class Chick {
         final String fromClip;
         final double fromTime;
         final float blend;
+        /** 0–1 nod on the head bone, and the sleep clip's eye scale, applied on top of sit. */
+        final float doze;
 
         Sample(String clip, double time, String fromClip, double fromTime, float blend) {
+            this(clip, time, fromClip, fromTime, blend, 0f);
+        }
+
+        Sample(String clip, double time, String fromClip, double fromTime, float blend, float doze) {
             this.clip = clip;
             this.time = time;
             this.fromClip = fromClip;
             this.fromTime = fromTime;
             this.blend = blend;
+            this.doze = doze;
         }
 
         float[] position(Model loaded, String bone) {
@@ -894,11 +861,25 @@ public final class Chick {
         }
 
         float[] rotation(Model loaded, String bone) {
-            return mix(loaded, bone, true, false);
+            float[] mixed = mix(loaded, bone, true, false);
+            if (doze <= 0f || !HEAD_BONE.equals(bone)) {
+                return mixed;
+            }
+            return new float[] {mixed[0] + DOZE_PITCH * doze, mixed[1], mixed[2]};
         }
 
         float[] scale(Model loaded, String bone) {
-            return mix(loaded, bone, false, true);
+            float[] mixed = mix(loaded, bone, false, true);
+            if (doze <= 0f || !EYES_BONE.equals(bone)) {
+                return mixed;
+            }
+            float[] closed = channel(loaded.clips.get("sleep"), EYES_BONE, false, true, 0);
+            float t = Math.max(0f, Math.min(1f, doze));
+            return new float[] {
+                    mixed[0] + (closed[0] - mixed[0]) * t,
+                    mixed[1] + (closed[1] - mixed[1]) * t,
+                    mixed[2] + (closed[2] - mixed[2]) * t
+            };
         }
 
         private float[] mix(Model loaded, String bone, boolean rotation, boolean scale) {

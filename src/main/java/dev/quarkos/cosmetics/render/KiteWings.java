@@ -76,7 +76,7 @@ public final class KiteWings {
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
         double sample = time;
-        submitter.submit(pose, TEXTURE, false, consumer -> render(consumer, view, normals, light, loaded, animation, sample));
+        submitter.submit(pose, TEXTURE, false, false, consumer -> render(consumer, view, normals, light, loaded, animation, sample));
         pose.popPose();
     }
 

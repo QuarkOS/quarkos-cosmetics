@@ -13,7 +13,11 @@ import java.util.function.Consumer;
 
 public final class CosmeticDrawer {
     public interface Submitter {
-        void submit(PoseStack pose, Identifier texture, boolean translucent, Consumer<VertexConsumer> draw);
+        /**
+         * @param cull false keeps the no-cull cutout used by wings and the other cosmetics.
+         *             The chick passes true so it draws with the regular entity cutout.
+         */
+        void submit(PoseStack pose, Identifier texture, boolean translucent, boolean cull, Consumer<VertexConsumer> draw);
     }
 
     private CosmeticDrawer() {
@@ -48,7 +52,7 @@ public final class CosmeticDrawer {
             pose.translate(placement.offsetX(), placement.offsetY(), placement.offsetZ());
             Matrix4f view = new Matrix4f(pose.last().pose());
             Matrix3f normals = new Matrix3f(pose.last().normal());
-            submitter.submit(pose, resolved.texture(), false, consumer ->
+            submitter.submit(pose, resolved.texture(), false, false, consumer ->
                     MeshDraw.model(consumer, view, normals, light, resolved.model(), resolved.width(), resolved.height(), age));
             pose.popPose();
         }
@@ -86,7 +90,7 @@ public final class CosmeticDrawer {
         pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
-        submitter.submit(pose, texture, true, consumer -> {
+        submitter.submit(pose, texture, true, false, consumer -> {
             for (SkinShell.Voxel voxel : voxels) {
                 MeshDraw.voxel(consumer, view, normals, light, voxel.x(), voxel.y(), voxel.z(), 1.02f, voxel.u(), voxel.v(), 64, 64);
             }
