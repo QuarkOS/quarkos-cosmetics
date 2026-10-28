@@ -353,9 +353,16 @@ public final class ClientHarness {
         client.player.connection.sendCommand("weather clear");
         client.player.connection.sendCommand("gamemode creative");
         if (shot.name.equals("chick-to-chest")) {
-            // North of the foot, facing the bed, so the side camera sees them get in.
+            // Wake first so the clip starts on the perch, then stand north of the foot facing the bed.
+            if (client.player.isSleeping()) {
+                client.player.stopSleeping();
+            }
+            Chick.resetBed();
             client.player.connection.sendCommand("tp @s -0.7 101 1.5 270 8");
         } else {
+            if (shot.name.equals("chick-chest-asleep")) {
+                Chick.resetBed();
+            }
             client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
         }
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
@@ -497,7 +504,7 @@ public final class ClientHarness {
             System.setProperty("quarkos_cosmetics.side", shot.name.equals("chick-head-side") ? "head" : "shoulder");
             client.options.hideGui = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            client.options.fov().set(32);
+            client.options.fov().set(shot.name.equals("chick-shoulder-side") ? 22 : 32);
         } else {
             System.clearProperty("quarkos_cosmetics.side");
         }

@@ -62,22 +62,28 @@ public abstract class CameraZoomMixin {
         }
         String side = System.getProperty("quarkos_cosmetics.side");
         if (side != null && !side.isBlank() && entity != null) {
-            // West of the player, looking east. Profile, so head depth and chick depth share the screen width.
-            double y = "shoulder".equals(side) ? 102.2 : 102.5;
-            this.setPosition(-3.6, y, 0.5);
-            this.setRotation(270f, 2f);
+            if ("shoulder".equals(side)) {
+                // Close, just west of the player, looking east. Beak runs across the frame.
+                this.setPosition(-2.15, 102.32, 0.85);
+                this.setRotation(262f, 0f);
+            } else {
+                // West of the player, looking east. Profile, so head depth and chick depth share the screen width.
+                this.setPosition(-3.6, 102.5, 0.5);
+                this.setRotation(270f, 2f);
+            }
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.flat")) && entity != null) {
-            // Close side of the south bed, on the chest, once the chick is asleep.
-            this.setPosition(2.2, 102.4, 2.05);
-            this.setRotation(98f, 22f);
+            // South of the pillow, looking north along the mattress, so a chick lying
+            // across the chest reads low and flat instead of end-on.
+            this.setPosition(1.7, 102.55, 3.25);
+            this.setRotation(152f, 24f);
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.chest")) && entity != null) {
-            // Close side of the south bed: getting in, the walk to the chest, and sleep.
-            this.setPosition(3.55, 103.15, 1.55);
-            this.setRotation(88f, 20f);
+            // South of the bed: the walk in, then the chick pitched flat on the chest.
+            this.setPosition(1.15, 102.7, 3.55);
+            this.setRotation(168f, 22f);
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.bed")) && entity != null) {
