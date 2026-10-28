@@ -45,12 +45,9 @@ public final class Chick {
     /** In-bed travel. One name, so a newer walk clip drops in without a path change. */
     private static final String TRAVEL_CLIP = "walk";
     private static final String SETTLE_CLIP = "settle";
+    private static final String SLEEP_CLIP = "sleep";
     /** 1.25 s from the perch to the chest, inside the 1–1.5 s window. */
     private static final float TRAVEL_TICKS = 25f;
-    /** Bedrock pitch added to the head bone, on top of sit, once the chick is on the chest. */
-    private static final float DOZE_PITCH = 22f;
-    private static final String HEAD_BONE = "head";
-    private static final String EYES_BONE = "eyes";
     private static final float HEAD_PX = 8f;
     /** Run6 bounds of the whole chick: wings, feet to tuft, beak to tail. */
     private static final float CHICK_WIDE_PX = 6f;
@@ -252,7 +249,7 @@ public final class Chick {
      * Put the chick on the chest in world space so that turn does not ride along.
      * Translate-space +Y is world down after the bedrock flip, so a standing up vector is world down.
      * The body stays level for the whole trip. The beak turns toward the pillow as it arrives.
-     * The doze is a head-bone pitch on the sit clip, not a tilt of this facing.
+     * Settle and sleep are the clips themselves: no extra bone pitch or position on top.
      */
     private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood) {
         Vector3f start = anchor(pose, part, perch[0], perch[1], perch[2]);
@@ -396,21 +393,16 @@ public final class Chick {
         }
     }
 
-    /** 0 while walking, then 0→1 across settle, then 1 while dozing. The settle clip itself is not played. */
-    private static float dozeAmount(Mood mood) {
-        if (mood.bed == Bed.ASLEEP) {
-            return 1f;
-        }
-        if (mood.bed != Bed.SETTLE || mood.phaseTick < 0) {
-            return 0f;
-        }
-        float elapsed = Math.max(0f, mood.lastBedTick - mood.phaseTick);
-        return smooth(elapsed / 16f);
-    }
-
+    /**
+     * Walk, then the settle clip, then sleep. Settle and sleep start on their own keys,
+     * with no leftover walk or sit scale and no bone rotation added on top.
+     */
     private static Sample bedSample(Model loaded, Mood mood, float age) {
-        if (mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP) {
-            return new Sample("sit", 0, null, 0, 1f, dozeAmount(mood));
+        if (mood.bed == Bed.SETTLE) {
+            return authored(loaded, SETTLE_CLIP, age - mood.phaseAge, false);
+        }
+        if (mood.bed == Bed.ASLEEP) {
+            return authored(loaded, SLEEP_CLIP, age - mood.phaseAge, true);
         }
         Clip clip = loaded.clips.get(TRAVEL_CLIP);
         double length = clip == null || clip.length <= 0.0001 ? 0.6 : clip.length;
@@ -428,6 +420,15 @@ public final class Chick {
             }
         }
         return new Sample(TRAVEL_CLIP, (age / 20.0) % length, from, fromTime, blend);
+    }
+
+    /** One clip, from its own keys. {@code loop} wraps; otherwise the sample holds the last frame. */
+    private static Sample authored(Model loaded, String name, float ageTicks, boolean loop) {
+        Clip clip = loaded.clips.get(name);
+        double length = clip == null || clip.length <= 0.0001 ? 1 : clip.length;
+        double seconds = Math.max(0, ageTicks / 20.0);
+        double time = loop ? seconds % length : Math.min(length, seconds);
+        return new Sample(name, time, null, 0, 1f);
     }
 
     private static Vector3f anchor(PoseStack pose, ModelPart part, float x, float y, float z) {
@@ -840,20 +841,13 @@ public final class Chick {
         final String fromClip;
         final double fromTime;
         final float blend;
-        /** 0–1 nod on the head bone, and the sleep clip's eye scale, applied on top of sit. */
-        final float doze;
 
         Sample(String clip, double time, String fromClip, double fromTime, float blend) {
-            this(clip, time, fromClip, fromTime, blend, 0f);
-        }
-
-        Sample(String clip, double time, String fromClip, double fromTime, float blend, float doze) {
             this.clip = clip;
             this.time = time;
             this.fromClip = fromClip;
             this.fromTime = fromTime;
             this.blend = blend;
-            this.doze = doze;
         }
 
         float[] position(Model loaded, String bone) {
@@ -861,25 +855,11 @@ public final class Chick {
         }
 
         float[] rotation(Model loaded, String bone) {
-            float[] mixed = mix(loaded, bone, true, false);
-            if (doze <= 0f || !HEAD_BONE.equals(bone)) {
-                return mixed;
-            }
-            return new float[] {mixed[0] + DOZE_PITCH * doze, mixed[1], mixed[2]};
+            return mix(loaded, bone, true, false);
         }
 
         float[] scale(Model loaded, String bone) {
-            float[] mixed = mix(loaded, bone, false, true);
-            if (doze <= 0f || !EYES_BONE.equals(bone)) {
-                return mixed;
-            }
-            float[] closed = channel(loaded.clips.get("sleep"), EYES_BONE, false, true, 0);
-            float t = Math.max(0f, Math.min(1f, doze));
-            return new float[] {
-                    mixed[0] + (closed[0] - mixed[0]) * t,
-                    mixed[1] + (closed[1] - mixed[1]) * t,
-                    mixed[2] + (closed[2] - mixed[2]) * t
-            };
+            return mix(loaded, bone, false, true);
         }
 
         private float[] mix(Model loaded, String bone, boolean rotation, boolean scale) {
