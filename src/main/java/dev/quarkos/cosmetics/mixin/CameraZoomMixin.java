@@ -60,6 +60,20 @@ public abstract class CameraZoomMixin {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
             return;
         }
+        String side = System.getProperty("quarkos_cosmetics.side");
+        if (side != null && !side.isBlank() && entity != null) {
+            // West of the player, looking east. Profile, so head depth and chick depth share the screen width.
+            double y = "shoulder".equals(side) ? 102.2 : 102.5;
+            this.setPosition(-3.6, y, 0.5);
+            this.setRotation(270f, 2f);
+            return;
+        }
+        if ("1".equals(System.getProperty("quarkos_cosmetics.flat")) && entity != null) {
+            // Close side of the south bed, on the chest, once the chick is asleep.
+            this.setPosition(2.2, 102.4, 2.05);
+            this.setRotation(98f, 22f);
+            return;
+        }
         if ("1".equals(System.getProperty("quarkos_cosmetics.chest")) && entity != null) {
             // Close side of the south bed: getting in, the walk to the chest, and sleep.
             this.setPosition(3.55, 103.15, 1.55);
