@@ -324,7 +324,8 @@ public final class Chick {
         if (mood.bed == Bed.ASLEEP) {
             Clip clip = loaded.clips.get("sleep");
             double length = clip == null || clip.length <= 0.0001 ? 4 : clip.length;
-            return new Sample("sleep", (age / 20.0) % length, null, 0, 1f);
+            double time = Math.max(0.0, (age - mood.phaseAge) / 20.0) % length;
+            return new Sample("sleep", time, null, 0, 1f);
         }
         Clip clip = loaded.clips.get(TRAVEL_CLIP);
         double length = clip == null || clip.length <= 0.0001 ? 0.6 : clip.length;
@@ -417,10 +418,11 @@ public final class Chick {
             right.negate();
             back.set(right).cross(up).normalize();
         }
+        // JOML's constructor is column-major: each basis vector is a row of arguments.
         Matrix3f basis = new Matrix3f(
-                right.x, up.x, back.x,
-                right.y, up.y, back.y,
-                right.z, up.z, back.z);
+                right.x, right.y, right.z,
+                up.x, up.y, up.z,
+                back.x, back.y, back.z);
         return new Quaternionf().setFromUnnormalized(basis);
     }
 
