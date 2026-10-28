@@ -60,6 +60,12 @@ public abstract class CameraZoomMixin {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
             return;
         }
+        if ("1".equals(System.getProperty("quarkos_cosmetics.chest")) && entity != null) {
+            // Close side of the south bed: getting in, the walk to the chest, and sleep.
+            this.setPosition(2.55, 102.28, 2.15);
+            this.setRotation(98f, 16f);
+            return;
+        }
         if ("1".equals(System.getProperty("quarkos_cosmetics.bed")) && entity != null) {
             // East of the pillow, looking down the length of the mattress so the whole body and the chick stay in frame.
             this.setPosition(3.1, 103.0, 2.6);

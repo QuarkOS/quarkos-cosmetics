@@ -75,7 +75,8 @@ public final class ClientHarness {
             new Shot("chick-shake", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
             new Shot("chick-shake-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
             new Shot("chick-head", Slot.HAT, Chick.ID, false, false, 0f, ""),
-            new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, "")
+            new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, "")
     );
 
     private static State state = State.WAIT_TITLE;
@@ -234,7 +235,8 @@ public final class ClientHarness {
                 prepare(client, shot);
                 shotQueued = false;
             }
-            boolean bedPlaced = !shot.name.contains("sleep")
+            boolean needsBed = shot.name.contains("sleep") || shot.name.equals("chick-to-chest");
+            boolean bedPlaced = !needsBed
                     || client.level.getBlockState(new BlockPos(0, 101, 2)).is(net.minecraft.world.level.block.Blocks.RED_BED);
             if (client.player.getY() >= 100.0 && bedPlaced) {
                 settledAt = ticks;
@@ -249,6 +251,10 @@ public final class ClientHarness {
             return;
         }
         if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
+            return;
+        }
+        if (shot.name.equals("chick-to-chest")) {
+            chickClip(client, shot);
             return;
         }
         if (shot.name.startsWith("chick-") && shot.name.endsWith("-clip")) {
@@ -341,7 +347,12 @@ public final class ClientHarness {
         client.player.connection.sendCommand("difficulty peaceful");
         client.player.connection.sendCommand("weather clear");
         client.player.connection.sendCommand("gamemode creative");
-        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
+        if (shot.name.equals("chick-to-chest")) {
+            // Beside the south bed, so the clip can show the player getting in.
+            client.player.connection.sendCommand("tp @s 1.7 101 1.6 90 8");
+        } else {
+            client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
+        }
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
         client.player.connection.sendCommand("item replace entity @s armor.chest with air");
         client.player.connection.sendCommand("item replace entity @s armor.legs with air");
@@ -352,7 +363,7 @@ public final class ClientHarness {
         client.player.stopFallFlying();
         client.player.getAbilities().flying = false;
         client.player.setNoGravity(false);
-        if (!shot.name.contains("sleep") && client.player.isSleeping()) {
+        if (!shot.name.contains("sleep") && !shot.name.equals("chick-to-chest") && client.player.isSleeping()) {
             client.player.stopSleeping();
         }
         ClientSettings settings = ClientSettings.get();
@@ -370,8 +381,8 @@ public final class ClientHarness {
         }
         settings.save(client.gameDirectory.toPath());
         client.player.connection.sendCommand("kill @e[type=!player]");
-        if (shot.name.contains("sleep")) {
-            client.player.connection.sendCommand("time set 18000");
+        if (shot.name.contains("sleep") || shot.name.equals("chick-to-chest")) {
+            client.player.connection.sendCommand(shot.name.equals("chick-to-chest") ? "time set 6000" : "time set 18000");
             client.player.connection.sendCommand("setblock 0 101 1 red_bed[facing=south,part=foot]");
             client.player.connection.sendCommand("setblock 0 101 2 red_bed[facing=south,part=head]");
             // Invisible lights so the chick on the pillow reads at night.
@@ -460,13 +471,32 @@ public final class ClientHarness {
         System.setProperty("quarkos_cosmetics.orbit", Float.toString(shot.orbit));
         client.options.fov().set(50);
         String clip = chickClipName(shot.name);
-        Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
+        if (shot.name.equals("chick-to-chest")) {
+            Chick.hold(null, null);
+        } else {
+            Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
+        }
         if (Chick.ID.equals(shot.id) && Chick.isPerch(shot.slot)) {
             ClientSettings.get().setChickPerch(shot.slot);
         }
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
         client.options.fov().set(50);
+        if (shot.name.equals("chick-to-chest")) {
+            System.setProperty("quarkos_cosmetics.chest", "1");
+            if (filmIndex >= 6 && !client.player.isSleeping()) {
+                client.player.startSleepInBed(new BlockPos(0, 101, 2));
+            }
+            if (client.player.isSleeping()) {
+                System.setProperty("quarkos_cosmetics.bed", "1");
+                client.screen = null;
+                holdSleepTimer(client.player);
+            }
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+        } else {
+            System.clearProperty("quarkos_cosmetics.chest");
+        }
         if (shot.name.contains("sleep") && !client.player.isSleeping()) {
             client.player.startSleepInBed(new BlockPos(0, 101, 2));
         }
@@ -561,7 +591,7 @@ public final class ClientHarness {
 
     /** Plays one chick clip and writes a short mp4 next to the stills. */
     private static void chickClip(Minecraft client, Shot shot) {
-        int frames = 20;
+        int frames = shot.name.equals("chick-to-chest") ? 48 : 20;
         if (filmIndex < 0) {
             filmIndex = 0;
             filmStartTick = ticks;
