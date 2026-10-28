@@ -99,6 +99,7 @@ public final class ClientHarness {
     private static int filmIndex = -1;
     private static int filmStartTick = -1;
     private static int sleepSeenAt = -1;
+    private static double airY = 108;
     private static RemotePlayer guest;
 
     private ClientHarness() {
@@ -233,7 +234,9 @@ public final class ClientHarness {
                 prepare(client, shot);
                 shotQueued = false;
             }
-            if (client.player.getY() >= 100.0) {
+            boolean bedPlaced = !shot.name.contains("sleep")
+                    || client.level.getBlockState(new BlockPos(0, 101, 2)).is(net.minecraft.world.level.block.Blocks.RED_BED);
+            if (client.player.getY() >= 100.0 && bedPlaced) {
                 settledAt = ticks;
                 LOGGER.info("studio ready at y={}", client.player.getY());
             } else if (ticks > 20 * 30) {
@@ -329,22 +332,16 @@ public final class ClientHarness {
         client.options.bobView().set(false);
         if (!studio) {
             studio = true;
-            client.player.connection.sendCommand("time set 6000");
-            client.player.connection.sendCommand("gamerule doDaylightCycle false");
-            client.player.connection.sendCommand("gamerule doMobSpawning false");
-            client.player.connection.sendCommand("weather clear");
-            client.player.connection.sendCommand("gamemode creative");
-            client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
-            client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
-        if (shot.name.contains("scared")) {
-            client.player.connection.sendCommand("data merge entity @s {NoGravity:1b}");
-            client.player.connection.sendCommand("tp @s 0.5 108 0.5 180 0");
-        } else {
-            client.player.connection.sendCommand("data merge entity @s {NoGravity:0b}");
-            client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
-        }
+        client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
+        // Join-tick commands are dropped, so the rules are sent again until the studio sticks.
+        client.player.connection.sendCommand("gamerule doDaylightCycle false");
+        client.player.connection.sendCommand("gamerule doMobSpawning false");
+        client.player.connection.sendCommand("difficulty peaceful");
+        client.player.connection.sendCommand("weather clear");
+        client.player.connection.sendCommand("gamemode creative");
+        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
         client.player.connection.sendCommand("item replace entity @s armor.chest with air");
         client.player.connection.sendCommand("item replace entity @s armor.legs with air");
@@ -377,18 +374,28 @@ public final class ClientHarness {
             client.player.connection.sendCommand("time set 18000");
             client.player.connection.sendCommand("setblock 0 101 1 red_bed[facing=south,part=foot]");
             client.player.connection.sendCommand("setblock 0 101 2 red_bed[facing=south,part=head]");
+            // Invisible lights so the chick on the pillow reads at night.
+            client.player.connection.sendCommand("setblock 2 102 1 light[level=15]");
+            client.player.connection.sendCommand("setblock 2 102 2 light[level=15]");
+            client.player.connection.sendCommand("setblock -1 102 1 light[level=15]");
+            client.player.connection.sendCommand("setblock -1 102 2 light[level=15]");
+            client.player.connection.sendCommand("setblock 0 103 1 light[level=15]");
+            client.player.connection.sendCommand("setblock 0 103 2 light[level=15]");
         } else {
             client.player.connection.sendCommand("time set 6000");
             client.player.connection.sendCommand("setblock 0 101 1 air");
             client.player.connection.sendCommand("setblock 0 101 2 air");
+            client.player.connection.sendCommand("setblock 2 102 1 air");
+            client.player.connection.sendCommand("setblock 2 102 2 air");
+            client.player.connection.sendCommand("setblock -1 102 1 air");
+            client.player.connection.sendCommand("setblock -1 102 2 air");
+            client.player.connection.sendCommand("setblock 0 103 1 air");
+            client.player.connection.sendCommand("setblock 0 103 2 air");
         }
     }
 
     private static void frame(Minecraft client, Shot shot) {
         client.options.hideGui = true;
-        if (!shot.name.contains("sleep")) {
-            System.clearProperty("quarkos_cosmetics.bed");
-        }
         boolean chick = shot.name.startsWith("chick-");
         boolean kite = shot.name.startsWith("kite-wings");
         boolean fly = shot.name.equals("kite-wings-flying");
@@ -415,6 +422,13 @@ public final class ClientHarness {
             KiteWings.hold(null, null);
         }
         client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
+        boolean sleepingShot = shot.name.contains("sleep");
+        if (!sleepingShot) {
+            System.clearProperty("quarkos_cosmetics.bed");
+        }
+        if (!shot.name.contains("scared")) {
+            System.clearProperty("quarkos_cosmetics.air");
+        }
         client.player.setYRot(180f);
         client.player.yRotO = 180f;
         client.player.setYBodyRot(180f);
@@ -462,28 +476,28 @@ public final class ClientHarness {
             // world to black, so the pose stays and the timer does not.
             client.screen = null;
             holdSleepTimer(client.player);
-            client.player.setPos(0.5, 101.0, 1.5);
-            client.player.xo = 0.5;
-            client.player.yo = 101.0;
-            client.player.zo = 1.5;
+            if (ticks % 10 == 0) {
+                client.player.connection.sendCommand("difficulty peaceful");
+                client.player.connection.sendCommand("gamerule doMobSpawning false");
+                client.player.connection.sendCommand("kill @e[type=!player]");
+            }
         }
         if (shot.name.contains("scared")) {
-            boolean fallingClip = shot.name.endsWith("-clip");
-            double y = client.player.getY();
-            if (!fallingClip || y < 105.0 || y > 112.0) {
-                y = 110.0;
-            } else {
-                y -= 0.12;
+            if (ticks <= 1) {
+                airY = 112.0;
             }
-            client.player.connection.sendCommand(String.format(java.util.Locale.US, "tp @s 0.5 %.2f 0.5 180 0", y));
-            client.player.setPos(0.5, y, 0.5);
-            client.player.xo = 0.5;
-            client.player.yo = y;
-            client.player.zo = 0.5;
-            client.player.setYRot(180f);
-            client.player.yRotO = 180f;
-            client.player.fallDistance = 6f;
+            if (!shot.name.endsWith("-clip")) {
+                airY = 108.0;
+            } else {
+                airY -= 0.45;
+                if (airY < 104.0) {
+                    airY = 112.0;
+                }
+            }
+            System.setProperty("quarkos_cosmetics.air", String.format(java.util.Locale.US, "%.3f", airY));
+            client.player.fallDistance = 8f;
             client.player.setOnGround(false);
+            client.player.setPose(Pose.STANDING);
         }
     }
 
@@ -511,16 +525,10 @@ public final class ClientHarness {
                 sleepSeenAt = ticks;
             }
             // Let the bed, the night, and the side camera land before the shot.
-            if (ticks - sleepSeenAt < 30) {
+            // Give the peaceful rule time to remove hostiles before the frame is saved.
+            if (ticks - sleepSeenAt < 80) {
                 return false;
             }
-        }
-        if (shot.name.contains("scared") && (client.player.fallDistance <= 3f || client.player.getY() < 104.0 || client.player.getY() > 111.0)) {
-            if (ticks - settledAt > 20 * 12) {
-                LOGGER.error("player never fell, y={} fall={}", client.player.getY(), client.player.fallDistance);
-                state = State.STOP;
-            }
-            return false;
         }
         return true;
     }

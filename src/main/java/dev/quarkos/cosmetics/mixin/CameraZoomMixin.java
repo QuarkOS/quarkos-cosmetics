@@ -61,9 +61,34 @@ public abstract class CameraZoomMixin {
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.bed")) && entity != null) {
-            this.setPosition(0.5 + 5.2, 102.6, 1.5);
-            this.setRotation(90f, 16f);
+            // East of the pillow, looking down the length of the mattress so the whole body and the chick stay in frame.
+            this.setPosition(3.1, 103.0, 2.6);
+            this.setRotation(105f, 21f);
             return;
+        }
+        String air = System.getProperty("quarkos_cosmetics.air");
+        if (air != null && !air.isBlank()) {
+            try {
+                double ay = Double.parseDouble(air);
+                if (entity instanceof net.minecraft.world.entity.player.Player player) {
+                    // Move the body before the frustum is built, or the grounded player is never extracted.
+                    player.setPos(0.5, ay, 0.5);
+                    player.xo = 0.5;
+                    player.yo = ay;
+                    player.zo = 0.5;
+                    player.xOld = 0.5;
+                    player.yOld = ay;
+                    player.zOld = 0.5;
+                    player.setOnGround(false);
+                    player.fallDistance = 8f;
+                }
+                // Beside the shoulder, near head height, so the chick and the boots stay inside the sky.
+                this.setPosition(2.2, ay + 1.15, 5.8);
+                this.setRotation(162f, 4f);
+                return;
+            } catch (NumberFormatException ignored) {
+                // Fall through to the ordinary third-person frame.
+            }
         }
         if (!detached) {
             return;

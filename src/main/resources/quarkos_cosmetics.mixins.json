@@ -8,7 +8,8 @@
     "CosmeticLayerAccess",
     "PauseScreenMixin",
     "ClientTickMixin",
-    "CameraZoomMixin"
+    "CameraZoomMixin",
+    "HarnessPoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1
