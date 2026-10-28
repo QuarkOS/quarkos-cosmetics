@@ -143,6 +143,15 @@
       "texture": "textures/cosmetics/bead_chain.png",
       "model": "cosmetics/bead_chain.json",
       "marker": "F0D48A"
+    },
+    {
+      "id": "quarkos:chick",
+      "name": "Chick",
+      "description": "A chick that sits on your head or either shoulder.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/chick.png",
+      "model": "cosmetics/chick.json",
+      "marker": "F6C945"
     }
   ]
 }

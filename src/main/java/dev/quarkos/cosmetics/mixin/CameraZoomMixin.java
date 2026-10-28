@@ -61,7 +61,13 @@ public abstract class CameraZoomMixin {
             return;
         }
         Vec3 pos = this.position;
-        double y = pos.y - 0.55;
+        double drop = 0.55;
+        try {
+            drop = Double.parseDouble(System.getProperty("quarkos_cosmetics.drop", "0.55"));
+        } catch (NumberFormatException ignored) {
+            drop = 0.55;
+        }
+        double y = pos.y - drop;
         float orbit = 0f;
         try {
             orbit = Float.parseFloat(System.getProperty("quarkos_cosmetics.orbit", "0"));

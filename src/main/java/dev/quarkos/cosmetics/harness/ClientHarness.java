@@ -8,9 +8,11 @@ import dev.quarkos.cosmetics.gallery.EquipmentMirror;
 import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.model.ModelException;
 import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.Chick;
 import dev.quarkos.cosmetics.render.KiteWings;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.CameraType;
+import net.minecraft.core.BlockPos;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.components.Button;
@@ -55,7 +57,25 @@ public final class ClientHarness {
             new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false, 0f, ""),
             new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false, 0f, ""),
             new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false, 0f, ""),
-            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false, 0f, "")
+            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false, 0f, ""),
+            new Shot("chick-idle", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-idle-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-peck", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-peck-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-sit", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-sit-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-sleep", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-sleep-clip", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-scared", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-scared-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-alert", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-alert-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-happy", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-happy-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-shake", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-shake-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
+            new Shot("chick-head", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, "")
     );
 
     private static State state = State.WAIT_TITLE;
@@ -73,6 +93,11 @@ public final class ClientHarness {
     private static volatile boolean pairFailed;
     private static volatile String pairKey = "";
     private static volatile UUID pairId;
+    private static volatile String adaToken = "";
+    private static volatile String chickHatId = "";
+    private static volatile String chickShoulderId = "";
+    private static int filmIndex = -1;
+    private static int filmStartTick = -1;
     private static RemotePlayer guest;
 
     private ClientHarness() {
@@ -219,6 +244,13 @@ public final class ClientHarness {
         if (ticks - settledAt < 40) {
             return;
         }
+        if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
+            return;
+        }
+        if (shot.name.startsWith("chick-") && shot.name.endsWith("-clip")) {
+            chickClip(client, shot);
+            return;
+        }
         // The flap clip is 1.6s. Age is in ticks, so the open keyframe at 0.8s lands every 32 ticks.
         if (shot.flap && Math.floorMod(client.player.tickCount, 32) != 16) {
             return;
@@ -314,6 +346,9 @@ public final class ClientHarness {
         client.player.stopFallFlying();
         client.player.getAbilities().flying = false;
         client.player.setNoGravity(false);
+        if (!shot.name.contains("sleep") && client.player.isSleeping()) {
+            client.player.stopSleeping();
+        }
         ClientSettings settings = ClientSettings.get();
         settings.skinLayers = false;
         settings.hideOthers = false;
@@ -323,11 +358,20 @@ public final class ClientHarness {
             settings.equip(slot, "");
         }
         settings.equip(shot.slot, shot.id);
+        if (Chick.ID.equals(shot.id) && Chick.isPerch(shot.slot)) {
+            settings.chickPerch = shot.slot.wire;
+        }
         settings.save(client.gameDirectory.toPath());
+        if (shot.name.contains("sleep")) {
+            client.player.connection.sendCommand("time set 18000");
+            client.player.connection.sendCommand("setblock 0 101 1 red_bed[facing=south,part=foot]");
+            client.player.connection.sendCommand("setblock 0 101 2 red_bed[facing=south,part=head]");
+        }
     }
 
     private static void frame(Minecraft client, Shot shot) {
         client.options.hideGui = true;
+        boolean chick = shot.name.startsWith("chick-");
         boolean kite = shot.name.startsWith("kite-wings");
         boolean fly = shot.name.equals("kite-wings-flying");
         boolean open = shot.name.equals("kite-wings-back")
@@ -359,15 +403,300 @@ public final class ClientHarness {
         client.player.yBodyRotO = 180f;
         client.player.setYHeadRot(180f);
         client.player.yHeadRotO = 180f;
-        client.player.setXRot(kite ? 8f : 0f);
-        client.player.xRotO = kite ? 8f : 0f;
+        client.player.setXRot(kite || chick ? 8f : 0f);
+        client.player.xRotO = kite || chick ? 8f : 0f;
         client.player.setSprinting(fly);
         client.player.getAbilities().mayfly = true;
-        client.player.getAbilities().flying = fly;
+        client.player.getAbilities().flying = fly && !chick;
         client.player.setNoGravity(false);
-        client.player.setPose(Pose.STANDING);
-        client.player.stopFallFlying();
+        if (!chick) {
+            client.player.setPose(Pose.STANDING);
+            client.player.stopFallFlying();
+        }
         client.setCameraEntity(client.player);
+        if (!chick) {
+            Chick.hold(null, null);
+            return;
+        }
+        System.setProperty("quarkos_cosmetics.zoom", "3.35");
+        System.setProperty("quarkos_cosmetics.drop", shot.name.contains("sleep") ? "0.15" : "0.55");
+        System.setProperty("quarkos_cosmetics.orbit", Float.toString(shot.orbit));
+        client.options.fov().set(50);
+        String clip = chickClipName(shot.name);
+        Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
+        client.player.setSprinting(false);
+        client.player.getAbilities().flying = false;
+        client.options.fov().set(50);
+        if (shot.name.contains("sleep") && !client.player.isSleeping()) {
+            client.player.startSleepInBed(new BlockPos(0, 101, 2));
+        }
+        if (shot.name.contains("scared")) {
+            if (client.player.onGround() || client.player.getY() < 103.0) {
+                client.player.fallDistance = 0f;
+                client.player.setPos(0.5, 112.0, 0.5);
+                client.player.setDeltaMovement(0, 0, 0);
+                client.player.setOnGround(false);
+            } else {
+                client.player.fallDistance = Math.max(client.player.fallDistance, 6f);
+            }
+        }
+    }
+
+    private static boolean chickReady(Minecraft client, Shot shot) {
+        if (shot.name.contains("sleep") && !client.player.isSleeping()) {
+            if (ticks - settledAt > 20 * 12) {
+                LOGGER.error("player never slept, y={}", client.player.getY());
+                state = State.STOP;
+            }
+            return false;
+        }
+        if (shot.name.contains("scared") && (client.player.fallDistance <= 3f || client.player.getY() < 104.0 || client.player.getY() > 111.0)) {
+            if (ticks - settledAt > 20 * 12) {
+                LOGGER.error("player never fell, y={} fall={}", client.player.getY(), client.player.fallDistance);
+                state = State.STOP;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private static String chickClipName(String name) {
+        String body = name.startsWith("chick-") ? name.substring("chick-".length()) : name;
+        if (body.endsWith("-clip")) {
+            body = body.substring(0, body.length() - "-clip".length());
+        }
+        return switch (body) {
+            case "head" -> "sit";
+            case "shoulder" -> "idle";
+            default -> body;
+        };
+    }
+
+    private static Float chickStill(String clip) {
+        return switch (clip) {
+            case "idle" -> 0.5f;
+            case "peck" -> 0.15f;
+            case "sit" -> 0.9f;
+            case "sleep" -> 1.0f;
+            case "scared" -> 0f;
+            case "alert" -> 0.3f;
+            case "happy" -> 0.2f;
+            case "shake" -> 0.1f;
+            default -> 0f;
+        };
+    }
+
+    /** Plays one chick clip and writes a short mp4 next to the stills. */
+    private static void chickClip(Minecraft client, Shot shot) {
+        int frames = 20;
+        if (filmIndex < 0) {
+            filmIndex = 0;
+            filmStartTick = ticks;
+            shotQueued = false;
+        }
+        if (ticks - filmStartTick < filmIndex * 2) {
+            return;
+        }
+        if (shotQueued) {
+            Path path = chickFrame(shot.name, filmIndex);
+            try {
+                if (Files.size(path) > 1000L) {
+                    shotQueued = false;
+                    filmIndex++;
+                    if (filmIndex >= frames) {
+                        encodeChickClip(shot.name, frames);
+                        filmIndex = -1;
+                        shotIndex++;
+                        ticks = 0;
+                        shotQueued = false;
+                        settledAt = -1;
+                    }
+                }
+            } catch (Exception ignored) {
+                // The frame is still being written.
+            }
+            return;
+        }
+        Path path = chickFrame(shot.name, filmIndex);
+        shotQueued = true;
+        try {
+            Files.createDirectories(path.getParent());
+        } catch (Exception e) {
+            LOGGER.error("could not create chick frames", e);
+            state = State.STOP;
+            return;
+        }
+        //? if >=1.21.11 {
+        Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    private static Path chickFrame(String name, int index) {
+        return Path.of("/tmp/chick-frames").resolve(name).resolve(String.format("f%02d.png", index));
+    }
+
+    private static void encodeChickClip(String shotName, int frames) {
+        String clip = chickClipName(shotName);
+        Path mp4 = shots().resolve("chick-" + clip + ".mp4");
+        Path pattern = chickFrame(shotName, 0).getParent().resolve("f%02d.png");
+        try {
+            Files.createDirectories(mp4.getParent());
+            Process process = new ProcessBuilder(
+                    "ffmpeg", "-y", "-framerate", "10", "-i", pattern.toString(),
+                    "-frames:v", Integer.toString(frames), "-pix_fmt", "yuv420p", mp4.toString())
+                    .redirectErrorStream(true)
+                    .start();
+            process.getInputStream().readAllBytes();
+            int code = process.waitFor();
+            LOGGER.info("chick clip {} exit {}", mp4, code);
+        } catch (Exception e) {
+            LOGGER.error("could not encode {}", mp4, e);
+        }
+    }
+
+    private static void chickPair(Minecraft client) {
+        KiteWings.hold(null, null);
+        client.player.setSprinting(false);
+        client.player.getAbilities().flying = false;
+        if (!pairStarted) {
+            pairStarted = true;
+            publishChickAda(client);
+        }
+        System.setProperty("quarkos_cosmetics.zoom", "3.35");
+        System.setProperty("quarkos_cosmetics.drop", "0.55");
+        boolean head = pairShot == 0;
+        System.setProperty("quarkos_cosmetics.orbit", head ? "0" : "36");
+        client.options.fov().set(50);
+        client.options.hideGui = true;
+        Chick.hold(head ? "sit" : "idle", head ? 0.9f : 0.5f);
+        if (ticks % 20 == 0) {
+            client.player.connection.sendCommand("tp @s 0.5 90 0.5 180 0");
+        }
+        if (!pairReady) {
+            if (pairFailed || ticks > 20 * 40) {
+                LOGGER.error("chick two-client gallery setup failed");
+                state = State.STOP;
+            }
+            return;
+        }
+        anchorGuest(client, false);
+        if (guest != null) {
+            guest.setXRot(8f);
+            guest.xRotO = 8f;
+        }
+        if (ticks < 40) {
+            return;
+        }
+        String name = head ? "chick-two-client-head" : "chick-two-client-shoulder";
+        shootWhenReady(client, name, () -> {
+            if (head) {
+                pairShot = 1;
+                pairReady = false;
+                ticks = 0;
+                shotQueued = false;
+                switchAdaShoulder(client);
+                return;
+            }
+            Chick.hold(null, null);
+            state = State.STOP;
+            ticks = 0;
+        });
+    }
+
+    private static void publishChickAda(Minecraft client) {
+        List<String> bodies = new ArrayList<>();
+        List<Slot> slots = new ArrayList<>();
+        try {
+            ModelLibrary.Resolved resolved = ModelLibrary.resolve(Chick.ID);
+            if (resolved == null || resolved.png() == null) {
+                LOGGER.error("packed chick missing for gallery publish");
+                pairFailed = true;
+                return;
+            }
+            for (Slot slot : List.of(Slot.HAT, Slot.SHOULDER_LEFT)) {
+                bodies.add(resolved.model().publishBody(resolved.name(), resolved.description(), slot, "texture", resolved.png()));
+                slots.add(slot);
+            }
+        } catch (ModelException ex) {
+            LOGGER.error("could not build the chick gallery body", ex);
+            pairFailed = true;
+            return;
+        }
+        Thread worker = new Thread(() -> {
+            try {
+                GalleryClient gallery = new GalleryClient(ClientSettings.get().galleryUrl);
+                GalleryClient.Challenge challenge = gallery.createChallenge();
+                GalleryClient.Session session = gallery.completeSession("Ada", challenge.serverId());
+                adaToken = session.token();
+                String key = ClientSettings.hyphenate(session.uuid());
+                String hatId = null;
+                String shoulderId = null;
+                for (int i = 0; i < bodies.size(); i++) {
+                    GalleryClient.Listed listed = gallery.publish(session.token(), bodies.get(i));
+                    if (slots.get(i) == Slot.HAT) {
+                        hatId = listed.id();
+                        gallery.equip(session.token(), Slot.HAT, listed.id());
+                    } else {
+                        shoulderId = listed.id();
+                    }
+                }
+                chickHatId = hatId;
+                chickShoulderId = shoulderId;
+                GalleryClient.Equipment equipment = gallery.equipment(key);
+                List<GalleryClient.Detail> details = new ArrayList<>();
+                for (Slot slot : Slot.values()) {
+                    String id = equipment.id(slot);
+                    if (id != null && !id.isBlank()) {
+                        details.add(gallery.cosmetic(id));
+                    }
+                }
+                client.execute(() -> {
+                    for (GalleryClient.Detail detail : details) {
+                        Slot slot = Slot.parse(detail.listed().slot()).orElse(null);
+                        if (slot != null) {
+                            ModelLibrary.remember(detail.listed().id(), detail.listed().name(), detail.listed().description(), slot, detail.model());
+                        }
+                    }
+                    EquipmentMirror.accept(key, equipment);
+                    pairKey = key;
+                    pairId = UUID.fromString(key);
+                    pairReady = true;
+                    LOGGER.info("gallery client B can see Ada's chick on {}", equipment.id(Slot.HAT));
+                });
+            } catch (Exception ex) {
+                LOGGER.error("Ada chick publish failed", ex);
+                pairFailed = true;
+            }
+        }, "quarkos-ada-chick");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static void switchAdaShoulder(Minecraft client) {
+        Thread worker = new Thread(() -> {
+            try {
+                GalleryClient gallery = new GalleryClient(ClientSettings.get().galleryUrl);
+                gallery.equip(adaToken, Slot.HAT, null);
+                gallery.equip(adaToken, Slot.SHOULDER_LEFT, chickShoulderId);
+                GalleryClient.Equipment equipment = gallery.equipment(pairKey);
+                GalleryClient.Detail detail = gallery.cosmetic(chickShoulderId);
+                client.execute(() -> {
+                    Slot slot = Slot.parse(detail.listed().slot()).orElse(Slot.SHOULDER_LEFT);
+                    ModelLibrary.remember(detail.listed().id(), detail.listed().name(), detail.listed().description(), slot, detail.model());
+                    EquipmentMirror.accept(pairKey, equipment);
+                    pairReady = true;
+                    LOGGER.info("Ada chick moved to {}", equipment.id(Slot.SHOULDER_LEFT));
+                });
+            } catch (Exception ex) {
+                LOGGER.error("Ada chick shoulder equip failed", ex);
+                pairFailed = true;
+            }
+        }, "quarkos-ada-shoulder");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private static void pair(Minecraft client) {
@@ -375,6 +704,14 @@ public final class ClientHarness {
             state = State.STOP;
             return;
         }
+        if (System.getProperty("quarkos_cosmetics.only", "").contains("chick-two")) {
+            chickPair(client);
+            return;
+        }
+        KiteWings.hold(null, null);
+        Chick.hold(null, null);
+        client.player.setSprinting(false);
+        client.player.getAbilities().flying = false;
         if (!pairStarted) {
             pairStarted = true;
             publishAda(client);

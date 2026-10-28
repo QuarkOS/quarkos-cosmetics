@@ -61,8 +61,14 @@ class PackedCosmeticTest {
             assertTrue(names.size() >= 4, modelPath);
             try (InputStream stream = resource(texturePath)) {
                 BufferedImage image = ImageIO.read(stream);
-                if ("textures/cosmetics/kite_wings.png".equals(texturePath)) {
+                String id = item.path("id").asText();
+                if ("quarkos:kite_wings".equals(id) || "textures/cosmetics/kite_wings.png".equals(texturePath) || "textures/cosmetics/wings.png".equals(texturePath)) {
                     assertEquals(64, image.getWidth(), texturePath);
+                    assertEquals(32, image.getHeight(), texturePath);
+                    continue;
+                }
+                if ("quarkos:chick".equals(id)) {
+                    assertEquals(32, image.getWidth(), texturePath);
                     assertEquals(32, image.getHeight(), texturePath);
                     continue;
                 }
@@ -72,7 +78,7 @@ class PackedCosmeticTest {
                 assertTrue(contains(image, wanted), texturePath + " is missing marker " + marker);
             }
         }
-        assertEquals(16, count);
+        assertEquals(17, count);
     }
 
     private static boolean contains(BufferedImage image, int rgb) {

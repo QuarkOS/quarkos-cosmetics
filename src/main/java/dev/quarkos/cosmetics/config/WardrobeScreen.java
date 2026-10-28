@@ -1,6 +1,7 @@
 package dev.quarkos.cosmetics.config;
 
 import dev.quarkos.cosmetics.gallery.GalleryClient;
+import dev.quarkos.cosmetics.render.Chick;
 import dev.quarkos.cosmetics.gallery.GalleryWork;
 import dev.quarkos.cosmetics.model.Slot;
 import dev.quarkos.cosmetics.render.ModelLibrary;
@@ -75,8 +76,12 @@ public final class WardrobeScreen extends Screen {
             String label = (id.equals(settings.equippedId(slot)) ? "* " : "") + resolved.name();
             addRenderableWidget(Button.builder(Component.literal(trim(label, 28)), button -> {
                 selectedPacked = id;
-                settings.equip(slot, id);
-                save();
+                if (Chick.ID.equals(id) && Chick.isPerch(slot)) {
+                    GalleryWork.syncChick(slot);
+                } else {
+                    settings.equip(slot, id);
+                    save();
+                }
                 rebuild();
             }).bounds(list.x(), y, list.w(), 20).build());
             y += 22;
@@ -164,6 +169,21 @@ public final class WardrobeScreen extends Screen {
             save();
             rebuild();
         }).bounds(settingsRect.x() + 218, sy, 90, 18).build());
+        Slot perch = Slot.parse(settings.chickPerch).orElse(Slot.HAT);
+        String perchLabel = switch (perch) {
+            case SHOULDER_LEFT -> "Perch left";
+            case SHOULDER_RIGHT -> "Perch right";
+            default -> "Perch head";
+        };
+        addRenderableWidget(Button.builder(Component.literal(perchLabel), button -> {
+            Slot next = switch (Slot.parse(settings.chickPerch).orElse(Slot.HAT)) {
+                case SHOULDER_LEFT -> Slot.SHOULDER_RIGHT;
+                case SHOULDER_RIGHT -> Slot.HAT;
+                default -> Slot.SHOULDER_LEFT;
+            };
+            GalleryWork.syncChick(next);
+            rebuild();
+        }).bounds(settingsRect.x() + 114, sy + 22, 150, 18).build());
         addRenderableWidget(Button.builder(Component.literal(itemHidden() ? "Item hidden" : "Item shown"), button -> {
             String id = settings.equippedId(slot);
             if (id.isBlank()) {

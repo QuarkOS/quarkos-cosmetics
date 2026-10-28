@@ -140,6 +140,8 @@ public final class ModelLibrary {
         for (Resolved resolved : packed()) {
             if (resolved.slot == slot) {
                 list.add(resolved);
+            } else if (Chick.ID.equals(resolved.id) && Chick.isPerch(slot)) {
+                list.add(resolved);
             }
         }
         return list;
