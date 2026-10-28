@@ -86,7 +86,8 @@ public final class ClientHarness {
             new Shot("chick-shake", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, false),
             new Shot("chick-shake-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, true),
             new Shot("chick-head", Slot.HAT, Chick.ID, false, false, 0f, false),
-            new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, false)
+            new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, false),
+            new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, false)
     );
 
     private static List<Shot> active;
@@ -263,6 +264,10 @@ public final class ClientHarness {
         if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
             return;
         }
+        if (shot.name.equals("chick-to-chest")) {
+            chickClip(client, shot);
+            return;
+        }
         if (shot.name.startsWith("chick-") && shot.name.endsWith("-clip")) {
             chickClip(client, shot);
             return;
@@ -316,7 +321,9 @@ public final class ClientHarness {
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
-        if (shot.name.contains("sleep")) {
+        if (shot.name.equals("chick-to-chest")) {
+            client.player.connection.sendCommand("tp @s 0.5 101 1.2 180 8");
+        } else if (shot.name.contains("sleep")) {
             client.player.connection.sendCommand("tp @s 0.5 102.2 0.5 180 8");
         } else if (!shot.name.contains("scared")) {
             client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
@@ -330,10 +337,10 @@ public final class ClientHarness {
         client.player.setShiftKeyDown(false);
         client.player.setSwimming(false);
         client.player.stopFallFlying();
-        if (!shot.name.contains("sleep") && client.player.isSleeping()) {
+        if (!shot.name.contains("sleep") && !shot.name.equals("chick-to-chest") && client.player.isSleeping()) {
             client.player.stopSleeping();
         }
-        if (shot.name.contains("sleep")) {
+        if (shot.name.contains("sleep") || shot.name.equals("chick-to-chest")) {
             client.player.connection.sendCommand("time set 6000");
             client.player.connection.sendCommand("setblock 0 100 0 white_concrete");
             client.player.connection.sendCommand("setblock 1 100 0 white_concrete");
@@ -405,10 +412,33 @@ public final class ClientHarness {
         portraitDrop = 0.55f;
         portraitOrbit = shot.orbit;
         String clip = chickClipName(shot.name);
-        Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
+        if (shot.name.equals("chick-to-chest")) {
+            Chick.hold(null, null);
+        } else {
+            Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
+        }
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
         client.options.fov().set(50);
+        if (shot.name.equals("chick-to-chest")) {
+            if (filmIndex >= 6 && !client.player.isSleeping()) {
+                client.player.startSleepInBed(new BlockPos(1, 101, 0));
+            }
+            if (client.player.isSleeping()) {
+                clearSleepFade(client.player);
+                if (client.screen != null) {
+                    client.setScreen(null);
+                }
+            }
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            portraitLock = true;
+            lockX = 1.0;
+            lockY = 102.35;
+            lockZ = 2.55;
+            lockYaw = 180f;
+            lockPitch = 18f;
+        }
         if (shot.name.contains("sleep")) {
             if (!client.player.isSleeping()) {
                 client.player.startSleepInBed(new BlockPos(1, 101, 0));
@@ -500,7 +530,7 @@ public final class ClientHarness {
 
     /** Plays one chick clip and writes a short mp4 next to the stills. */
     private static void chickClip(Minecraft client, Shot shot) {
-        int frames = 20;
+        int frames = shot.name.equals("chick-to-chest") ? 48 : 20;
         if (filmIndex < 0) {
             filmIndex = 0;
             filmStartTick = ticks;

@@ -17,6 +17,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,13 @@ public final class Chick {
     private static final String ANIMATION = "/assets/quarkos_cosmetics/geckolib/animations/chick.animation.json";
     private static final float[] ZERO = new float[3];
     private static final float[] ONE = {1f, 1f, 1f};
+    /** In-bed travel. One name, so a newer walk clip drops in without a path change. */
+    private static final String TRAVEL_CLIP = "walk";
+    private static final String SETTLE_CLIP = "settle";
+    /** 1.25 s from the perch to the chest, inside the 1–1.5 s window. */
+    private static final float TRAVEL_TICKS = 25f;
+    private static final float HEAD_PX = 8f;
+    private static boolean loggedScale;
 
     private static Model model;
     private static boolean failed;
@@ -108,7 +116,85 @@ public final class Chick {
             logged = announce;
             LOGGER.info("chick playing {} at {}s on {}", sample.clip, sample.time, slot.wire);
         }
+        float scale = chickScale(loaded);
+        float contact = sitContact(loaded);
+        if (!loggedScale) {
+            loggedScale = true;
+            float width = bodyWidth(loaded);
+            LOGGER.info("chick body {} px scaled by {} to {} px", width, scale, width * scale);
+        }
+        Place place = place(pose, loaded, slot, head, body, scale, contact);
+        pose.pushPose();
+        place.part.translateAndRotate(pose);
+        pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        pose.translate(place.x, place.y, place.z);
+        if (place.turn != null) {
+            pose.mulPose(place.turn);
+        }
+        pose.scale(scale, scale, scale);
+        Matrix4f view = new Matrix4f(pose.last().pose());
+        Matrix3f normals = new Matrix3f(pose.last().normal());
+        submitter.submit(pose, TEXTURE, false, consumer -> render(consumer, view, normals, light, loaded, sample));
+        pose.popPose();
+    }
+
+    /**
+     * Head and shoulder stay on their parts. In bed the chick walks in body space from that perch
+     * to the chest, faces its travel, then lies on the chest for settle and sleep.
+     */
+    private static Place place(PoseStack pose, Model loaded, Slot slot, ModelPart head, ModelPart body,
+                               float scale, float contact) {
+        float[] perch = perch(slot, scale, contact);
         ModelPart part = slot == Slot.HAT ? head : body;
+        Mood mood = bound == null ? null : MOODS.get(bound.getUUID());
+        if (heldClip != null || mood == null || mood.bed == Bed.PERCH) {
+            return new Place(part, perch[0], perch[1], perch[2], null);
+        }
+        Matrix4f toBody = bodyPixels(pose, body);
+        Vector3f start = toBody(toBody, anchor(pose, part, perch[0], perch[1], perch[2]));
+        Vector3f startUp = axis(pose, toBody, part, perch, 0f, 1f, 0f);
+        Vector3f startBeak = axis(pose, toBody, part, perch, 0f, 0f, -1f);
+        Vector3f outward = new Vector3f(0f, 0f, -1f);
+        Vector3f surface = new Vector3f(0f, -4.5f, -2f);
+        Vector3f chest = new Vector3f(surface).fma(0.1f - contact * scale, outward);
+        Vector3f control = new Vector3f(chest).add(0f, 8f, -6f);
+        boolean settled = mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP;
+        float s = settled ? 1f : smooth(mood.trip);
+        Vector3f pos = settled ? new Vector3f(chest) : bezier(start, control, chest, s);
+        Vector3f up;
+        Vector3f beak;
+        if (settled) {
+            up = outward;
+            beak = new Vector3f(0f, -1f, 0f);
+        } else {
+            float upBlend = smooth(Math.min(1f, s / 0.3f));
+            up = new Vector3f(startUp).lerp(outward, upBlend);
+            if (up.lengthSquared() < 1.0e-6f) {
+                up.set(outward);
+            }
+            up.normalize();
+            Vector3f tangent = bezierTangent(start, control, chest, Math.max(0.001f, Math.min(0.999f, s)));
+            if (mood.bed == Bed.TO_PERCH) {
+                tangent.negate();
+            }
+            beak = new Vector3f(tangent).fma(-tangent.dot(up), up);
+            if (beak.lengthSquared() < 0.04f) {
+                beak.set(startBeak).fma(-startBeak.dot(up), up);
+            }
+            float align = mood.bed == Bed.TO_PERCH || s <= 0.65f ? 0f : (s - 0.65f) / 0.35f;
+            if (align > 0f) {
+                Vector3f rest = new Vector3f(0f, -1f, 0f).fma(-new Vector3f(0f, -1f, 0f).dot(up), up);
+                if (rest.lengthSquared() > 1.0e-4f && beak.lengthSquared() > 1.0e-4f) {
+                    rest.normalize();
+                    beak.normalize().lerp(rest, align);
+                }
+            }
+        }
+        return new Place(body, pos.x, pos.y, pos.z, facing(up, beak));
+    }
+
+    /** Feet stay 0.1 px clear. Sit tucks the belly to {@code contact}; scale would lift it, so Y comes back down. */
+    private static float[] perch(Slot slot, float scale, float contact) {
         float x = slot == Slot.SHOULDER_RIGHT ? -7f : slot == Slot.SHOULDER_LEFT ? 7f : 0f;
         float y = slot == Slot.HAT ? 32.1f : 24.1f;
         if (slot == Slot.HAT) {
@@ -118,14 +204,224 @@ public final class Chick {
                 y += 0.5f;
             }
         }
+        y -= contact * (scale - 1f);
+        return new float[] {x, y - 24f, 0f};
+    }
+
+    private static float chickScale(Model loaded) {
+        float width = bodyWidth(loaded);
+        if (width < 0.001f) {
+            return 1f;
+        }
+        return (HEAD_PX * 2f / 3f) / width;
+    }
+
+    private static float bodyWidth(Model loaded) {
+        Bone body = loaded.bones.get("body");
+        if (body == null) {
+            return 4f;
+        }
+        float min = Float.POSITIVE_INFINITY;
+        float max = Float.NEGATIVE_INFINITY;
+        for (Cube cube : body.cubes) {
+            min = Math.min(min, cube.ox);
+            max = Math.max(max, cube.ox + cube.sx);
+        }
+        return max - min;
+    }
+
+    /** Lowest body corner once the sit tuck is applied. Measured from the body cubes and the sit clip. */
+    private static float sitContact(Model loaded) {
+        Bone body = loaded.bones.get("body");
+        float minY = 0f;
+        if (body != null) {
+            minY = Float.POSITIVE_INFINITY;
+            for (Cube cube : body.cubes) {
+                minY = Math.min(minY, cube.oy);
+            }
+        }
+        Clip sit = loaded.clips.get("sit");
+        float drop = 0f;
+        if (sit != null) {
+            Channel channel = sit.bones.get("body");
+            if (channel != null && channel.position.times.length > 0) {
+                drop = channel.position.sample(0)[1];
+            }
+        }
+        return minY + drop;
+    }
+
+    private static void updateBed(Player player, Mood mood, Model loaded, float age) {
+        int tick = player.tickCount;
+        if (tick == mood.lastBedTick) {
+            return;
+        }
+        int steps = mood.lastBedTick < 0 ? 1 : Math.max(1, tick - mood.lastBedTick);
+        mood.lastBedTick = tick;
+        boolean sleeping = player.isSleeping();
+        Clip settle = loaded.clips.get(SETTLE_CLIP);
+        double settleLen = settle == null || settle.length <= 0.0001 ? 0.8 : settle.length;
+        int settleTicks = Math.max(1, (int) Math.round(settleLen * 20.0));
+        switch (mood.bed) {
+            case PERCH -> {
+                if (sleeping) {
+                    enter(mood, Bed.TO_CHEST, age);
+                    mood.trip = 0f;
+                }
+            }
+            case TO_CHEST -> {
+                if (!sleeping) {
+                    enter(mood, Bed.TO_PERCH, age);
+                } else {
+                    mood.trip = Math.min(1f, mood.trip + steps / TRAVEL_TICKS);
+                    if (mood.trip >= 1f) {
+                        enter(mood, Bed.SETTLE, age);
+                    }
+                }
+            }
+            case SETTLE -> {
+                if (!sleeping) {
+                    enter(mood, Bed.TO_PERCH, age);
+                } else if (tick - mood.phaseTick >= settleTicks) {
+                    enter(mood, Bed.ASLEEP, age);
+                }
+            }
+            case ASLEEP -> {
+                if (!sleeping) {
+                    enter(mood, Bed.TO_PERCH, age);
+                }
+            }
+            case TO_PERCH -> {
+                if (sleeping) {
+                    enter(mood, Bed.TO_CHEST, age);
+                } else {
+                    mood.trip = Math.max(0f, mood.trip - steps / TRAVEL_TICKS);
+                    if (mood.trip <= 0f) {
+                        enter(mood, Bed.PERCH, age);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void enter(Mood mood, Bed bed, float age) {
+        mood.bed = bed;
+        mood.phaseAge = age;
+        mood.phaseTick = mood.lastBedTick;
+        if (!bed.name().equals(mood.bedLogged)) {
+            mood.bedLogged = bed.name();
+            LOGGER.info("chick bed {}", bed.name());
+        }
+    }
+
+    private static Sample bedSample(Model loaded, Mood mood, float age) {
+        if (mood.bed == Bed.SETTLE) {
+            Clip clip = loaded.clips.get(SETTLE_CLIP);
+            double length = clip == null || clip.length <= 0.0001 ? 0.8 : clip.length;
+            double time = Math.min(length, Math.max(0.0, (age - mood.phaseAge) / 20.0));
+            return new Sample(SETTLE_CLIP, time, null, 0, 1f);
+        }
+        if (mood.bed == Bed.ASLEEP) {
+            Clip clip = loaded.clips.get("sleep");
+            double length = clip == null || clip.length <= 0.0001 ? 4 : clip.length;
+            return new Sample("sleep", (age / 20.0) % length, null, 0, 1f);
+        }
+        Clip clip = loaded.clips.get(TRAVEL_CLIP);
+        double length = clip == null || clip.length <= 0.0001 ? 0.6 : clip.length;
+        String from = null;
+        double fromTime = 0;
+        float blend = 1f;
+        if (mood.bed == Bed.TO_CHEST) {
+            float stood = (age - mood.phaseAge) / 20f;
+            if (stood < 0.2f) {
+                blend = Math.max(0f, stood / 0.2f);
+                from = "sit";
+                Clip sit = loaded.clips.get("sit");
+                double sitLength = sit == null || sit.length <= 0.0001 ? 1 : sit.length;
+                fromTime = (age / 20.0) % sitLength;
+            }
+        }
+        return new Sample(TRAVEL_CLIP, (age / 20.0) % length, from, fromTime, blend);
+    }
+
+    private static Vector3f anchor(PoseStack pose, ModelPart part, float x, float y, float z) {
         pose.pushPose();
         part.translateAndRotate(pose);
         pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
-        pose.translate(x, y - 24f, 0f);
-        Matrix4f view = new Matrix4f(pose.last().pose());
-        Matrix3f normals = new Matrix3f(pose.last().normal());
-        submitter.submit(pose, TEXTURE, false, consumer -> render(consumer, view, normals, light, loaded, sample));
+        pose.translate(x, y, z);
+        Vector3f point = new Vector3f();
+        pose.last().pose().transformPosition(point);
         pose.popPose();
+        return point;
+    }
+
+    private static Matrix4f bodyPixels(PoseStack pose, ModelPart body) {
+        pose.pushPose();
+        body.translateAndRotate(pose);
+        pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        Matrix4f inverse = new Matrix4f(pose.last().pose()).invert();
+        pose.popPose();
+        return inverse;
+    }
+
+    private static Vector3f toBody(Matrix4f inverseBody, Vector3f point) {
+        return inverseBody.transformPosition(new Vector3f(point));
+    }
+
+    private static Vector3f axis(PoseStack pose, Matrix4f inverseBody, ModelPart part, float[] perch,
+                                 float dx, float dy, float dz) {
+        Vector3f origin = toBody(inverseBody, anchor(pose, part, perch[0], perch[1], perch[2]));
+        Vector3f shifted = toBody(inverseBody, anchor(pose, part, perch[0] + dx, perch[1] + dy, perch[2] + dz));
+        return shifted.sub(origin);
+    }
+
+    private static Vector3f bezier(Vector3f a, Vector3f b, Vector3f c, float s) {
+        float u = 1f - s;
+        return new Vector3f(a).mul(u * u).fma(2f * u * s, b).fma(s * s, c);
+    }
+
+    private static Vector3f bezierTangent(Vector3f a, Vector3f b, Vector3f c, float s) {
+        Vector3f towardControl = new Vector3f(b).sub(a).mul(2f * (1f - s));
+        return towardControl.fma(2f * s, new Vector3f(c).sub(b));
+    }
+
+    private static float smooth(float t) {
+        float clamped = Math.max(0f, Math.min(1f, t));
+        return clamped * clamped * (3f - 2f * clamped);
+    }
+
+    /** Bedrock +Y to {@code up}, beak (−Z) to {@code beak}, in the same space as the perch translate. */
+    private static Quaternionf facing(Vector3f upIn, Vector3f beakIn) {
+        Vector3f up = new Vector3f(upIn);
+        if (up.lengthSquared() < 1.0e-6f) {
+            up.set(0f, 1f, 0f);
+        }
+        up.normalize();
+        Vector3f beak = new Vector3f(beakIn);
+        if (beak.lengthSquared() < 1.0e-6f) {
+            beak.set(0f, 0f, -1f);
+        }
+        beak.normalize().fma(-beak.dot(up), up);
+        if (beak.lengthSquared() < 1.0e-6f) {
+            Vector3f hint = Math.abs(up.y) < 0.9f ? new Vector3f(0f, 1f, 0f) : new Vector3f(1f, 0f, 0f);
+            beak.set(hint).fma(-hint.dot(up), up);
+        }
+        beak.normalize();
+        Vector3f right = beak.cross(up, new Vector3f());
+        if (right.lengthSquared() < 1.0e-6f) {
+            right.set(1f, 0f, 0f);
+        }
+        right.normalize();
+        Vector3f back = right.cross(up, new Vector3f()).normalize();
+        if (back.dot(beak) > 0f) {
+            right.negate();
+            back.set(right).cross(up).normalize();
+        }
+        Matrix3f basis = new Matrix3f(
+                right.x, up.x, back.x,
+                right.y, up.y, back.y,
+                right.z, up.z, back.z);
+        return new Quaternionf().setFromUnnormalized(basis);
     }
 
     private static Sample sample(Model loaded, Slot slot, float age) {
@@ -140,6 +436,10 @@ public final class Chick {
             return new Sample(resting, 0, null, 0, 1f);
         }
         Mood mood = MOODS.computeIfAbsent(bound.getUUID(), ignored -> new Mood());
+        updateBed(bound, mood, loaded, age);
+        if (mood.bed != Bed.PERCH) {
+            return bedSample(loaded, mood, age);
+        }
         String clip = choose(bound, slot, mood, age);
         if (mood.clip != null && !mood.clip.equals(clip)) {
             mood.fromClip = mood.clip;
@@ -523,6 +823,26 @@ public final class Chick {
         }
     }
 
+    private enum Bed {
+        PERCH, TO_CHEST, SETTLE, ASLEEP, TO_PERCH
+    }
+
+    private static final class Place {
+        final ModelPart part;
+        final float x;
+        final float y;
+        final float z;
+        final Quaternionf turn;
+
+        Place(ModelPart part, float x, float y, float z, Quaternionf turn) {
+            this.part = part;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.turn = turn;
+        }
+    }
+
     private static final class Mood {
         private String clip;
         private String fromClip;
@@ -531,6 +851,12 @@ public final class Chick {
         private int blendLeft;
         private int blendTotal;
         private int lastTick = -1;
+        private Bed bed = Bed.PERCH;
+        private int lastBedTick = -1;
+        private int phaseTick = -1;
+        private float phaseAge;
+        private float trip;
+        private String bedLogged = "";
         private int stillSince = -1;
         private int nextPeck = -1;
         private int alertUntil;
