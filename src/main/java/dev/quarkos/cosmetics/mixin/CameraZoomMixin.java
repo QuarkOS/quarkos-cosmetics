@@ -62,8 +62,8 @@ public abstract class CameraZoomMixin {
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.chest")) && entity != null) {
             // Close side of the south bed: getting in, the walk to the chest, and sleep.
-            this.setPosition(2.55, 102.28, 2.15);
-            this.setRotation(98f, 16f);
+            this.setPosition(3.55, 103.15, 1.55);
+            this.setRotation(88f, 20f);
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.bed")) && entity != null) {

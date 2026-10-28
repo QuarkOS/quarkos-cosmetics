@@ -74,7 +74,7 @@ public final class ClientHarness {
             new Shot("chick-happy-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
             new Shot("chick-shake", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
             new Shot("chick-shake-clip", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
-            new Shot("chick-head", Slot.HAT, Chick.ID, false, false, 0f, ""),
+            new Shot("chick-head", Slot.HAT, Chick.ID, true, false, 0f, ""),
             new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, ""),
             new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, "")
     );
@@ -348,8 +348,8 @@ public final class ClientHarness {
         client.player.connection.sendCommand("weather clear");
         client.player.connection.sendCommand("gamemode creative");
         if (shot.name.equals("chick-to-chest")) {
-            // Beside the south bed, so the clip can show the player getting in.
-            client.player.connection.sendCommand("tp @s 1.7 101 1.6 90 8");
+            // North of the foot, facing the bed, so the side camera sees them get in.
+            client.player.connection.sendCommand("tp @s -0.7 101 1.5 270 8");
         } else {
             client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
         }
@@ -461,8 +461,9 @@ public final class ClientHarness {
             Chick.hold(null, null);
             return;
         }
-        System.setProperty("quarkos_cosmetics.zoom", "3.35");
-        System.setProperty("quarkos_cosmetics.drop", shot.name.contains("sleep") ? "0.15" : "0.55");
+        boolean headShot = shot.name.equals("chick-head");
+        System.setProperty("quarkos_cosmetics.zoom", headShot ? "3.2" : "2.55");
+        System.setProperty("quarkos_cosmetics.drop", shot.name.contains("sleep") ? "0.15" : headShot ? "0.18" : "0.35");
         if (shot.name.contains("sleep")) {
             System.setProperty("quarkos_cosmetics.bed", "1");
         } else {
@@ -484,6 +485,14 @@ public final class ClientHarness {
         client.options.fov().set(50);
         if (shot.name.equals("chick-to-chest")) {
             System.setProperty("quarkos_cosmetics.chest", "1");
+            if (!client.player.isSleeping()) {
+                client.player.setYRot(270f);
+                client.player.yRotO = 270f;
+                client.player.setYBodyRot(270f);
+                client.player.yBodyRotO = 270f;
+                client.player.setYHeadRot(270f);
+                client.player.yHeadRotO = 270f;
+            }
             if (filmIndex >= 6 && !client.player.isSleeping()) {
                 client.player.startSleepInBed(new BlockPos(0, 101, 2));
             }
