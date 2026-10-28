@@ -71,7 +71,7 @@ public final class Chick {
             return false;
         }
         for (CosmeticModel.Element element : resolved.model().elements) {
-            if ("geometry.chick".equals(element.name())) {
+            if ("geometry_chick".equals(element.name())) {
                 return true;
             }
         }

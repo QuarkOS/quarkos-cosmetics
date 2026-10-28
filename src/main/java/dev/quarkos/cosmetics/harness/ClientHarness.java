@@ -44,6 +44,13 @@ public final class ClientHarness {
     public static float portraitDrop = 0.42f;
     /** Degrees added to the player's yaw to swing the harness camera off the back. 0 stays behind. */
     public static float portraitOrbit;
+    /** When set, the camera sits at this pose instead of the third-person rig. Sleep uses it. */
+    public static boolean portraitLock;
+    public static double lockX;
+    public static double lockY;
+    public static double lockZ;
+    public static float lockYaw;
+    public static float lockPitch;
     private static final List<Shot> SHOTS = List.of(
             new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, false),
             new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
@@ -238,16 +245,19 @@ public final class ClientHarness {
                 prepare(client, shot);
                 shotQueued = false;
             }
-            if (client.player.getY() >= 100.0) {
+            // Sleep moves the player onto the bed before the platform exists. Wait until they are over the studio.
+            boolean overStudio = Math.abs(client.player.getX() - 0.5) < 4.0 && Math.abs(client.player.getZ() - 0.5) < 4.0
+                    && client.player.getY() > 90.0;
+            if (studio && overStudio && ticks > 40) {
                 settledAt = ticks;
-                LOGGER.info("studio ready at y={}", client.player.getY());
+                LOGGER.info("studio ready at {},{},{}", client.player.getX(), client.player.getY(), client.player.getZ());
             } else if (ticks > 20 * 30) {
                 LOGGER.error("player never reached the studio, y={}", client.player.getY());
                 state = State.STOP;
             }
             return;
         }
-        if (ticks - settledAt < 40) {
+        if (ticks - settledAt < (shot.name.contains("sleep") || shot.name.contains("scared") ? 60 : 40)) {
             return;
         }
         if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
@@ -306,7 +316,11 @@ public final class ClientHarness {
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
-        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
+        if (!shot.name.contains("scared")) {
+            client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
+        } else {
+            client.player.connection.sendCommand("tp @s 0.5 116 0.5 180 12");
+        }
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
         client.player.connection.sendCommand("item replace entity @s armor.chest with air");
         client.player.connection.sendCommand("item replace entity @s armor.legs with air");
@@ -317,6 +331,16 @@ public final class ClientHarness {
         if (!shot.name.contains("sleep") && client.player.isSleeping()) {
             client.player.stopSleeping();
         }
+        if (shot.name.contains("sleep")) {
+            client.player.connection.sendCommand("time set 6000");
+            client.player.connection.sendCommand("setblock 0 100 0 red_bed[facing=east,part=foot]");
+            client.player.connection.sendCommand("setblock 1 100 0 red_bed[facing=east,part=head]");
+        } else {
+            client.player.connection.sendCommand("time set 6000");
+            client.player.connection.sendCommand("setblock 0 100 0 white_concrete");
+            client.player.connection.sendCommand("setblock 1 100 0 white_concrete");
+            client.player.connection.sendCommand("kill @e[type=!player]");
+        }
         ClientSettings settings = ClientSettings.get();
         settings.skinLayers = false;
         settings.hideOthers = false;
@@ -325,19 +349,16 @@ public final class ClientHarness {
             settings.categoryOn.put(slot, true);
             settings.equip(slot, "");
         }
-        settings.equip(shot.slot, shot.id);
         if (Chick.ID.equals(shot.id) && Chick.isPerch(shot.slot)) {
-            settings.chickPerch = shot.slot.wire;
+            settings.setChickPerch(shot.slot);
+        } else {
+            settings.equip(shot.slot, shot.id);
         }
         settings.save(client.gameDirectory.toPath());
-        if (shot.name.contains("sleep")) {
-            client.player.connection.sendCommand("time set 18000");
-            client.player.connection.sendCommand("setblock 0 101 1 red_bed[facing=south,part=foot]");
-            client.player.connection.sendCommand("setblock 0 101 2 red_bed[facing=south,part=head]");
-        }
     }
 
     private static void frame(Minecraft client, Shot shot) {
+        portraitLock = false;
         boolean chick = shot.name.startsWith("chick-");
         boolean kite = shot.name.startsWith("kite-wings");
         boolean wide = kite || shot.spread || shot.film || shot.orbit != 0f;
@@ -375,37 +396,67 @@ public final class ClientHarness {
             return;
         }
         portraitDistance = 3.35f;
-        portraitDrop = shot.name.contains("sleep") ? 0.15f : 0.55f;
+        portraitDrop = 0.55f;
         portraitOrbit = shot.orbit;
         String clip = chickClipName(shot.name);
         Chick.hold(clip, shot.name.endsWith("-clip") ? null : chickStill(clip));
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
         client.options.fov().set(50);
-        if (shot.name.contains("sleep") && !client.player.isSleeping()) {
-            client.player.startSleepInBed(new BlockPos(0, 101, 2));
+        if (shot.name.contains("sleep")) {
+            if (!client.player.isSleeping()) {
+                client.player.startSleepInBed(new BlockPos(1, 100, 0));
+            }
+            clearSleepFade(client.player);
+            if (client.screen != null) {
+                client.setScreen(null);
+            }
+            client.options.hideGui = true;
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            // East bed: foot (0,100,0), head (1,100,0). Camera sits south of it, above the mattress, so the lying body fills the frame.
+            portraitLock = true;
+            lockX = 0.9;
+            lockY = 104.2;
+            lockZ = 3.3;
+            lockYaw = 180f;
+            lockPitch = 50f;
         }
         if (shot.name.contains("scared")) {
-            if (client.player.onGround() || client.player.getY() < 103.0) {
-                client.player.fallDistance = 0f;
-                client.player.setPos(0.5, 112.0, 0.5);
-                client.player.setDeltaMovement(0, 0, 0);
-                client.player.setOnGround(false);
-            } else {
-                client.player.fallDistance = Math.max(client.player.fallDistance, 6f);
+            client.player.connection.sendCommand("tp @s 0.5 116 0.5 180 12");
+            client.player.fallDistance = 8f;
+            client.player.setOnGround(false);
+            portraitDistance = 5.4f;
+            portraitDrop = -0.6f;
+            portraitOrbit = 28f;
+        }
+    }
+
+    /** The sleep overlay darkens the world as the timer climbs. Keep the pose, drop the fade. */
+    private static void clearSleepFade(net.minecraft.world.entity.player.Player player) {
+        Class<?> type = player.getClass();
+        while (type != null) {
+            try {
+                java.lang.reflect.Field field = type.getDeclaredField("sleepCounter");
+                field.setAccessible(true);
+                field.setInt(player, 0);
+                return;
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            } catch (IllegalAccessException ignored) {
+                return;
             }
         }
     }
 
     private static boolean chickReady(Minecraft client, Shot shot) {
-        if (shot.name.contains("sleep") && !client.player.isSleeping()) {
+        if (shot.name.contains("sleep") && (!client.player.isSleeping() || client.screen != null)) {
             if (ticks - settledAt > 20 * 12) {
-                LOGGER.error("player never slept, y={}", client.player.getY());
+                LOGGER.error("player never slept, y={} screen={}", client.player.getY(), client.screen);
                 state = State.STOP;
             }
             return false;
         }
-        if (shot.name.contains("scared") && (client.player.fallDistance <= 3f || client.player.getY() < 104.0 || client.player.getY() > 111.0)) {
+        if (shot.name.contains("scared") && client.player.getY() < 112.0) {
             if (ticks - settledAt > 20 * 12) {
                 LOGGER.error("player never fell, y={} fall={}", client.player.getY(), client.player.fallDistance);
                 state = State.STOP;
@@ -513,6 +564,7 @@ public final class ClientHarness {
     }
 
     private static void chickPair(Minecraft client) {
+        portraitLock = false;
         KiteWings.hold(null, null);
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
@@ -583,6 +635,13 @@ public final class ClientHarness {
                 GalleryClient.Session session = gallery.completeSession("Ada", challenge.serverId());
                 adaToken = session.token();
                 String key = ClientSettings.hyphenate(session.uuid());
+                GalleryClient.Equipment previous = gallery.equipment(key);
+                for (Slot slot : Slot.values()) {
+                    String occupied = previous.id(slot);
+                    if (occupied != null && !occupied.isBlank()) {
+                        gallery.equip(session.token(), slot, null);
+                    }
+                }
                 String hatId = null;
                 String shoulderId = null;
                 for (int i = 0; i < bodies.size(); i++) {
