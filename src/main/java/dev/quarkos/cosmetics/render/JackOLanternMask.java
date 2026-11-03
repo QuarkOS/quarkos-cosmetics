@@ -225,8 +225,8 @@ public final class JackOLanternMask {
             float cu = (uv.u1 + uv.u2) * 0.5f / FRAME;
             float cv = (uv.v1 + uv.v2) * 0.5f / FRAME;
             // Half a texel of overlap. The carving-edge shell is a couple of pixels past the cube.
-            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, cu, cv, cu, cv, CANDLE_OVERLAP,
-                    nudge(x0, y0),
+            // Exact cube face. An overlap here sat on the flesh rim and the two quads hatched.
+            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, cu, cv, cu, cv, 0f, 0f,
                     x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
             return;
         }
@@ -245,17 +245,16 @@ public final class JackOLanternMask {
     private static final float FLESH_U = 13.5f / 80f;
     private static final float FLESH_V = 15.5f / 80f;
     /**
-     * Just in front of the rind (z = -5.996) and behind the pulled flame. The back stops short of
-     * the dark inner face at z = -4.612 so the two do not fight. Span is about one texel.
+     * Behind the pulled flame (z = -6.35) and in front of the dark inner face (z = -4.612).
+     * The span is the rind, so a 3/4 view sees the side of the cut going inward.
      */
-    private static final float WALL_FRONT = -6.12f;
-    private static final float WALL_BACK = -5.05f;
+    private static final float WALL_FRONT = -6.08f;
+    private static final float WALL_BACK = -4.90f;
 
     /**
-     * Inner faces of each cut. A one-texel flesh rim runs from the front of the rind back into the
-     * cavity, brightest against the flame and one block-light level dimmer on the inner strip.
-     * Every opening cell, including the cells behind the flame, has a lit back so an angled view
-     * cannot see the dark inner wall.
+     * Side walls of each cut, not a plate across the opening. The strip nearest the flame is one
+     * block light under the candle, and the inner strip is one level dimmer. A north cap is only
+     * the gaps between flame texels, at the back of the cavity, so it cannot cover the rim.
      */
     private static void emitCarveWalls(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame) {
         float minX = Float.MAX_VALUE;
@@ -302,23 +301,25 @@ public final class JackOLanternMask {
                 }
                 float x0 = minX + ix * TEXEL;
                 float x1 = x0 + TEXEL;
+                // The back of the hole, a full rind behind the flame, so an angled view cannot fall through.
                 int far = wallLight(light, candle, 1);
-                // Flat in Z, so the overlap grows in X and Y only and hides the seam between cells.
-                emitFlesh(consumer, view, normals, far, 0f, 0f, -1f, 0.04f,
+                emitFlesh(consumer, view, normals, far, 0f, 0f, -1f, 0.06f,
                         x0, y1, WALL_BACK, x1, y1, WALL_BACK, x1, y0, WALL_BACK, x0, y0, WALL_BACK);
-                // A hair inside the hole so the rim covers the shell's dark side without sitting on it.
-                float inset = 0.03f;
-                if (!openAt(open, nx, ny, ix - 1, iy)) {
-                    emitWallX(consumer, view, normals, light, candle, x0 + inset, y0 - pad, y1 + pad, 1f);
+                boolean westGap = gapEdge(open, loaded, minX, minY, nx, ny, ix, iy, ix - 1, iy);
+                boolean eastGap = gapEdge(open, loaded, minX, minY, nx, ny, ix, iy, ix + 1, iy);
+                boolean downGap = gapEdge(open, loaded, minX, minY, nx, ny, ix, iy, ix, iy - 1);
+                boolean upGap = gapEdge(open, loaded, minX, minY, nx, ny, ix, iy, ix, iy + 1);
+                if (westGap) {
+                    emitWallX(consumer, view, normals, light, candle, x0, y0 - pad, y1 + pad, 1f);
                 }
-                if (!openAt(open, nx, ny, ix + 1, iy)) {
-                    emitWallX(consumer, view, normals, light, candle, x1 - inset, y0 - pad, y1 + pad, -1f);
+                if (eastGap) {
+                    emitWallX(consumer, view, normals, light, candle, x1, y0 - pad, y1 + pad, -1f);
                 }
-                if (!openAt(open, nx, ny, ix, iy - 1)) {
-                    emitWallY(consumer, view, normals, light, candle, y0 + inset, x0 - pad, x1 + pad, 1f);
+                if (downGap) {
+                    emitWallY(consumer, view, normals, light, candle, y0, x0 - pad, x1 + pad, 1f);
                 }
-                if (!openAt(open, nx, ny, ix, iy + 1)) {
-                    emitWallY(consumer, view, normals, light, candle, y1 - inset, x0 - pad, x1 + pad, -1f);
+                if (upGap) {
+                    emitWallY(consumer, view, normals, light, candle, y1, x0 - pad, x1 + pad, -1f);
                 }
             }
         }
@@ -329,6 +330,20 @@ public final class JackOLanternMask {
             return false;
         }
         return open[iy * nx + ix];
+    }
+
+    /**
+     * A wall belongs on this edge when the neighbor is rind, or when a flame texel meets a gap.
+     * Two flame texels share an edge and stay open. The wall is drawn once, from the gap side.
+     */
+    private static boolean gapEdge(boolean[] open, Model loaded, float minX, float minY, int nx, int ny,
+                                   int ix, int iy, int jx, int jy) {
+        if (!openAt(open, nx, ny, jx, jy)) {
+            return true;
+        }
+        boolean here = insideCandle(loaded, minX + (ix + 0.5f) * TEXEL, minY + (iy + 0.5f) * TEXEL);
+        boolean there = insideCandle(loaded, minX + (jx + 0.5f) * TEXEL, minY + (jy + 0.5f) * TEXEL);
+        return here != there && !here;
     }
 
     /** Candle cells, plus the one-texel gaps between them. The front rind stays outside the cut. */
@@ -487,6 +502,11 @@ public final class JackOLanternMask {
                 float[] center = bilerp((uLo + uHi) * 0.5f, (vLo + vHi) * 0.5f,
                         x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 int texelLight = ringLight(light, ringOf(loaded, center[0], center[1], center[2]), candle);
+                // The flesh rim owns the cut's side. Drawing the shell on the same plane hatches.
+                if ((Math.abs(nx) > 0.5f || Math.abs(ny) > 0.5f)
+                        && openingCell(loaded, center[0] + nx * TEXEL * 0.55f, center[1] + ny * TEXEL * 0.55f)) {
+                    continue;
+                }
                 float[] p00 = bilerp(uLo, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p10 = bilerp(uHi, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p11 = bilerp(uHi, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
@@ -572,8 +592,7 @@ public final class JackOLanternMask {
                 float[] p01 = bilerp(uLo, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float cu = (glow.u1 + glow.u2) * 0.5f / FRAME;
                 float cv = (glow.v1 + glow.v2) * 0.5f / FRAME;
-                emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, cu, cv, cu, cv, CANDLE_OVERLAP,
-                        nudge(center[0], center[1]),
+                emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, cu, cv, cu, cv, 0f, 0f,
                         p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],
                         p11[0], p11[1], p11[2], p01[0], p01[1], p01[2]);
             }
@@ -645,10 +664,11 @@ public final class JackOLanternMask {
     /** How many flat rings sit around a carving, and how far the outer one reaches. */
     private static final int RINGS = 5;
     private static final float HALO = 3f;
-    /** Candle quads overlap the carving edge. Each one sits a hair closer so the overlap does not stripe. */
-    private static final float CANDLE_OVERLAP = 0.36f;
-    /** Shell rings overlap just enough to hide a one-pixel raster crack. */
-    private static final float SHELL_OVERLAP = 0.12f;
+    /**
+     * In-plane only. Neighbors share a covered edge so a raster crack cannot show the dark
+     * cavity. Z is not grown, so the margin is not a second surface at a new depth.
+     */
+    private static final float SHELL_OVERLAP = 0.05f;
     /** Ring 1 is this many block-light levels under the candle. Each next ring drops one more. */
     private static final int RING_DROP = 3;
 
@@ -737,12 +757,6 @@ public final class JackOLanternMask {
         return new float[] {x, y, z};
     }
 
-    /** A stable per-texel depth step so overlapping candle quads do not z-fight. */
-    private static float nudge(float x, float y) {
-        int h = Math.floorMod((int) Math.floor(x * 8f) * 17 + (int) Math.floor(y * 8f), 8);
-        return 0.012f + h * 0.004f;
-    }
-
     private static void emit(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
                              float nx, float ny, float nz, int alpha,
                              float u0, float v0, float u1, float v1, float overlap, float zNudge,
@@ -760,11 +774,11 @@ public final class JackOLanternMask {
             float dy = ys[i] - cy;
             float dz = zs[i] - cz;
             float len = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (len > 1.0e-4f) {
+            if (len > 1.0e-4f && overlap > 0f) {
                 float scale = overlap / len;
                 xs[i] += dx * scale;
                 ys[i] += dy * scale;
-                zs[i] += dz * scale;
+                // Z stays put. Growing it laid the next strip on this one and the two hatched.
             }
             zs[i] -= zNudge;
         }
