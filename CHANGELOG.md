@@ -3,7 +3,7 @@
 ## 1.0.0
 
 - Packed cosmetics are tapered pixel-art meshes with shaded 16×16 textures. Kite wings stay about torso height, folded at rest, and flap from a GeckoLib clip.
-- Jack o' lantern mask equips in the hat slot. It is a GeckoLib armor model on the head bone, with a 24-frame candle. The lit texels of the five back-wall faces are ~1px cubes at the eye, nose, and mouth openings, and the emissive pass draws on every frame.
+- Jack o' lantern mask equips in the hat slot. It is a GeckoLib armor model on the head bone, with a 24-frame candle. The lit texels of the five back-wall faces are ~1px cubes at the eye, nose, and mouth openings, and the emissive pass draws on every frame. The shell brightens toward those openings and the halo flickers with the candle.
 - Packed wardrobe for hat, ears, left shoulder, right shoulder, back, and tail, with a live player preview.
 - Gallery browse, equip, publish, and report against `http://127.0.0.1:39221` (no `/v1` suffix).
 - Other players render from `GET /v1/equipment/{uuid}` and `GET /v1/cosmetics/{id}`.

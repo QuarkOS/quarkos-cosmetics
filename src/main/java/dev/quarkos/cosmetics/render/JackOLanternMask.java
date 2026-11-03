@@ -42,6 +42,15 @@ public final class JackOLanternMask {
     private static boolean loggedDet;
     /** 0 only while the combined mask shader is drawing the candle. Eyes still wants opaque vertices. */
     private static int candleAlpha = 255;
+    /** Shell vertices store falloff in red while the combined mask shader is drawing the rind. */
+    private static boolean shellBleed;
+    /** x0, y0, x1, y1 of each candle cube. The glow png is not rewritten; this is the opening list. */
+    private static float[] candleBoxes;
+    /** Width of the gaussian halo, in bedrock pixels. */
+    private static final float BLEED_SIGMA = 1.55f;
+    /** Front of the rind. Surfaces behind this fade as they wrap toward the back. */
+    private static final float BLEED_FRONT = -5.55f;
+    private static final float BLEED_Z = 0.8f;
 
     private JackOLanternMask() {
     }
@@ -130,7 +139,12 @@ public final class JackOLanternMask {
             //? if fabric {
             // One mesh. The rind and the candle used to be two immediate draws, and the second one dropped out.
             var consumer = source.getBuffer(MaskGlow.combined(TEXTURE, GLOW));
-            paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
+            shellBleed = true;
+            try {
+                paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
+            } finally {
+                shellBleed = false;
+            }
             candleAlpha = 0;
             try {
                 paint(consumer, heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
@@ -164,6 +178,9 @@ public final class JackOLanternMask {
 
     /** kind 0 is the rind. kind 1 is the emissive lip and the side walls of the carving. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
+        if (shellBleed) {
+            rememberCandles(loaded);
+        }
         for (Cube cube : loaded.cubes) {
             paintCube(consumer, view, normals, light, loaded, cube, frame, kind);
         }
@@ -227,8 +244,123 @@ public final class JackOLanternMask {
         float bias = 0f;
         float pull = kind == 0 ? 0f : 0.25f;
         int alpha = kind == 0 ? 255 : candleAlpha;
-        emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
-                x0, y0, z0 - pull, x1, y1, z1 - pull, x2, y2, z2 - pull, x3, y3, z3 - pull);
+        float z0p = z0 - pull;
+        float z1p = z1 - pull;
+        float z2p = z2 - pull;
+        float z3p = z3 - pull;
+        if (shellBleed) {
+            // Large rind faces would turn the gaussian into a straight ramp. A ~1px grid keeps the curve.
+            emitGrid(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
+                    x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
+        } else {
+            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
+                    x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
+        }
+    }
+
+    /** Distance to the nearest candle cube, as a gaussian. 1 on the lip of an opening, fading across the rind. */
+    private static float bleedAt(float x, float y, float z) {
+        if (candleBoxes == null || candleBoxes.length == 0) {
+            return 0f;
+        }
+        float best = 0f;
+        float denom = 2f * BLEED_SIGMA * BLEED_SIGMA;
+        for (int i = 0; i < candleBoxes.length; i += 4) {
+            float dx = outside(x, candleBoxes[i], candleBoxes[i + 2]);
+            float dy = outside(y, candleBoxes[i + 1], candleBoxes[i + 3]);
+            float dz = Math.max(0f, (z - BLEED_FRONT) * BLEED_Z);
+            float g = (float) Math.exp(-(dx * dx + dy * dy + dz * dz) / denom);
+            if (g > best) {
+                best = g;
+            }
+        }
+        return best;
+    }
+
+    private static float outside(float p, float a, float b) {
+        if (p < a) {
+            return a - p;
+        }
+        if (p > b) {
+            return p - b;
+        }
+        return 0f;
+    }
+
+    private static void rememberCandles(Model loaded) {
+        if (candleBoxes != null) {
+            return;
+        }
+        int count = 0;
+        for (Cube cube : loaded.cubes) {
+            if (cube.z0 <= -6.05f) {
+                count++;
+            }
+        }
+        float[] boxes = new float[count * 4];
+        int i = 0;
+        for (Cube cube : loaded.cubes) {
+            if (cube.z0 > -6.05f) {
+                continue;
+            }
+            boxes[i++] = cube.x0;
+            boxes[i++] = cube.y0;
+            boxes[i++] = cube.x1;
+            boxes[i++] = cube.y1;
+        }
+        candleBoxes = boxes;
+    }
+
+    private static void emitGrid(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
+                                 float nx, float ny, float nz, int alpha,
+                                 float u0, float v0, float u1, float v1,
+                                 float x0, float y0, float z0, float x1, float y1, float z1,
+                                 float x2, float y2, float z2, float x3, float y3, float z3) {
+        float spanU = distance(x0, y0, z0, x1, y1, z1);
+        float spanV = distance(x0, y0, z0, x3, y3, z3);
+        int nu = Math.min(24, Math.max(1, Math.round(spanU / 1.1f)));
+        int nv = Math.min(24, Math.max(1, Math.round(spanV / 1.1f)));
+        if (nu == 1 && nv == 1) {
+            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
+                    x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+            return;
+        }
+        for (int j = 0; j < nv; j++) {
+            float va = j / (float) nv;
+            float vb = (j + 1) / (float) nv;
+            for (int i = 0; i < nu; i++) {
+                float ua = i / (float) nu;
+                float ub = (i + 1) / (float) nu;
+                float[] p00 = bilerp(ua, va, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float[] p10 = bilerp(ub, va, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float[] p11 = bilerp(ub, vb, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float[] p01 = bilerp(ua, vb, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                emit(consumer, view, light, normal, bias, nx, ny, nz, alpha,
+                        lerp(u0, u1, ua), lerp(v0, v1, va), lerp(u0, u1, ub), lerp(v0, v1, vb),
+                        p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],
+                        p11[0], p11[1], p11[2], p01[0], p01[1], p01[2]);
+            }
+        }
+    }
+
+    private static float[] bilerp(float u, float v,
+                                  float x0, float y0, float z0, float x1, float y1, float z1,
+                                  float x2, float y2, float z2, float x3, float y3, float z3) {
+        float x = (1f - v) * ((1f - u) * x0 + u * x1) + v * ((1f - u) * x3 + u * x2);
+        float y = (1f - v) * ((1f - u) * y0 + u * y1) + v * ((1f - u) * y3 + u * y2);
+        float z = (1f - v) * ((1f - u) * z0 + u * z1) + v * ((1f - u) * z3 + u * z2);
+        return new float[] {x, y, z};
+    }
+
+    private static float lerp(float a, float b, float t) {
+        return a + (b - a) * t;
+    }
+
+    private static float distance(float x0, float y0, float z0, float x1, float y1, float z1) {
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float dz = z1 - z0;
+        return (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     private static void emit(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
@@ -244,8 +376,22 @@ public final class JackOLanternMask {
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,
                                float u, float v, int light, int alpha, Vector3f normal) {
+        int red = 255;
+        int green = 255;
+        int blue = 255;
+        if (shellBleed) {
+            int bleed = Math.round(bleedAt(x, y, z) * 255f);
+            if (bleed < 0) {
+                bleed = 0;
+            } else if (bleed > 255) {
+                bleed = 255;
+            }
+            red = bleed;
+            green = bleed;
+            blue = bleed;
+        }
         consumer.addVertex(view, x, y, z)
-                .setColor(255, 255, 255, alpha)
+                .setColor(red, green, blue, alpha)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.pack(0, 10))
                 .setLight(light)

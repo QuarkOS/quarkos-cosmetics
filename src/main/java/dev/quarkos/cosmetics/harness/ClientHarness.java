@@ -366,9 +366,10 @@ public final class ClientHarness {
         lockY = 103.05f;
         lockPitch = 2f;
         if (shot.name.contains("side")) {
-            lockX = 0.5 + 3.2;
-            lockZ = 0.5;
-            lockYaw = 90f;
+            // About 62° off the face, so the cheek and the carved openings are both in frame.
+            lockX = 0.5 + 2.82;
+            lockZ = 0.5 - 1.50;
+            lockYaw = 62f;
         } else if (shot.name.contains("three-quarter")) {
             lockX = 0.5 + 1.35;
             lockZ = 0.5 - 2.90;
