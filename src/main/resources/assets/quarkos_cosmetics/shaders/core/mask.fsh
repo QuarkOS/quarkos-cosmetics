@@ -14,17 +14,6 @@ in vec2 texCoord0;
 
 out vec4 fragColor;
 
-// One lit texel from each carving. GeckoLib uploads the current 80×80 frame, so these
-// samples are the candle's color this tick. The shell bleed uses that same color.
-vec3 candleColor() {
-    vec3 sum = texture(Sampler1, vec2(63.5, 18.5) / 80.0).rgb;
-    sum += texture(Sampler1, vec2(71.5, 22.5) / 80.0).rgb;
-    sum += texture(Sampler1, vec2(29.5, 38.5) / 80.0).rgb;
-    sum += texture(Sampler1, vec2(32.5, 28.5) / 80.0).rgb;
-    sum += texture(Sampler1, vec2(36.5, 38.5) / 80.0).rgb;
-    return sum / 5.0;
-}
-
 void main() {
     vec4 color;
     // Candle vertices are marked with alpha 0. They sample the glow strip and skip the lightmap,
@@ -40,14 +29,8 @@ void main() {
         if (shell.a < 0.1) {
             discard;
         }
-        vec3 lit = shell.rgb * ColorModulator.rgb * lightMapColor.rgb;
-        // Red is the smooth distance to the nearest opening, 1 beside a carving and 0 on the far shell.
-        float bleed = vertexColor.r;
-        float luma = dot(lightMapColor.rgb, vec3(0.299, 0.587, 0.114));
-        float night = smoothstep(0.88, 0.32, luma);
-        float gain = mix(0.18, 0.62, night);
-        vec3 spill = candleColor() * bleed * gain;
-        color = vec4(min(lit + spill, vec3(1.0)), 1.0);
+        // lightMapColor is one block-light step for the whole texel. It is not mixed across the quad.
+        color = vec4(shell.rgb * vertexColor.rgb * ColorModulator.rgb * lightMapColor.rgb, 1.0);
     }
     fragColor = apply_fog(color, sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor);
 }

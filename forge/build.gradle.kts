@@ -139,11 +139,33 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     tasks.named<Jar>("jar") {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+        exclude("META-INF/MANIFEST.MF")
+        manifest {
+            attributes("MixinConfigs" to "quarkos_cosmetics.mixins.json")
+        }
         from({
             configurations.getByName("runtimeClasspath")
                 .filter { it.name.startsWith("jackson-") }
                 .map { zipTree(it) }
         })
+    }
+
+    // Mixin 0.8 on Forge reads MixinConfigs from the jar manifest. mods.toml
+    // [[mixins]] is not consulted, and the userdev mod is a classes directory,
+    // so the same manifest has to land next to the classes or the client mixins
+    // never apply and the mask is never drawn.
+    val forgeManifest = layout.buildDirectory.dir("generated/forge-manifest")
+    val writeForgeManifest = tasks.register("writeForgeManifest") {
+        outputs.dir(forgeManifest)
+        doLast {
+            val file = forgeManifest.get().asFile.resolve("META-INF/MANIFEST.MF")
+            file.parentFile.mkdirs()
+            file.writeText(
+                "Manifest-Version: 1.0\n" +
+                    "MixinConfigs: quarkos_cosmetics.mixins.json\n" +
+                    "\n"
+            )
+        }
     }
 
     val forgePack = layout.buildDirectory.dir("generated/forge-pack")
@@ -157,7 +179,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     }
 
     tasks.named<ProcessResources>("processResources") {
-        dependsOn(writeForgePack)
+        dependsOn(writeForgePack, writeForgeManifest)
         val props = mapOf(
             "version" to "1.0.0+$minecraftVersion",
             "forge_dep" to node.forgeDep,
@@ -171,7 +193,15 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         }
         exclude("fabric.mod.json")
         exclude("pack.mcmeta")
-        from(forgePack)
+        from(forgeManifest)
+        // The exclude above also matches a later from(), so the Forge pack
+        // metadata has to be copied after the task filter runs.
+        doLast {
+            copy {
+                from(forgePack)
+                into(destinationDir)
+            }
+        }
     }
 
     tasks.withType<JavaExec>().configureEach {
@@ -182,6 +212,12 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         systemProperty("cosmetics.galleryUrl", "http://127.0.0.1:39221")
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
+            val wide = providers.gradleProperty("wide").orNull == "true"
+            args("--width", if (wide) "1920" else "960", "--height", if (wide) "1080" else "540")
+        }
+        val only = providers.gradleProperty("only").orNull
+        if (!only.isNullOrBlank()) {
+            systemProperty("quarkos_cosmetics.only", only)
         }
         val display = providers.gradleProperty("display").orNull
         val xauth = providers.gradleProperty("xauth").orNull

@@ -42,15 +42,8 @@ public final class JackOLanternMask {
     private static boolean loggedDet;
     /** 0 only while the combined mask shader is drawing the candle. Eyes still wants opaque vertices. */
     private static int candleAlpha = 255;
-    /** Shell vertices store falloff in red while the combined mask shader is drawing the rind. */
-    private static boolean shellBleed;
-    /** x0, y0, x1, y1 of each candle cube. The glow png is not rewritten; this is the opening list. */
-    private static float[] candleBoxes;
-    /** Width of the gaussian halo, in bedrock pixels. */
-    private static final float BLEED_SIGMA = 1.55f;
-    /** Front of the rind. Surfaces behind this fade as they wrap toward the back. */
-    private static final float BLEED_FRONT = -5.55f;
-    private static final float BLEED_Z = 0.8f;
+    /** One shell texel, in bedrock pixels. The candle cubes and the face grid share this step. */
+    private static final float TEXEL = 0.9224f;
 
     private JackOLanternMask() {
     }
@@ -139,12 +132,7 @@ public final class JackOLanternMask {
             //? if fabric {
             // One mesh. The rind and the candle used to be two immediate draws, and the second one dropped out.
             var consumer = source.getBuffer(MaskGlow.combined(TEXTURE, GLOW));
-            shellBleed = true;
-            try {
-                paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
-            } finally {
-                shellBleed = false;
-            }
+            paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
             candleAlpha = 0;
             try {
                 paint(consumer, heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
@@ -178,9 +166,6 @@ public final class JackOLanternMask {
 
     /** kind 0 is the rind. kind 1 is the emissive lip and the side walls of the carving. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
-        if (shellBleed) {
-            rememberCandles(loaded);
-        }
         for (Cube cube : loaded.cubes) {
             paintCube(consumer, view, normals, light, loaded, cube, frame, kind);
         }
@@ -229,11 +214,6 @@ public final class JackOLanternMask {
         // GeckoLib keeps an animated mcmeta texture as one 80×80 frame and swaps the pixels itself.
         // Offsetting V down the strip samples empty rows of that frame, so the flame drops out.
         // Candle faces are one texel. Inset so nearest-filtering cannot step onto a clear neighbor.
-        float inset = candleCube ? 0.08f : 0f;
-        float u0 = (uv.u1 + inset) / FRAME;
-        float u1 = (uv.u2 - inset) / FRAME;
-        float v0 = (uv.v1 + inset) / FRAME;
-        float v1 = (uv.v2 - inset) / FRAME;
         Vector3f normal = new Vector3f(nx, ny, nz);
         normals.transform(normal);
         if (normal.lengthSquared() > 0.0001f) {
@@ -248,33 +228,139 @@ public final class JackOLanternMask {
         float z1p = z1 - pull;
         float z2p = z2 - pull;
         float z3p = z3 - pull;
-        if (shellBleed) {
-            // Large rind faces would turn the gaussian into a straight ramp. A ~1px grid keeps the curve.
-            emitGrid(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
+        if (candleCube) {
+            float inset = 0.08f;
+            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha,
+                    (uv.u1 + inset) / FRAME, (uv.v1 + inset) / FRAME, (uv.u2 - inset) / FRAME, (uv.v2 - inset) / FRAME,
                     x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
-        } else {
-            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
-                    x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
+            return;
+        }
+        // One quad per texture texel, every corner the same block light, so the step does not blend inside the texel.
+        emitTexels(consumer, view, light, loaded, frame, normal, bias, nx, ny, nz, alpha, uv,
+                x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
+    }
+
+    /**
+     * Split a rind face on texel boundaries. A texel's step is how many texel-widths its center
+     * sits from the nearest carving: 1 is almost fully lit, 2 is four block-light levels down,
+     * 3 is eight down, and anything farther keeps the world's light. The candle frame picks the
+     * top level, so the rings jump together when the flame steps.
+     */
+    private static void emitTexels(VertexConsumer consumer, Matrix4f view, int light, Model loaded, int frame,
+                                   Vector3f normal, float bias, float nx, float ny, float nz, int alpha, Uv uv,
+                                   float x0, float y0, float z0, float x1, float y1, float z1,
+                                   float x2, float y2, float z2, float x3, float y3, float z3) {
+        float uSpan = uv.u2 - uv.u1;
+        float vSpan = uv.v2 - uv.v1;
+        if (Math.abs(uSpan) < 1.0e-4f || Math.abs(vSpan) < 1.0e-4f) {
+            return;
+        }
+        float uMin = Math.min(uv.u1, uv.u2);
+        float uMax = Math.max(uv.u1, uv.u2);
+        float vMin = Math.min(uv.v1, uv.v2);
+        float vMax = Math.max(uv.v1, uv.v2);
+        int tx0 = (int) Math.floor(uMin);
+        int tx1 = (int) Math.ceil(uMax - 1.0e-4f);
+        int ty0 = (int) Math.floor(vMin);
+        int ty1 = (int) Math.ceil(vMax - 1.0e-4f);
+        if (tx1 <= tx0) {
+            tx1 = tx0 + 1;
+        }
+        if (ty1 <= ty0) {
+            ty1 = ty0 + 1;
+        }
+        int candle = loaded.frameLight[Math.floorMod(frame, loaded.frameLight.length)];
+        for (int ty = ty0; ty < ty1; ty++) {
+            float sv0 = Math.max(vMin, ty);
+            float sv1 = Math.min(vMax, ty + 1f);
+            if (sv1 <= sv0) {
+                continue;
+            }
+            float va = (sv0 - uv.v1) / vSpan;
+            float vb = (sv1 - uv.v1) / vSpan;
+            float vLo = Math.min(va, vb);
+            float vHi = Math.max(va, vb);
+            for (int tx = tx0; tx < tx1; tx++) {
+                float su0 = Math.max(uMin, tx);
+                float su1 = Math.min(uMax, tx + 1f);
+                if (su1 <= su0) {
+                    continue;
+                }
+                float ua = (su0 - uv.u1) / uSpan;
+                float ub = (su1 - uv.u1) / uSpan;
+                float uLo = Math.min(ua, ub);
+                float uHi = Math.max(ua, ub);
+                float[] center = bilerp((uLo + uHi) * 0.5f, (vLo + vHi) * 0.5f,
+                        x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                int texelLight = ringLight(light, ringOf(loaded, center[0], center[1], center[2]), candle);
+                float[] p00 = bilerp(uLo, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float[] p10 = bilerp(uHi, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float[] p11 = bilerp(uHi, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float[] p01 = bilerp(uLo, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                float tu0 = (uv.u1 + uLo * uSpan) / FRAME;
+                float tu1 = (uv.u1 + uHi * uSpan) / FRAME;
+                float tv0 = (uv.v1 + vLo * vSpan) / FRAME;
+                float tv1 = (uv.v1 + vHi * vSpan) / FRAME;
+                // Stay inside this texel so a linear sample cannot mix the neighbor's color into it.
+                float nudge = 0.05f / FRAME;
+                float midU = (tu0 + tu1) * 0.5f;
+                float midV = (tv0 + tv1) * 0.5f;
+                tu0 = tu0 < tu1 ? Math.min(tu0 + nudge, midU) : Math.max(tu0 - nudge, midU);
+                tu1 = tu1 > tu0 ? Math.max(tu1 - nudge, midU) : Math.min(tu1 + nudge, midU);
+                tv0 = tv0 < tv1 ? Math.min(tv0 + nudge, midV) : Math.max(tv0 - nudge, midV);
+                tv1 = tv1 > tv0 ? Math.max(tv1 - nudge, midV) : Math.min(tv1 + nudge, midV);
+                emit(consumer, view, texelLight, normal, bias, nx, ny, nz, alpha, tu0, tv0, tu1, tv1,
+                        p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],
+                        p11[0], p11[1], p11[2], p01[0], p01[1], p01[2]);
+            }
         }
     }
 
-    /** Distance to the nearest candle cube, as a gaussian. 1 on the lip of an opening, fading across the rind. */
-    private static float bleedAt(float x, float y, float z) {
-        if (candleBoxes == null || candleBoxes.length == 0) {
-            return 0f;
+    /** 1, 2, or 3 texel-widths from the nearest carving. 0 is inside a carving. 4 and up is ordinary shell. */
+    private static int ringOf(Model loaded, float x, float y, float z) {
+        float[] openings = loaded.openings;
+        if (openings.length == 0) {
+            return 4;
         }
-        float best = 0f;
-        float denom = 2f * BLEED_SIGMA * BLEED_SIGMA;
-        for (int i = 0; i < candleBoxes.length; i += 4) {
-            float dx = outside(x, candleBoxes[i], candleBoxes[i + 2]);
-            float dy = outside(y, candleBoxes[i + 1], candleBoxes[i + 3]);
-            float dz = Math.max(0f, (z - BLEED_FRONT) * BLEED_Z);
-            float g = (float) Math.exp(-(dx * dx + dy * dy + dz * dz) / denom);
-            if (g > best) {
-                best = g;
+        float best = Float.MAX_VALUE;
+        for (int i = 0; i < openings.length; i += 6) {
+            float dx = outside(x, openings[i], openings[i + 3]);
+            float dy = outside(y, openings[i + 1], openings[i + 4]);
+            float dz = outside(z, openings[i + 2], openings[i + 5]);
+            float cheb = Math.max(dx, Math.max(dy, dz));
+            if (cheb < best) {
+                best = cheb;
             }
         }
-        return best;
+        float texels = best / TEXEL;
+        if (texels < 0.05f) {
+            return 0;
+        }
+        return (int) Math.floor(texels) + 1;
+    }
+
+    /** Block light for a ring, stepped down from this candle frame. Sky light stays the world's. */
+    private static int ringLight(int world, int ring, int candle) {
+        int drop;
+        if (ring == 1) {
+            drop = 0;
+        } else if (ring == 2) {
+            drop = 4;
+        } else if (ring == 3) {
+            drop = 8;
+        } else {
+            return world;
+        }
+        int block = candle - drop;
+        if (block < 0) {
+            block = 0;
+        }
+        int sky = LightTexture.sky(world);
+        int have = LightTexture.block(world);
+        if (block < have) {
+            block = have;
+        }
+        return LightTexture.pack(block, sky);
     }
 
     private static float outside(float p, float a, float b) {
@@ -287,62 +373,6 @@ public final class JackOLanternMask {
         return 0f;
     }
 
-    private static void rememberCandles(Model loaded) {
-        if (candleBoxes != null) {
-            return;
-        }
-        int count = 0;
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 <= -6.05f) {
-                count++;
-            }
-        }
-        float[] boxes = new float[count * 4];
-        int i = 0;
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 > -6.05f) {
-                continue;
-            }
-            boxes[i++] = cube.x0;
-            boxes[i++] = cube.y0;
-            boxes[i++] = cube.x1;
-            boxes[i++] = cube.y1;
-        }
-        candleBoxes = boxes;
-    }
-
-    private static void emitGrid(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
-                                 float nx, float ny, float nz, int alpha,
-                                 float u0, float v0, float u1, float v1,
-                                 float x0, float y0, float z0, float x1, float y1, float z1,
-                                 float x2, float y2, float z2, float x3, float y3, float z3) {
-        float spanU = distance(x0, y0, z0, x1, y1, z1);
-        float spanV = distance(x0, y0, z0, x3, y3, z3);
-        int nu = Math.min(24, Math.max(1, Math.round(spanU / 1.1f)));
-        int nv = Math.min(24, Math.max(1, Math.round(spanV / 1.1f)));
-        if (nu == 1 && nv == 1) {
-            emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
-                    x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-            return;
-        }
-        for (int j = 0; j < nv; j++) {
-            float va = j / (float) nv;
-            float vb = (j + 1) / (float) nv;
-            for (int i = 0; i < nu; i++) {
-                float ua = i / (float) nu;
-                float ub = (i + 1) / (float) nu;
-                float[] p00 = bilerp(ua, va, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                float[] p10 = bilerp(ub, va, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                float[] p11 = bilerp(ub, vb, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                float[] p01 = bilerp(ua, vb, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                emit(consumer, view, light, normal, bias, nx, ny, nz, alpha,
-                        lerp(u0, u1, ua), lerp(v0, v1, va), lerp(u0, u1, ub), lerp(v0, v1, vb),
-                        p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],
-                        p11[0], p11[1], p11[2], p01[0], p01[1], p01[2]);
-            }
-        }
-    }
-
     private static float[] bilerp(float u, float v,
                                   float x0, float y0, float z0, float x1, float y1, float z1,
                                   float x2, float y2, float z2, float x3, float y3, float z3) {
@@ -350,17 +380,6 @@ public final class JackOLanternMask {
         float y = (1f - v) * ((1f - u) * y0 + u * y1) + v * ((1f - u) * y3 + u * y2);
         float z = (1f - v) * ((1f - u) * z0 + u * z1) + v * ((1f - u) * z3 + u * z2);
         return new float[] {x, y, z};
-    }
-
-    private static float lerp(float a, float b, float t) {
-        return a + (b - a) * t;
-    }
-
-    private static float distance(float x0, float y0, float z0, float x1, float y1, float z1) {
-        float dx = x1 - x0;
-        float dy = y1 - y0;
-        float dz = z1 - z0;
-        return (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     private static void emit(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
@@ -376,22 +395,8 @@ public final class JackOLanternMask {
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,
                                float u, float v, int light, int alpha, Vector3f normal) {
-        int red = 255;
-        int green = 255;
-        int blue = 255;
-        if (shellBleed) {
-            int bleed = Math.round(bleedAt(x, y, z) * 255f);
-            if (bleed < 0) {
-                bleed = 0;
-            } else if (bleed > 255) {
-                bleed = 255;
-            }
-            red = bleed;
-            green = bleed;
-            blue = bleed;
-        }
         consumer.addVertex(view, x, y, z)
-                .setColor(red, green, blue, alpha)
+                .setColor(255, 255, 255, alpha)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.pack(0, 10))
                 .setLight(light)
@@ -419,13 +424,20 @@ public final class JackOLanternMask {
         final boolean anyGlow;
         /** Frame 0 of the glow strip. Lit texels are the same rectangle on every frame. */
         final SkinImages.Pixels glowPixels;
+        /** x0, y0, z0, x1, y1, z1 of each carving cube. */
+        final float[] openings;
+        /** Block light of a bright candle frame, one entry per glow frame. Rings subtract from this. */
+        final int[] frameLight;
 
-        Model(float textureWidth, float textureHeight, List<Cube> cubes, boolean anyGlow, SkinImages.Pixels glowPixels) {
+        Model(float textureWidth, float textureHeight, List<Cube> cubes, boolean anyGlow, SkinImages.Pixels glowPixels,
+              float[] openings, int[] frameLight) {
             this.textureWidth = textureWidth;
             this.textureHeight = textureHeight;
             this.cubes = cubes;
             this.anyGlow = anyGlow;
             this.glowPixels = glowPixels;
+            this.openings = openings;
+            this.frameLight = frameLight;
         }
 
         static Model parse() {
@@ -471,8 +483,72 @@ public final class JackOLanternMask {
                     }
                 }
             }
-            LOGGER.info("mask cubes {} glow faces {} glow texels {}", cubes.size(), lit, texels);
-            return new Model(width, height, cubes, texels > 0 && lit > 0, glowPixels);
+            float[] openings = openingsOf(cubes);
+            int[] frameLight = frameLight(glowPixels);
+            LOGGER.info("mask cubes {} glow faces {} glow texels {} candle steps {}", cubes.size(), lit, texels, java.util.Arrays.toString(frameLight));
+            return new Model(width, height, cubes, texels > 0 && lit > 0, glowPixels, openings, frameLight);
+        }
+
+        private static float[] openingsOf(List<Cube> cubes) {
+            int count = 0;
+            for (Cube cube : cubes) {
+                if (cube.z0 <= -6.05f) {
+                    count++;
+                }
+            }
+            float[] openings = new float[count * 6];
+            int i = 0;
+            for (Cube cube : cubes) {
+                if (cube.z0 > -6.05f) {
+                    continue;
+                }
+                openings[i++] = cube.x0;
+                openings[i++] = cube.y0;
+                openings[i++] = cube.z0;
+                openings[i++] = cube.x1;
+                openings[i++] = cube.y1;
+                openings[i++] = cube.z1;
+            }
+            return openings;
+        }
+
+        /** Brightest opaque texel of each glow frame, as a block-light level. Frames do not blend. */
+        private static int[] frameLight(SkinImages.Pixels pixels) {
+            int[] levels = new int[FRAMES];
+            if (pixels == null) {
+                java.util.Arrays.fill(levels, 15);
+                return levels;
+            }
+            int frame = (int) FRAME;
+            for (int f = 0; f < FRAMES; f++) {
+                int y0 = f * frame;
+                float max = 0f;
+                if (y0 + frame <= pixels.height()) {
+                    for (int y = 0; y < frame; y++) {
+                        for (int x = 0; x < frame && x < pixels.width(); x++) {
+                            int argb = pixels.argb()[(y0 + y) * pixels.width() + x];
+                            if (((argb >>> 24) & 255) == 0) {
+                                continue;
+                            }
+                            int red = (argb >> 16) & 255;
+                            int green = (argb >> 8) & 255;
+                            int blue = argb & 255;
+                            float luma = 0.299f * red + 0.587f * green + 0.114f * blue;
+                            if (luma > max) {
+                                max = luma;
+                            }
+                        }
+                    }
+                }
+                int level = Math.round(max * 15f / 240f);
+                if (level < 0) {
+                    level = 0;
+                } else if (level > 15) {
+                    level = 15;
+                }
+                levels[f] = level;
+            }
+            return levels;
         }
 
         /** Frame 0 of the glow strip. The lit mask is the same rectangle on every frame. */

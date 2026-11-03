@@ -769,6 +769,12 @@ public final class ClientHarness {
             return;
         }
         //? if >=1.21.11 {
+        // Forge draws the shell rings in the entity pass and has no deferred flush.
+        // A fenced read can land after the next clear, so copy the finished frame here.
+        if ("forge".equals(System.getProperty("quarkos_cosmetics.loader"))) {
+            writeTargetNow(client, path);
+            return;
+        }
         Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
         //?} else {
         NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
