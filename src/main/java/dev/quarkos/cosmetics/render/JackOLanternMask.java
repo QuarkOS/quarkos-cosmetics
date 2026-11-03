@@ -157,10 +157,13 @@ public final class JackOLanternMask {
     }
     //?}
 
-    /** kind 0 is the rind. kind 1 is the emissive lip and the side walls of the carving. */
+    /** kind 0 is the rind. kind 1 is the emissive candle. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
         for (Cube cube : loaded.cubes) {
             paintCube(consumer, view, normals, light, loaded, cube, frame, kind);
+        }
+        if (kind == 0) {
+            emitCarveWalls(consumer, view, normals, light, loaded, frame);
         }
     }
 
@@ -228,11 +231,6 @@ public final class JackOLanternMask {
             return;
         }
         if (kind != 0) {
-            // Only the front of the shell. Side faces of the lip sit on the same pixels and stripe.
-            if ("north".equals(name) && uv != null) {
-                emitOpeningGaps(consumer, view, light, loaded, normal, bias, nx, ny, nz, alpha, uv,
-                        x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
-            }
             return;
         }
         if (uv == null) {
@@ -241,6 +239,198 @@ public final class JackOLanternMask {
         // One quad per texture texel, every corner the same block light, so the step does not blend inside the texel.
         emitTexels(consumer, view, light, loaded, frame, normal, bias, nx, ny, nz, alpha, uv,
                 x0, y0, z0p, x1, y1, z1p, x2, y2, z2p, x3, y3, z3p);
+    }
+
+    /** Shell texel (13, 15), pumpkin flesh on every frame. Walls sample it instead of a new texture. */
+    private static final float FLESH_U = 13.5f / 80f;
+    private static final float FLESH_V = 15.5f / 80f;
+    /**
+     * Just in front of the rind (z = -5.996) and behind the pulled flame. The back stops short of
+     * the dark inner face at z = -4.612 so the two do not fight. Span is about one texel.
+     */
+    private static final float WALL_FRONT = -6.12f;
+    private static final float WALL_BACK = -5.05f;
+
+    /**
+     * Inner faces of each cut. A one-texel flesh rim runs from the front of the rind back into the
+     * cavity, brightest against the flame and one block-light level dimmer on the inner strip.
+     * Every opening cell, including the cells behind the flame, has a lit back so an angled view
+     * cannot see the dark inner wall.
+     */
+    private static void emitCarveWalls(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame) {
+        float minX = Float.MAX_VALUE;
+        float minY = Float.MAX_VALUE;
+        float maxX = -Float.MAX_VALUE;
+        float maxY = -Float.MAX_VALUE;
+        int candles = 0;
+        for (Cube cube : loaded.cubes) {
+            if (cube.z0 > -6.05f) {
+                continue;
+            }
+            candles++;
+            minX = Math.min(minX, cube.x0);
+            minY = Math.min(minY, cube.y0);
+            maxX = Math.max(maxX, cube.x1);
+            maxY = Math.max(maxY, cube.y1);
+        }
+        if (candles == 0) {
+            return;
+        }
+        minX -= TEXEL;
+        minY -= TEXEL;
+        maxX += TEXEL;
+        maxY += TEXEL;
+        int nx = Math.max(1, Math.round((maxX - minX) / TEXEL));
+        int ny = Math.max(1, Math.round((maxY - minY) / TEXEL));
+        boolean[] open = new boolean[nx * ny];
+        for (int iy = 0; iy < ny; iy++) {
+            float cy = minY + (iy + 0.5f) * TEXEL;
+            for (int ix = 0; ix < nx; ix++) {
+                float cx = minX + (ix + 0.5f) * TEXEL;
+                open[iy * nx + ix] = openingCell(loaded, cx, cy);
+            }
+        }
+        int candle = loaded.frameLight[Math.floorMod(frame, loaded.frameLight.length)];
+        float pad = 0.04f;
+        for (int iy = 0; iy < ny; iy++) {
+            float y0 = minY + iy * TEXEL;
+            float y1 = y0 + TEXEL;
+            float cy = (y0 + y1) * 0.5f;
+            for (int ix = 0; ix < nx; ix++) {
+                if (!open[iy * nx + ix]) {
+                    continue;
+                }
+                float x0 = minX + ix * TEXEL;
+                float x1 = x0 + TEXEL;
+                int far = wallLight(light, candle, 1);
+                // Flat in Z, so the overlap grows in X and Y only and hides the seam between cells.
+                emitFlesh(consumer, view, normals, far, 0f, 0f, -1f, 0.04f,
+                        x0, y1, WALL_BACK, x1, y1, WALL_BACK, x1, y0, WALL_BACK, x0, y0, WALL_BACK);
+                // A hair inside the hole so the rim covers the shell's dark side without sitting on it.
+                float inset = 0.03f;
+                if (!openAt(open, nx, ny, ix - 1, iy)) {
+                    emitWallX(consumer, view, normals, light, candle, x0 + inset, y0 - pad, y1 + pad, 1f);
+                }
+                if (!openAt(open, nx, ny, ix + 1, iy)) {
+                    emitWallX(consumer, view, normals, light, candle, x1 - inset, y0 - pad, y1 + pad, -1f);
+                }
+                if (!openAt(open, nx, ny, ix, iy - 1)) {
+                    emitWallY(consumer, view, normals, light, candle, y0 + inset, x0 - pad, x1 + pad, 1f);
+                }
+                if (!openAt(open, nx, ny, ix, iy + 1)) {
+                    emitWallY(consumer, view, normals, light, candle, y1 - inset, x0 - pad, x1 + pad, -1f);
+                }
+            }
+        }
+    }
+
+    private static boolean openAt(boolean[] open, int nx, int ny, int ix, int iy) {
+        if (ix < 0 || iy < 0 || ix >= nx || iy >= ny) {
+            return false;
+        }
+        return open[iy * nx + ix];
+    }
+
+    /** Candle cells, plus the one-texel gaps between them. The front rind stays outside the cut. */
+    private static boolean openingCell(Model loaded, float x, float y) {
+        if (insideCandle(loaded, x, y)) {
+            return true;
+        }
+        if (frontCovers(loaded, x, y)) {
+            return false;
+        }
+        return bestXY(loaded, x, y) <= TEXEL * 0.8f;
+    }
+
+    private static boolean insideCandle(Model loaded, float x, float y) {
+        float[] openings = loaded.openings;
+        for (int i = 0; i < openings.length; i += 6) {
+            if (x >= openings[i] - 0.02f && x <= openings[i + 3] + 0.02f
+                    && y >= openings[i + 1] - 0.02f && y <= openings[i + 4] + 0.02f) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Front-shell cubes only. Deeper cavity faces are not the rind. */
+    private static boolean frontCovers(Model loaded, float x, float y) {
+        for (Cube cube : loaded.cubes) {
+            if (cube.z0 <= -6.05f || cube.z0 > -5.5f) {
+                continue;
+            }
+            if (x >= cube.x0 - 0.02f && x <= cube.x1 + 0.02f && y >= cube.y0 - 0.02f && y <= cube.y1 + 0.02f) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A wall along X = constant. sign +1 faces into an opening on the east of this edge. */
+    private static void emitWallX(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int world, int candle,
+                                  float x, float y0, float y1, float sign) {
+        float step = (WALL_BACK - WALL_FRONT) * 0.5f;
+        for (int depth = 0; depth < 2; depth++) {
+            float z = WALL_FRONT + depth * step;
+            float z1 = depth == 1 ? WALL_BACK : z + step;
+            int lit = wallLight(world, candle, depth);
+            if (sign > 0f) {
+                emitFlesh(consumer, view, normals, lit, 1f, 0f, 0f, 0f,
+                        x, y1, z, x, y1, z1, x, y0, z1, x, y0, z);
+            } else {
+                emitFlesh(consumer, view, normals, lit, -1f, 0f, 0f, 0f,
+                        x, y1, z1, x, y1, z, x, y0, z, x, y0, z1);
+            }
+        }
+    }
+
+    /** A wall along Y = constant. sign +1 faces into an opening above this edge. */
+    private static void emitWallY(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int world, int candle,
+                                  float y, float x0, float x1, float sign) {
+        float step = (WALL_BACK - WALL_FRONT) * 0.5f;
+        for (int depth = 0; depth < 2; depth++) {
+            float z = WALL_FRONT + depth * step;
+            float z1 = depth == 1 ? WALL_BACK : z + step;
+            int lit = wallLight(world, candle, depth);
+            if (sign > 0f) {
+                emitFlesh(consumer, view, normals, lit, 0f, 1f, 0f, 0f,
+                        x0, y, z1, x1, y, z1, x1, y, z, x0, y, z);
+            } else {
+                emitFlesh(consumer, view, normals, lit, 0f, -1f, 0f, 0f,
+                        x0, y, z, x1, y, z, x1, y, z1, x0, y, z1);
+            }
+        }
+    }
+
+    /** Nearest the candle is candle minus 1. Each texel of depth drops one, and ring 1 is the floor. */
+    private static int wallLight(int world, int candle, int depth) {
+        int block = candle - 1 - depth;
+        int floor = candle - RING_DROP;
+        if (block < floor) {
+            block = floor;
+        }
+        if (block < 0) {
+            block = 0;
+        } else if (block > 15) {
+            block = 15;
+        }
+        if (block <= LightTexture.block(world)) {
+            return world;
+        }
+        return LightTexture.pack(block, LightTexture.sky(world));
+    }
+
+    private static void emitFlesh(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light,
+                                  float nx, float ny, float nz, float overlap,
+                                  float x0, float y0, float z0, float x1, float y1, float z1,
+                                  float x2, float y2, float z2, float x3, float y3, float z3) {
+        Vector3f normal = new Vector3f(nx, ny, nz);
+        normals.transform(normal);
+        if (normal.lengthSquared() > 0.0001f) {
+            normal.normalize();
+        }
+        emit(consumer, view, light, normal, 0f, nx, ny, nz, 255, FLESH_U, FLESH_V, FLESH_U, FLESH_V, overlap, 0f,
+                x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
     }
 
     /**
