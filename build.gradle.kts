@@ -125,7 +125,8 @@ tasks {
         systemProperty("cosmetics.galleryUrl", "http://127.0.0.1:39221")
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
-            args("--width", "960", "--height", "540")
+            val wide = providers.gradleProperty("wide").orNull == "true"
+            args("--width", if (wide) "1920" else "960", "--height", if (wide) "1080" else "540")
         }
         if (providers.gradleProperty("wardrobeOnly").orNull == "true") {
             systemProperty("quarkos_cosmetics.wardrobeOnly", "true")

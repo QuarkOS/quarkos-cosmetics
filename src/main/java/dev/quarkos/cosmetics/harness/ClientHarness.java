@@ -56,8 +56,23 @@ public final class ClientHarness {
             new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false, 0f, false),
             new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false, 0f, false),
             new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false, 0f, false),
-            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false, 0f, false)
+            new Shot("pebble-moth-back", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", false, false, 0f, false),
+            new Shot("mask-front-day", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("mask-front-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("mask-three-quarter-day", Slot.HAT, "quarkos:jack_o_lantern_mask", false, false, 45f, false),
+            new Shot("mask-three-quarter-night", Slot.HAT, "quarkos:jack_o_lantern_mask", false, false, 45f, false),
+            new Shot("mask-side-day", Slot.HAT, "quarkos:jack_o_lantern_mask", false, false, 90f, false),
+            new Shot("mask-side-night", Slot.HAT, "quarkos:jack_o_lantern_mask", false, false, 90f, false),
+            new Shot("mask-flicker", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, true)
     );
+
+    /** Locked harness camera. Mask proof shots sit close on the head instead of the body portrait. */
+    public static boolean portraitLock;
+    public static double lockX;
+    public static double lockY;
+    public static double lockZ;
+    public static float lockYaw;
+    public static float lockPitch;
 
     private static List<Shot> active;
     private static State state = State.WAIT_TITLE;
@@ -72,6 +87,10 @@ public final class ClientHarness {
     private static int pairShot;
     private static int filmIndex = -1;
     private static int filmStartTick = -1;
+    /** When set, the screenshot is taken at the end of the frame, after the candle is drawn. */
+    private static boolean frameEndShots;
+    private static Path pendingShot;
+    private static int nightRetries;
     private static volatile boolean pairReady;
     private static volatile boolean pairFailed;
     private static volatile String pairKey = "";
@@ -215,7 +234,14 @@ public final class ClientHarness {
             }
             return;
         }
-        if (ticks - settledAt < 40) {
+        if (ticks - settledAt < 50) {
+            if (shot.name.startsWith("mask-") && (ticks - settledAt) % 15 == 0) {
+                ClientSettings.get().equip(shot.slot, shot.id);
+            }
+            return;
+        }
+        if (shot.name.equals("mask-flicker")) {
+            maskFilm(client);
             return;
         }
         if (shot.film) {
@@ -234,6 +260,7 @@ public final class ClientHarness {
             ticks = 0;
             shotQueued = false;
             settledAt = -1;
+            nightRetries = 0;
             state = State.SHOTS;
         });
     }
@@ -260,17 +287,24 @@ public final class ClientHarness {
         client.options.bobView().set(false);
         if (!studio) {
             studio = true;
-            client.player.connection.sendCommand("time set 6000");
+            client.player.connection.sendCommand("time set day");
+            client.player.connection.sendCommand("gamerule doDaylightCycle false");
             client.player.connection.sendCommand("weather clear");
             client.player.connection.sendCommand("gamemode creative");
+            client.player.connection.sendCommand("gamerule doMobSpawning false");
+            client.player.connection.sendCommand("kill @e[type=!player]");
             client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
         }
-        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
+        boolean night = shot.name.contains("night") || shot.name.contains("flicker");
+        client.player.connection.sendCommand(night ? "time set midnight" : "time set day");
+        client.options.gamma().set(night ? 0.0 : 1.0);
+        client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
         client.player.connection.sendCommand("item replace entity @s armor.chest with air");
         client.player.connection.sendCommand("item replace entity @s armor.legs with air");
+        client.player.connection.sendCommand("kill @e[type=!player]");
         client.player.connection.sendCommand("clear @s");
         client.player.setShiftKeyDown(false);
         client.player.setSwimming(false);
@@ -288,6 +322,11 @@ public final class ClientHarness {
     }
 
     private static void frame(Minecraft client, Shot shot) {
+        portraitLock = false;
+        if (shot.name.startsWith("mask-")) {
+            frameMask(client, shot);
+            return;
+        }
         boolean wide = shot.spread || shot.film || shot.orbit != 0f;
         portraitDistance = wide ? 4.8f : 2.55f;
         portraitDrop = wide ? 0.15f : 0.42f;
@@ -303,6 +342,107 @@ public final class ClientHarness {
         client.player.yBodyRotO = 180f;
         client.player.setXRot(8f);
         client.setCameraEntity(client.player);
+    }
+
+    /** Close on the head. Night drops the brightness so the candle reads against the dark. */
+    private static void frameMask(Minecraft client, Shot shot) {
+        boolean night = shot.name.contains("night") || shot.name.contains("flicker");
+        client.options.fov().set(30);
+        client.options.gamma().set(night ? 0.0 : 1.0);
+        client.options.hideGui = true;
+        client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+        client.player.setYRot(180f);
+        client.player.setYHeadRot(180f);
+        client.player.yRotO = 180f;
+        client.player.yHeadRotO = 180f;
+        client.player.setYBodyRot(180f);
+        client.player.yBodyRotO = 180f;
+        client.player.setXRot(0f);
+        client.player.xRotO = 0f;
+        client.setCameraEntity(client.player);
+        portraitLock = true;
+        // Look down onto the crown so the stem clears the front lip. Same distance on every angle.
+        // Mockup camera sits a little above the eyes so the stem clears the front lip.
+        lockY = 103.05f;
+        lockPitch = 2f;
+        if (shot.name.contains("side")) {
+            lockX = 0.5 + 3.2;
+            lockZ = 0.5;
+            lockYaw = 90f;
+        } else if (shot.name.contains("three-quarter")) {
+            lockX = 0.5 + 1.35;
+            lockZ = 0.5 - 2.90;
+            lockYaw = 25f;
+        } else {
+            lockX = 0.5;
+            lockZ = 0.5 - 3.2;
+            lockYaw = 0f;
+        }
+    }
+
+    /** Candle loop. One frame every other tick, four seconds, then an mp4 next to the stills. */
+    private static void maskFilm(Minecraft client) {
+        int frames = 40;
+        if (filmIndex < 0) {
+            filmIndex = 0;
+            filmStartTick = ticks;
+            shotQueued = false;
+        }
+        if (ticks - filmStartTick < filmIndex * 2) {
+            return;
+        }
+        if (shotQueued) {
+            Path path = maskFrame(filmIndex);
+            try {
+                if (Files.size(path) > 1000L) {
+                    shotQueued = false;
+                    filmIndex++;
+                    if (filmIndex >= frames) {
+                        encodeMask(frames);
+                        filmIndex = -1;
+                        shotIndex++;
+                        ticks = 0;
+                        shotQueued = false;
+                        settledAt = -1;
+                    }
+                }
+            } catch (Exception ignored) {
+                // The frame is still being written.
+            }
+            return;
+        }
+        Path path = maskFrame(filmIndex);
+        shotQueued = true;
+        try {
+            Files.createDirectories(path.getParent());
+        } catch (Exception e) {
+            LOGGER.error("could not create mask frames", e);
+            state = State.STOP;
+            return;
+        }
+        requestShot(client, path);
+    }
+
+    private static Path maskFrame(int index) {
+        return Path.of("/tmp/mask-flicker").resolve(String.format("f%03d.png", index));
+    }
+
+    private static void encodeMask(int frames) {
+        Path mp4 = shots().resolve("mask-flicker.mp4");
+        Path pattern = maskFrame(0).getParent().resolve("f%03d.png");
+        try {
+            Files.createDirectories(mp4.getParent());
+            Process process = new ProcessBuilder(
+                    "ffmpeg", "-y", "-framerate", "10", "-i", pattern.toString(),
+                    "-frames:v", Integer.toString(frames), "-pix_fmt", "yuv420p", mp4.toString())
+                    .redirectErrorStream(true)
+                    .start();
+            process.getInputStream().readAllBytes();
+            int code = process.waitFor();
+            LOGGER.info("mask clip {} exit {}", mp4, code);
+        } catch (Exception e) {
+            LOGGER.error("could not encode {}", mp4, e);
+        }
     }
 
     /** One flap cycle, back view, written as numbered frames for the GIF. */
@@ -576,16 +716,17 @@ public final class ClientHarness {
                 state = State.STOP;
                 return;
             }
-            //? if >=1.21.11 {
-            Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
-            //?} else {
-            NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
-            writeImage(path, image);
-            //?}
+            requestShot(client, path);
             return;
         }
         try {
             if (Files.size(path) > 1000L) {
+                if (name.contains("night") && nightRetries < 10 && !nightGlow(path)) {
+                    nightRetries++;
+                    shotQueued = false;
+                    Files.deleteIfExists(path);
+                    return;
+                }
                 next.run();
             } else if (ticks > 20 * 20) {
                 LOGGER.error("screenshot {} was not written", path);
@@ -596,6 +737,64 @@ public final class ClientHarness {
                 LOGGER.error("screenshot {} missing", path);
                 state = State.STOP;
             }
+        }
+    }
+
+    /** Mask proof captures after the candle pass, so the copy includes the emissive layer. */
+    public static void shotAtFrameEnd() {
+        frameEndShots = true;
+    }
+
+    public static void capturePending() {
+        Path path = pendingShot;
+        if (path == null) {
+            return;
+        }
+        pendingShot = null;
+        Minecraft client = Minecraft.getInstance();
+        //? if >=1.21.11 {
+        Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    private static void requestShot(Minecraft client, Path path) {
+        if (frameEndShots) {
+            pendingShot = path;
+            return;
+        }
+        //? if >=1.21.11 {
+        Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    /** True when the candle is actually bright in the shot, not a dipped frame of the loop. */
+    private static boolean nightGlow(Path path) {
+        try (var input = Files.newInputStream(path)) {
+            var image = javax.imageio.ImageIO.read(input);
+            if (image == null) {
+                return false;
+            }
+            int bright = 0;
+            for (int y = 0; y < image.getHeight(); y += 2) {
+                for (int x = 0; x < image.getWidth(); x += 2) {
+                    int rgb = image.getRGB(x, y);
+                    int r = (rgb >> 16) & 255;
+                    int g = (rgb >> 8) & 255;
+                    int b = rgb & 255;
+                    if (r > 140 && r > g + 30 && b < 90) {
+                        bright++;
+                    }
+                }
+            }
+            return bright > 80;
+        } catch (Exception e) {
+            return false;
         }
     }
 

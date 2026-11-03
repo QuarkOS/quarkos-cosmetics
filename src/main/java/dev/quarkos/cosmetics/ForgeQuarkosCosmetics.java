@@ -1,12 +1,14 @@
 package dev.quarkos.cosmetics;
 
 //? if forge {
+import dev.quarkos.cosmetics.render.MaskGlow;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.fml.common.Mod;
 
 @Mod(QuarkosClient.MOD_ID)
 public final class ForgeQuarkosCosmetics {
     public ForgeQuarkosCosmetics() {
+        MaskGlow.boot();
         //? if >=1.21.11 {
         RegisterKeyMappingsEvent.BUS.addListener(event -> event.register(QuarkosClient.OPEN));
         //?} else {

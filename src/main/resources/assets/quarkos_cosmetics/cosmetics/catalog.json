@@ -28,6 +28,15 @@
       "marker": "F4E2B0"
     },
     {
+      "id": "quarkos:jack_o_lantern_mask",
+      "name": "Jack o' lantern mask",
+      "description": "A pumpkin mask with a candle that flickers in the eyes and the smile.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/jack_o_lantern_mask.png",
+      "model": "geo/jack_o_lantern_mask.geo.json",
+      "marker": "EAA269"
+    },
+    {
       "id": "quarkos:fox_tips",
       "name": "Fox tips",
       "description": "Short russet tips, not a copy of any ears mod.",
