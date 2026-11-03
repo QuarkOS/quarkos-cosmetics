@@ -129,8 +129,7 @@ public final class JackOLanternMask {
         GLOW_BYTES.clear();
         try {
             var source = net.minecraft.client.renderer.MultiBufferSource.immediate(GLOW_BYTES);
-            //? if fabric {
-            // One mesh. The rind and the candle used to be two immediate draws, and the second one dropped out.
+            // One mesh. Two immediate draws dropped the candle, and the entity batch lets the rind cover it.
             var consumer = source.getBuffer(MaskGlow.combined(TEXTURE, GLOW));
             paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
             candleAlpha = 0;
@@ -140,12 +139,6 @@ public final class JackOLanternMask {
                 candleAlpha = 255;
             }
             source.endBatch();
-            //?} else {
-            paint(source.getBuffer(net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(TEXTURE)), heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
-            source.endBatch();
-            paint(source.getBuffer(MaskGlow.type(GLOW)), heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
-            source.endBatch();
-            //?}
             org.lwjgl.opengl.GL11.glFinish();
         } finally {
             com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride = previousColor;
@@ -241,10 +234,11 @@ public final class JackOLanternMask {
     }
 
     /**
-     * Split a rind face on texel boundaries. A texel's step is how many texel-widths its center
-     * sits from the nearest carving: 1 is almost fully lit, 2 is four block-light levels down,
-     * 3 is eight down, and anything farther keeps the world's light. The candle frame picks the
-     * top level, so the rings jump together when the flame steps.
+     * Split a rind face on texel boundaries. A texel's step is its Euclidean distance, in
+     * texel-widths, to the nearest carving. Five rings span about three texels: the first is
+     * the candle frame minus 6, and each ring after that is one block-light level dimmer.
+     * Farther texels keep the world's light. The candle frame picks the top level, so the
+     * rings jump together when the flame steps. Every corner of a texel shares that one level.
      */
     private static void emitTexels(VertexConsumer consumer, Matrix4f view, int light, Model loaded, int frame,
                                    Vector3f normal, float bias, float nx, float ny, float nz, int alpha, Uv uv,
@@ -316,51 +310,56 @@ public final class JackOLanternMask {
         }
     }
 
-    /** 1, 2, or 3 texel-widths from the nearest carving. 0 is inside a carving. 4 and up is ordinary shell. */
+    /** How many flat rings sit around a carving, and how far the outer one reaches. */
+    private static final int RINGS = 5;
+    private static final float HALO = 3f;
+    /** Ring 1 is this many block-light levels under the candle. Each next ring drops one more. */
+    private static final int RING_DROP = 6;
+
+    /** 0 is inside a carving. 1..5 are the halo. Anything else keeps the world's light. */
     private static int ringOf(Model loaded, float x, float y, float z) {
         float[] openings = loaded.openings;
         if (openings.length == 0) {
-            return 4;
+            return RINGS + 1;
         }
         float best = Float.MAX_VALUE;
         for (int i = 0; i < openings.length; i += 6) {
             float dx = outside(x, openings[i], openings[i + 3]);
             float dy = outside(y, openings[i + 1], openings[i + 4]);
             float dz = outside(z, openings[i + 2], openings[i + 5]);
-            float cheb = Math.max(dx, Math.max(dy, dz));
-            if (cheb < best) {
-                best = cheb;
+            float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < best) {
+                best = dist;
             }
         }
         float texels = best / TEXEL;
         if (texels < 0.05f) {
             return 0;
         }
-        return (int) Math.floor(texels) + 1;
+        if (texels >= HALO) {
+            return RINGS + 1;
+        }
+        int ring = (int) Math.floor(texels / (HALO / RINGS)) + 1;
+        if (ring > RINGS) {
+            return RINGS;
+        }
+        return ring;
     }
 
-    /** Block light for a ring, stepped down from this candle frame. Sky light stays the world's. */
+    /** Block light for a ring, one level dimmer per step down from this candle frame. Sky light stays the world's. */
     private static int ringLight(int world, int ring, int candle) {
-        int drop;
-        if (ring == 1) {
-            drop = 0;
-        } else if (ring == 2) {
-            drop = 4;
-        } else if (ring == 3) {
-            drop = 8;
-        } else {
+        if (ring < 1 || ring > RINGS) {
             return world;
         }
-        int block = candle - drop;
+        int block = candle - (RING_DROP + ring - 1);
         if (block < 0) {
             block = 0;
         }
-        int sky = LightTexture.sky(world);
         int have = LightTexture.block(world);
-        if (block < have) {
-            block = have;
+        if (block <= have) {
+            return world;
         }
-        return LightTexture.pack(block, sky);
+        return LightTexture.pack(block, LightTexture.sky(world));
     }
 
     private static float outside(float p, float a, float b) {
