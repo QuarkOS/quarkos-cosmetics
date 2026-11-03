@@ -35,13 +35,13 @@ public final class JackOLanternMask {
     private static final int FRAMES = 24;
     /** Holds each candle frame for this many ticks. Matches the mcmeta frametime, with interpolation off. */
     private static final int FRAME_TICKS = 2;
-    /** Lip and side walls sit on the rind. A short nudge clears the z-fight. */
-    private static final float GLOW_BIAS = 0.6f;
     private static final String[] FACES = {"north", "south", "east", "west", "up", "down"};
 
     private static Model model;
     private static boolean failed;
     private static boolean loggedDet;
+    /** 0 only while the combined mask shader is drawing the candle. Eyes still wants opaque vertices. */
+    private static int candleAlpha = 255;
 
     private JackOLanternMask() {
     }
@@ -70,14 +70,17 @@ public final class JackOLanternMask {
         if (Math.abs(normals.determinant()) > 0.0000001f) {
             normals.invert().transpose();
         }
-        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
-        // Eyes is ordered after cutout, so the candle is in the same frame as the rind.
-        submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
         //? if >=1.21.11 {
-        // Draw it again after the world so a later shell pass cannot cover the openings.
         if (deferred) {
-            hold(view, normals, frame, loaded);
+            // The entity batch drops the mask on some frames. Redraw it after the world, pose held from this submit.
+            hold(view, normals, frame, loaded, light);
+        } else {
+            submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
+            submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
         }
+        //?} else {
+        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
+        submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
         //?}
         pose.popPose();
     }
@@ -87,6 +90,7 @@ public final class JackOLanternMask {
     private static Matrix4f heldView;
     private static Matrix3f heldNormals;
     private static int heldFrame;
+    private static int heldLight;
     private static Model heldModel;
     private static boolean loggedFlush;
     /** Big enough for every lit face. The 8 KB builder overflowed and the mesh was dropped. */
@@ -106,8 +110,6 @@ public final class JackOLanternMask {
         org.joml.Matrix4fStack stack = com.mojang.blaze3d.systems.RenderSystem.getModelViewStack();
         stack.pushMatrix();
         net.minecraft.client.Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
-        // Pull the candle toward the camera in view space. The cavity back walls sit behind
-        // the rind, and eyes does not write depth, so they have to win the test on their own.
         Matrix4f viewRotation = new Matrix4f().rotation(camera.rotation().conjugate());
         stack.identity().mul(viewRotation);
         com.mojang.blaze3d.systems.RenderSystem.disableScissorForRenderTypeDraws();
@@ -115,20 +117,47 @@ public final class JackOLanternMask {
             loggedFlush = true;
             LOGGER.info("mask glow flush frame {}", heldFrame);
         }
+        // The world may still be aimed at another color target. The screenshot reads the main
+        // target, so the candle has to land there or whole frames come back with the rind only.
+        var main = net.minecraft.client.Minecraft.getInstance().getMainRenderTarget();
+        var previousColor = com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride;
+        var previousDepth = com.mojang.blaze3d.systems.RenderSystem.outputDepthTextureOverride;
+        com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride = main.getColorTextureView();
+        com.mojang.blaze3d.systems.RenderSystem.outputDepthTextureOverride = main.getDepthTextureView();
         GLOW_BYTES.clear();
-        var source = net.minecraft.client.renderer.MultiBufferSource.immediate(GLOW_BYTES);
-        var glowType = MaskGlow.type(GLOW);
-        paint(source.getBuffer(glowType), heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
-        source.endBatch();
-        GLOW_BYTES.clear();
-        stack.popMatrix();
-        heldView = null;
+        try {
+            var source = net.minecraft.client.renderer.MultiBufferSource.immediate(GLOW_BYTES);
+            //? if fabric {
+            // One mesh. The rind and the candle used to be two immediate draws, and the second one dropped out.
+            var consumer = source.getBuffer(MaskGlow.combined(TEXTURE, GLOW));
+            paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
+            candleAlpha = 0;
+            try {
+                paint(consumer, heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
+            } finally {
+                candleAlpha = 255;
+            }
+            source.endBatch();
+            //?} else {
+            paint(source.getBuffer(net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(TEXTURE)), heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
+            source.endBatch();
+            paint(source.getBuffer(MaskGlow.type(GLOW)), heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
+            source.endBatch();
+            //?}
+            org.lwjgl.opengl.GL11.glFinish();
+        } finally {
+            com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride = previousColor;
+            com.mojang.blaze3d.systems.RenderSystem.outputDepthTextureOverride = previousDepth;
+            GLOW_BYTES.clear();
+            stack.popMatrix();
+        }
     }
 
-    private static void hold(Matrix4f view, Matrix3f normals, int frame, Model loaded) {
+    private static void hold(Matrix4f view, Matrix3f normals, int frame, Model loaded, int light) {
         heldView = new Matrix4f(view);
         heldNormals = new Matrix3f(normals);
         heldFrame = frame;
+        heldLight = light;
         heldModel = loaded;
     }
     //?}
@@ -136,20 +165,24 @@ public final class JackOLanternMask {
     /** kind 0 is the rind. kind 1 is the emissive lip and the side walls of the carving. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
         for (Cube cube : loaded.cubes) {
-            float x0 = cube.x0;
-            float y0 = cube.y0;
-            float z0 = cube.z0;
-            float x1 = cube.x1;
-            float y1 = cube.y1;
-            float z1 = cube.z1;
-            // Same outward winding as the chick cubes, in bedrock space.
-            face(consumer, view, normals, light, loaded, cube, frame, kind, "east", x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
-            face(consumer, view, normals, light, loaded, cube, frame, kind, "west", x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
-            face(consumer, view, normals, light, loaded, cube, frame, kind, "north", x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
-            face(consumer, view, normals, light, loaded, cube, frame, kind, "south", x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
-            face(consumer, view, normals, light, loaded, cube, frame, kind, "up", x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
-            face(consumer, view, normals, light, loaded, cube, frame, kind, "down", x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
+            paintCube(consumer, view, normals, light, loaded, cube, frame, kind);
         }
+    }
+
+    private static void paintCube(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube, int frame, int kind) {
+        float x0 = cube.x0;
+        float y0 = cube.y0;
+        float z0 = cube.z0;
+        float x1 = cube.x1;
+        float y1 = cube.y1;
+        float z1 = cube.z1;
+        // Same outward winding as the chick cubes, in bedrock space.
+        face(consumer, view, normals, light, loaded, cube, frame, kind, "east", x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, "west", x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, "north", x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, "south", x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, "up", x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, "down", x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
     }
 
     private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube,
@@ -157,114 +190,62 @@ public final class JackOLanternMask {
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3,
                              float nx, float ny, float nz) {
-        Uv uv = cube.uv(name);
+        // The ~1px cubes sit at z = -6.1, in the eye, nose, and mouth openings.
+        // Only their north face is the flame. The carving walls sample the same texels
+        // and come out as bars beside the cut-outs.
+        boolean candleCube = cube.z0 <= -6.05f;
+        Uv uv;
+        if (candleCube) {
+            if (kind == 0 || !"north".equals(name)) {
+                return;
+            }
+            uv = cube.uv("north");
+        } else {
+            if (kind != 0) {
+                return;
+            }
+            uv = cube.uv(name);
+        }
         if (uv == null || (kind != 0 && loaded.anyGlow && !uv.glow)) {
             return;
         }
-        // The candle picture is five large north faces on the back wall of the carving.
-        // A full quad of that mostly empty rect does not survive the eyes pass, so each
-        // lit texel becomes its own quad on the front of the opening.
-        if (kind == 1 && "north".equals(name)) {
-            candleTexels(consumer, view, normals, light, loaded, cube, frame, uv);
-            return;
-        }
-        // The geo file's texture height is one frame. The png is the full strip, and SimpleTexture
-        // uploads that strip as-is, so V has to land on this tick's frame or the candle samples empty rows.
-        float u0 = uv.u1 / FRAME;
-        float u1 = uv.u2 / FRAME;
-        float v0 = (uv.v1 + frame * FRAME) / (FRAME * FRAMES);
-        float v1 = (uv.v2 + frame * FRAME) / (FRAME * FRAMES);
+        // GeckoLib keeps an animated mcmeta texture as one 80×80 frame and swaps the pixels itself.
+        // Offsetting V down the strip samples empty rows of that frame, so the flame drops out.
+        // Candle faces are one texel. Inset so nearest-filtering cannot step onto a clear neighbor.
+        float inset = candleCube ? 0.08f : 0f;
+        float u0 = (uv.u1 + inset) / FRAME;
+        float u1 = (uv.u2 - inset) / FRAME;
+        float v0 = (uv.v1 + inset) / FRAME;
+        float v1 = (uv.v2 - inset) / FRAME;
         Vector3f normal = new Vector3f(nx, ny, nz);
         normals.transform(normal);
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
-        float bias = kind == 1 ? GLOW_BIAS : 0f;
-        // Bedrock -Z is toward the viewer once the mask is on the head. The carving's
-        // lit edges sit on the rind, so they also step forward or a level camera hides them.
-        float pull = kind == 1 ? 0.55f : 0f;
-        emit(consumer, view, light, normal, bias, nx, ny, nz, u0, v0, u1, v1,
+        // In front of the rind at z = -6.1, so the flame wins the depth test in the cut-out.
+        // The geo origin stays at -6.1. Alpha 0 marks a candle vertex for the mask shader.
+        float bias = 0f;
+        float pull = kind == 0 ? 0f : 0.25f;
+        int alpha = kind == 0 ? 255 : candleAlpha;
+        emit(consumer, view, light, normal, bias, nx, ny, nz, alpha, u0, v0, u1, v1,
                 x0, y0, z0 - pull, x1, y1, z1 - pull, x2, y2, z2 - pull, x3, y3, z3 - pull);
-        if (kind == 1) {
-            vertex(consumer, view, x0 + nx * bias, y0 + ny * bias, z0 - pull + nz * bias, u0, v0, light, normal);
-            vertex(consumer, view, x3 + nx * bias, y3 + ny * bias, z3 - pull + nz * bias, u0, v1, light, normal);
-            vertex(consumer, view, x2 + nx * bias, y2 + ny * bias, z2 - pull + nz * bias, u1, v1, light, normal);
-            vertex(consumer, view, x1 + nx * bias, y1 + ny * bias, z1 - pull + nz * bias, u1, v0, light, normal);
-        }
-    }
-
-    /** Front of the rind. The back-wall candle is moved here so it sits in the holes. */
-    private static final float FLAME_Z = -6.55f;
-    private static boolean loggedCandles;
-
-    /** One quad per opaque texel of a back-wall face, placed on the front of the carving. */
-    private static void candleTexels(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded,
-                                    Cube cube, int frame, Uv uv) {
-        if (loaded.glowPixels == null || Math.abs(uv.u2 - uv.u1) < 0.01f || Math.abs(uv.v2 - uv.v1) < 0.01f) {
-            return;
-        }
-        int tx0 = (int) Math.floor(Math.min(uv.u1, uv.u2));
-        int tx1 = (int) Math.ceil(Math.max(uv.u1, uv.u2));
-        int ty0 = (int) Math.floor(Math.min(uv.v1, uv.v2));
-        int ty1 = (int) Math.ceil(Math.max(uv.v1, uv.v2));
-        int width = loaded.glowPixels.width();
-        int[] argb = loaded.glowPixels.argb();
-        Vector3f normal = new Vector3f(0f, 0f, -1f);
-        normals.transform(normal);
-        if (normal.lengthSquared() > 0.0001f) {
-            normal.normalize();
-        }
-        int lit = 0;
-        for (int ty = ty0; ty < ty1; ty++) {
-            for (int tx = tx0; tx < tx1; tx++) {
-                if (tx < 0 || ty < 0 || tx >= width || ty >= width) {
-                    continue;
-                }
-                if (((argb[ty * width + tx] >>> 24) & 255) == 0) {
-                    continue;
-                }
-                float fu0 = (tx - uv.u1) / (uv.u2 - uv.u1);
-                float fu1 = (tx + 1f - uv.u1) / (uv.u2 - uv.u1);
-                float fv0 = (ty - uv.v1) / (uv.v2 - uv.v1);
-                float fv1 = (ty + 1f - uv.v1) / (uv.v2 - uv.v1);
-                float wx0 = cube.x0 + fu0 * (cube.x1 - cube.x0);
-                float wx1 = cube.x0 + fu1 * (cube.x1 - cube.x0);
-                float wyHigh = cube.y1 + fv0 * (cube.y0 - cube.y1);
-                float wyLow = cube.y1 + fv1 * (cube.y0 - cube.y1);
-                float u0 = tx / FRAME;
-                float u1 = (tx + 1f) / FRAME;
-                float v0 = (ty + frame * FRAME) / (FRAME * FRAMES);
-                float v1 = (ty + 1f + frame * FRAME) / (FRAME * FRAMES);
-                emit(consumer, view, light, normal, 0f, 0f, 0f, 0f, u0, v0, u1, v1,
-                        wx0, wyHigh, FLAME_Z, wx1, wyHigh, FLAME_Z, wx1, wyLow, FLAME_Z, wx0, wyLow, FLAME_Z);
-                vertex(consumer, view, wx0, wyHigh, FLAME_Z, u0, v0, light, normal);
-                vertex(consumer, view, wx0, wyLow, FLAME_Z, u0, v1, light, normal);
-                vertex(consumer, view, wx1, wyLow, FLAME_Z, u1, v1, light, normal);
-                vertex(consumer, view, wx1, wyHigh, FLAME_Z, u1, v0, light, normal);
-                lit++;
-            }
-        }
-        if (!loggedCandles && lit > 0) {
-            loggedCandles = true;
-            LOGGER.info("mask candle texels {}", lit);
-        }
     }
 
     private static void emit(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
-                             float nx, float ny, float nz,
+                             float nx, float ny, float nz, int alpha,
                              float u0, float v0, float u1, float v1,
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3) {
-        vertex(consumer, view, x0 + nx * bias, y0 + ny * bias, z0 + nz * bias, u0, v0, light, normal);
-        vertex(consumer, view, x1 + nx * bias, y1 + ny * bias, z1 + nz * bias, u1, v0, light, normal);
-        vertex(consumer, view, x2 + nx * bias, y2 + ny * bias, z2 + nz * bias, u1, v1, light, normal);
-        vertex(consumer, view, x3 + nx * bias, y3 + ny * bias, z3 + nz * bias, u0, v1, light, normal);
+        vertex(consumer, view, x0 + nx * bias, y0 + ny * bias, z0 + nz * bias, u0, v0, light, alpha, normal);
+        vertex(consumer, view, x1 + nx * bias, y1 + ny * bias, z1 + nz * bias, u1, v0, light, alpha, normal);
+        vertex(consumer, view, x2 + nx * bias, y2 + ny * bias, z2 + nz * bias, u1, v1, light, alpha, normal);
+        vertex(consumer, view, x3 + nx * bias, y3 + ny * bias, z3 + nz * bias, u0, v1, light, alpha, normal);
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,
-                               float u, float v, int light, Vector3f normal) {
+                               float u, float v, int light, int alpha, Vector3f normal) {
         consumer.addVertex(view, x, y, z)
-                .setColor(255, 255, 255, 255)
+                .setColor(255, 255, 255, alpha)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.pack(0, 10))
                 .setLight(light)

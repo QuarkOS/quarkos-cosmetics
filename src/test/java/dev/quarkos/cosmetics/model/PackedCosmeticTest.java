@@ -92,7 +92,8 @@ class PackedCosmeticTest {
         }
         assertTrue(head != null, "armorHead bone");
         assertEquals("bipedHead", head.path("parent").asText());
-        assertEquals(60, head.path("cubes").size());
+        // 60 shell cubes, plus one cube per lit texel of the five candle north faces.
+        assertEquals(85, head.path("cubes").size());
         try (InputStream stream = resource(texturePath)) {
             BufferedImage image = ImageIO.read(stream);
             assertEquals(80, image.getWidth(), texturePath);

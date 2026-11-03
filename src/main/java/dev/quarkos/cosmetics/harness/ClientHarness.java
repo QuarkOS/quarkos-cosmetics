@@ -234,10 +234,10 @@ public final class ClientHarness {
             }
             return;
         }
+        if (shot.name.startsWith("mask-")) {
+            ClientSettings.get().equip(shot.slot, shot.id);
+        }
         if (ticks - settledAt < 50) {
-            if (shot.name.startsWith("mask-") && (ticks - settledAt) % 15 == 0) {
-                ClientSettings.get().equip(shot.slot, shot.id);
-            }
             return;
         }
         if (shot.name.equals("mask-flicker")) {
@@ -753,7 +753,9 @@ public final class ClientHarness {
         pendingShot = null;
         Minecraft client = Minecraft.getInstance();
         //? if >=1.21.11 {
-        Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+        // The stock screenshot copies through a fence. The next pass can clear the
+        // target before that read lands, so the candle is missing on some frames.
+        writeTargetNow(client, path);
         //?} else {
         NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
         writeImage(path, image);
@@ -797,6 +799,46 @@ public final class ClientHarness {
             return false;
         }
     }
+
+    //? if >=1.21.11 {
+    /** Read the main color texture on this thread, before the frame moves on. */
+    private static void writeTargetNow(Minecraft client, Path path) {
+        var target = client.getMainRenderTarget();
+        var color = target.getColorTexture();
+        if (!(color instanceof com.mojang.blaze3d.opengl.GlTexture texture)) {
+            Screenshot.takeScreenshot(target, image -> writeImage(path, image));
+            return;
+        }
+        int width = target.width;
+        int height = target.height;
+        org.lwjgl.opengl.GL11.glFinish();
+        int previous = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL11.GL_TEXTURE_BINDING_2D);
+        org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, texture.glId());
+        java.nio.ByteBuffer buffer = org.lwjgl.system.MemoryUtil.memAlloc(width * height * 4);
+        NativeImage image = new NativeImage(width, height, false);
+        try {
+            org.lwjgl.opengl.GL11.glGetTexImage(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_RGBA, org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE, buffer);
+            for (int y = 0; y < height; y++) {
+                int row = (height - 1 - y) * width * 4;
+                for (int x = 0; x < width; x++) {
+                    int i = row + x * 4;
+                    int red = buffer.get(i) & 255;
+                    int green = buffer.get(i + 1) & 255;
+                    int blue = buffer.get(i + 2) & 255;
+                    int alpha = buffer.get(i + 3) & 255;
+                    image.setPixel(x, y, (alpha << 24) | (red << 16) | (green << 8) | blue);
+                }
+            }
+            writeImage(path, image);
+        } catch (RuntimeException ex) {
+            LOGGER.error("failed to read the mask frame", ex);
+            image.close();
+        } finally {
+            org.lwjgl.system.MemoryUtil.memFree(buffer);
+            org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, previous);
+        }
+    }
+    //?}
 
     private static void writeImage(Path path, NativeImage image) {
         try {
