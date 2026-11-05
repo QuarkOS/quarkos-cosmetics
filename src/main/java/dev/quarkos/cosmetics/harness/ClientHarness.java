@@ -122,6 +122,8 @@ public final class ClientHarness {
     private static int ticks;
     private static boolean armed;
     private static boolean shotQueued;
+    private static boolean frameEndShots;
+    private static Path pendingShot;
     private static boolean studio;
     private static int shotIndex;
     private static int settledAt = -1;
@@ -1104,12 +1106,7 @@ public final class ClientHarness {
                 state = State.STOP;
                 return;
             }
-            //? if >=1.21.11 {
-            Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
-            //?} else {
-            NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
-            writeImage(path, image);
-            //?}
+            requestShot(client, path);
             return;
         }
         try {
@@ -1126,6 +1123,83 @@ public final class ClientHarness {
             }
         }
     }
+
+    /** Mask proof captures after the candle pass, so the copy includes the emissive layer. */
+    public static void shotAtFrameEnd() {
+        frameEndShots = true;
+    }
+
+    public static void capturePending() {
+        Path path = pendingShot;
+        if (path == null) {
+            return;
+        }
+        pendingShot = null;
+        Minecraft client = Minecraft.getInstance();
+        //? if >=1.21.11 {
+        writeTargetNow(client, path);
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    private static void requestShot(Minecraft client, Path path) {
+        if (frameEndShots) {
+            pendingShot = path;
+            return;
+        }
+        //? if >=1.21.11 {
+        if ("forge".equals(System.getProperty("quarkos_cosmetics.loader"))) {
+            writeTargetNow(client, path);
+            return;
+        }
+        Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    //? if >=1.21.11 {
+    /** Read the main color texture on this thread, before the frame moves on. */
+    private static void writeTargetNow(Minecraft client, Path path) {
+        var target = client.getMainRenderTarget();
+        var color = target.getColorTexture();
+        if (!(color instanceof com.mojang.blaze3d.opengl.GlTexture texture)) {
+            Screenshot.takeScreenshot(target, image -> writeImage(path, image));
+            return;
+        }
+        int width = target.width;
+        int height = target.height;
+        org.lwjgl.opengl.GL11.glFinish();
+        int previous = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL11.GL_TEXTURE_BINDING_2D);
+        org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, texture.glId());
+        java.nio.ByteBuffer buffer = org.lwjgl.system.MemoryUtil.memAlloc(width * height * 4);
+        NativeImage image = new NativeImage(width, height, false);
+        try {
+            org.lwjgl.opengl.GL11.glGetTexImage(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_RGBA, org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE, buffer);
+            for (int y = 0; y < height; y++) {
+                int row = (height - 1 - y) * width * 4;
+                for (int x = 0; x < width; x++) {
+                    int i = row + x * 4;
+                    int red = buffer.get(i) & 255;
+                    int green = buffer.get(i + 1) & 255;
+                    int blue = buffer.get(i + 2) & 255;
+                    int alpha = buffer.get(i + 3) & 255;
+                    image.setPixel(x, y, (alpha << 24) | (red << 16) | (green << 8) | blue);
+                }
+            }
+            writeImage(path, image);
+        } catch (RuntimeException ex) {
+            LOGGER.error("failed to read the frame", ex);
+            image.close();
+        } finally {
+            org.lwjgl.system.MemoryUtil.memFree(buffer);
+            org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, previous);
+        }
+    }
+    //?}
 
     private static void writeImage(Path path, NativeImage image) {
         try {
