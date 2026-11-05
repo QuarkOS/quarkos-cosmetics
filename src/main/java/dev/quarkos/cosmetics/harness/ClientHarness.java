@@ -74,6 +74,22 @@ public final class ClientHarness {
             new Shot("jack_o_lantern_mask-three-quarter-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
             new Shot("jack_o_lantern_mask-side-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 90f, false),
             new Shot("jack_o_lantern_mask-front-night-zoom", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-day-front-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-day-front-close-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-day-three-quarter-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-day-three-quarter-close-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-night-front-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-night-front-close-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-night-three-quarter-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-night-three-quarter-close-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-day-front-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-day-front-close-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-day-three-quarter-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-day-three-quarter-close-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-night-front-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-night-front-close-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("gif-night-three-quarter-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("gif-night-three-quarter-close-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
             new Shot("fox_tips-front", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false),
             new Shot("fox_tips-three-quarter", Slot.EARS, "quarkos:fox_tips", true, false, 40f, false),
             new Shot("fox_tips-side", Slot.EARS, "quarkos:fox_tips", true, false, 90f, false),
@@ -379,6 +395,14 @@ public final class ClientHarness {
                 return;
             }
         }
+        if (shot.name.startsWith("gif-") && !shotQueued) {
+            int candle = Math.floorMod(client.player.tickCount / 2, 24);
+            int wanted = gifFrame(shot.name);
+            if (candle != wanted) {
+                return;
+            }
+            LOGGER.info("gif shot {} locked to candle frame {}", shot.name, candle);
+        }
         shootWhenReady(client, shot.name, () -> {
             shotIndex++;
             ticks = 0;
@@ -386,6 +410,19 @@ public final class ClientHarness {
             settledAt = -1;
             state = State.SHOTS;
         });
+    }
+
+    /** Candle frame named on a gif shot, as in {@code gif-day-front-f15}. */
+    private static int gifFrame(String name) {
+        int at = name.lastIndexOf("-f");
+        if (at < 0) {
+            return 12;
+        }
+        try {
+            return Integer.parseInt(name.substring(at + 2));
+        } catch (NumberFormatException ex) {
+            return 12;
+        }
     }
 
     private static List<Shot> activeShots() {
@@ -485,6 +522,7 @@ public final class ClientHarness {
                 || name.startsWith("paper_boat-")
                 || name.startsWith("crescent_circlet-")
                 || name.startsWith("jack_o_lantern_mask-")
+                || name.startsWith("gif-")
                 || name.startsWith("fox_tips-")
                 || name.startsWith("moth_tufts-")
                 || name.startsWith("ribbon_bows-")
@@ -523,6 +561,7 @@ public final class ClientHarness {
         ClientSettings.get().skinLayers = false;
         boolean night = shot.name.contains("night");
         boolean zoom = shot.name.contains("zoom");
+        boolean close = shot.name.contains("close");
         boolean side = shot.name.contains("-side");
         boolean three = shot.name.contains("three-quarter");
         client.options.gamma().set(night ? 0.0 : 1.0);
@@ -542,16 +581,24 @@ public final class ClientHarness {
         client.player.setXRot(0f);
         client.player.xRotO = 0f;
         client.setCameraEntity(client.player);
-        if (zoom) {
-            // Whole pumpkin, about three times the full-body framing, nearest texels.
+        if (zoom || close) {
+            // Close sits on the pumpkin, a little above, so the carved walls read the way the GIF does.
             portraitLock = true;
-            client.options.fov().set(54);
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            lockX = 0.5;
-            lockY = 102.82;
-            lockZ = 0.5 - 1.9;
-            lockYaw = 0f;
-            lockPitch = 0f;
+            float dist = close ? 1.55f : 1.9f;
+            client.options.fov().set(close ? 30 : 54);
+            lockY = close ? 103.05f : 102.82f;
+            lockPitch = close ? (three ? 18f : 8f) : 0f;
+            if (three) {
+                double rad = Math.toRadians(40);
+                lockX = 0.5 - Math.sin(rad) * dist;
+                lockZ = 0.5 - Math.cos(rad) * dist;
+                lockYaw = 320f;
+            } else {
+                lockX = 0.5;
+                lockZ = 0.5 - dist;
+                lockYaw = 0f;
+            }
             return;
         }
         portraitDistance = 2.55f;

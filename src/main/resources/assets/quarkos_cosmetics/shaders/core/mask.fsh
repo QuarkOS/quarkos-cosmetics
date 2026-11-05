@@ -16,20 +16,20 @@ out vec4 fragColor;
 
 void main() {
     vec4 color;
-    // Candle vertices are marked with alpha 0. They sample the glow strip and skip the lightmap,
-    // so a dipped frame stays the texture's own red instead of flashing off.
-    if (vertexColor.a < 0.5) {
+    // Alpha under 0.75 is a carved glow texel, its own UV. Orange and cream skip the lightmap.
+    // Dark red keeps the shell's light. There is no stand-in UV.
+    if (vertexColor.a < 0.75) {
         vec4 glow = texture(Sampler1, texCoord0);
-        // Red, orange, yellow, and cream are the carving. Only a clear or
-        // near-black sample is empty. The png and mcmeta are unchanged.
-        bool empty = glow.a < 0.1 || (glow.r < (24.0 / 255.0) && glow.g < (16.0 / 255.0) && glow.b < (16.0 / 255.0));
-        if (empty) {
-            glow = texture(Sampler1, vec2(72.5 / 80.0, 22.5 / 80.0));
-        }
         if (glow.a < 0.1) {
             discard;
         }
-        color = vec4(glow.rgb, 1.0);
+        // Orange and cream are the candle. They stay full bright so night does not repaint them.
+        // Dark red is the recess and keeps the shell's light.
+        if (glow.g >= (64.0 / 255.0) && glow.r > glow.b) {
+            color = vec4(glow.rgb, 1.0);
+        } else {
+            color = vec4(glow.rgb * vertexColor.rgb * ColorModulator.rgb * lightMapColor.rgb, 1.0);
+        }
     } else {
         vec4 shell = texture(Sampler0, texCoord0);
         if (shell.a < 0.1) {

@@ -1,10 +1,12 @@
 package dev.quarkos.cosmetics.render;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Matrix3f;
@@ -30,6 +32,8 @@ public final class JackOLanternMask {
     private static final Identifier GEO = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "geo/jack_o_lantern_mask.geo.json");
     private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/cosmetics/jack_o_lantern_mask.png");
     private static final Identifier GLOW = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/cosmetics/jack_o_lantern_mask_glow.png");
+    /** One 80×80 candle frame, copied out of the strip. The entity sampler does not advance mcmeta. */
+    private static final Identifier GLOW_FRAME = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "dynamic/jack_o_lantern_glow_frame");
     /** One square of the vertical strip. The mcmeta asks for this, but entity textures upload the whole strip. */
     private static final float FRAME = 80f;
     private static final int FRAMES = 24;
@@ -40,8 +44,13 @@ public final class JackOLanternMask {
     private static Model model;
     private static boolean failed;
     private static boolean loggedDet;
-    /** 0 only while the combined mask shader is drawing the candle. Eyes still wants opaque vertices. */
-    private static int candleAlpha = 255;
+    /**
+     * Combined-shader alpha. 255 is the shell texture. 128 is any carved glow texel.
+     * The mask shader keeps dark red under the world's light and leaves orange and cream full bright.
+     */
+    private static int maskAlpha = 255;
+    private static DynamicTexture glowFrame;
+    private static int uploadedFrame = -1;
     /** One shell texel, in bedrock pixels. The candle cubes and the face grid share this step. */
     private static final float TEXEL = 0.9224f;
 
@@ -64,6 +73,7 @@ public final class JackOLanternMask {
         pose.translate(-offsetX, -24f + offsetY, offsetZ);
         Matrix4f view = new Matrix4f(pose.last().pose());
         int frame = Math.floorMod(tick / FRAME_TICKS, FRAMES);
+        uploadGlowFrame(loaded, frame);
         if (!loggedDet) {
             loggedDet = true;
             LOGGER.info("mask pose det {} candle frame {} of {}", String.format(Locale.ROOT, "%.8g", view.determinant()), frame, FRAMES);
@@ -77,12 +87,10 @@ public final class JackOLanternMask {
             // The entity batch drops the mask on some frames. Redraw it after the world, pose held from this submit.
             hold(view, normals, frame, loaded, light);
         } else {
-            submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
-            submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
+            submitLayers(submitter, pose, view, normals, light, loaded, frame);
         }
         //?} else {
-        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
-        submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
+        submitLayers(submitter, pose, view, normals, light, loaded, frame);
         //?}
         pose.popPose();
     }
@@ -128,16 +136,18 @@ public final class JackOLanternMask {
         com.mojang.blaze3d.systems.RenderSystem.outputDepthTextureOverride = main.getDepthTextureView();
         GLOW_BYTES.clear();
         try {
+            uploadGlowFrame(heldModel, heldFrame);
             var source = net.minecraft.client.renderer.MultiBufferSource.immediate(GLOW_BYTES);
             // One mesh. Two immediate draws dropped the candle, and the entity batch lets the rind cover it.
-            var consumer = source.getBuffer(MaskGlow.combined(TEXTURE, GLOW));
+            var consumer = source.getBuffer(MaskGlow.combined(TEXTURE, glowSampler()));
+            maskAlpha = 255;
             paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 0);
-            candleAlpha = 0;
-            try {
-                paint(consumer, heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
-            } finally {
-                candleAlpha = 255;
-            }
+            maskAlpha = 128;
+            paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 2);
+            // Same alpha as the recess. A lower alpha was dropped, so the flame never reached the shader.
+            // The shader tells the candle cores from the red by the texel's own green.
+            paint(consumer, heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
+            maskAlpha = 255;
             source.endBatch();
             org.lwjgl.opengl.GL11.glFinish();
         } finally {
@@ -161,14 +171,72 @@ public final class JackOLanternMask {
     }
     //?}
 
-    /** kind 0 is the rind. kind 1 is the emissive candle. */
+    /**
+     * The glow png is an 80×1920 strip. A plain entity texture stays on frame 0, so the candle
+     * frame the CPU picked is copied into an 80×80 texture and that is what the mesh samples.
+     */
+    private static void uploadGlowFrame(Model loaded, int frame) {
+        SkinImages.Pixels glow = loaded == null ? null : loaded.glowPixels;
+        if (glow == null || glow.width() < (int) FRAME || glow.height() < (int) FRAME * FRAMES) {
+            return;
+        }
+        int index = Math.floorMod(frame, FRAMES);
+        if (glowFrame != null && uploadedFrame == index) {
+            return;
+        }
+        NativeImage image = glowFrame == null ? new NativeImage((int) FRAME, (int) FRAME, false) : glowFrame.getPixels();
+        if (image == null) {
+            return;
+        }
+        int y0 = index * (int) FRAME;
+        for (int y = 0; y < (int) FRAME; y++) {
+            for (int x = 0; x < (int) FRAME; x++) {
+                int argb = glow.argb()[(y0 + y) * glow.width() + x];
+                int alpha = (argb >>> 24) & 255;
+                int red = (argb >> 16) & 255;
+                int green = (argb >> 8) & 255;
+                int blue = argb & 255;
+                int abgr = (alpha << 24) | (blue << 16) | (green << 8) | red;
+                //? if >=1.21.11 {
+                image.setPixel(x, y, abgr);
+                //?} else {
+                image.setPixelRGBA(x, y, abgr);
+                //?}
+            }
+        }
+        if (glowFrame == null) {
+            //? if >=1.21.11 {
+            glowFrame = new DynamicTexture(() -> GLOW_FRAME.toString(), image);
+            //?} else {
+            glowFrame = new DynamicTexture(image);
+            //?}
+            Minecraft.getInstance().getTextureManager().register(GLOW_FRAME, glowFrame);
+        }
+        glowFrame.upload();
+        uploadedFrame = index;
+    }
+
+    private static Identifier glowSampler() {
+        return glowFrame == null ? GLOW : GLOW_FRAME;
+    }
+
+    /**
+     * Shell texture under the world's light, then the carved glow texels on the same faces.
+     * The 25 candle quads are not a face-plane overlay.
+     */
+    private static void submitLayers(CosmeticDrawer.Submitter submitter, PoseStack pose, Matrix4f view, Matrix3f normals,
+                                     int light, Model loaded, int frame) {
+        maskAlpha = 255;
+        Identifier glow = glowSampler();
+        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
+        submitter.submit(pose, glow, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 2));
+        submitter.submit(pose, glow, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
+    }
+
+    /** kind 0 is the shell. kind 1 is the yellow and cream cores. kind 2 is the red recess and orange carved texels. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
         for (Cube cube : loaded.cubes) {
             paintCube(consumer, view, normals, light, loaded, cube, frame, kind);
-        }
-        if (kind == 1) {
-            // One flame layer on the face. The shell pass does not draw these texels again.
-            emitFlames(consumer, view, normals, light, loaded, frame);
         }
     }
 
@@ -193,13 +261,13 @@ public final class JackOLanternMask {
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3,
                              float nx, float ny, float nz) {
-        // The candle cubes stay in the geo for the halo distance. Their faces are not drawn.
-        // The flame layer owns every texel of the carving, once, on the face plane.
+        // The 25 candle quads sit at z -6.1, in front of the carving, and their north UVs are
+        // one texel each. They are not in the 60-element model. Drawing them caps the holes.
         if (cube.z0 <= -6.05f) {
             return;
         }
         Uv uv = cube.uv(name);
-        if (uv == null || (kind != 0 && kind != 1)) {
+        if (uv == null || kind < 0 || kind > 2) {
             return;
         }
         // GeckoLib keeps an animated mcmeta texture as one 80×80 frame and swaps the pixels itself.
@@ -210,331 +278,53 @@ public final class JackOLanternMask {
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
-        float bias = 0f;
-        int alpha = kind == 1 ? candleAlpha : 255;
-        // Kind 1 redraws the carving lip, including the inner wall you see at an angle, as flame.
-        emitTexels(consumer, view, light, loaded, frame, normal, bias, nx, ny, nz, alpha, kind == 1, uv,
+        int alpha = kind == 0 ? 255 : maskAlpha;
+        emitTexels(consumer, view, light, loaded, frame, normal, nx, ny, nz, alpha, kind, uv,
                 x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
     }
 
-    /** North face of the candle cubes. The rind's front sits just behind this plane. */
-    private static final float FLAME_Z = -6.1f;
-    /** In-plane only, so neighboring flame texels share an edge and do not stack in Z. */
-    private static final float FLAME_OVERLAP = 0.05f;
-    /**
-     * Fallback for a clear or near-black cavity sample. Coloured glow texels keep
-     * their own UV: the carving is the texture's red, orange, yellow, and cream.
-     */
-    private static final float FLAME_U = 72.5f / FRAME;
-    private static final float FLAME_V = 22.5f / FRAME;
 
     /**
-     * Eyes, nose, and mouth on the face plane. Each glow texel is drawn once, full bright.
-     * A hole between candle cubes is filled with the nearest flame texel, so the carving
-     * is closed and the dark inner face never shows through. Nothing else is drawn there.
+     * 0 is a shell texel. 1 is an orange or cream core, green at least 64: the small flame inside
+     * the eyes and the mouth. 2 is any other opaque glow texel, the dark-red recess. -1 is a clear
+     * hole. The cut stays on that texel's own UV.
      */
-    private static void emitFlames(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame) {
-        float anchorX = Float.MAX_VALUE;
-        float anchorY = Float.MAX_VALUE;
-        float minX = Float.MAX_VALUE;
-        float minY = Float.MAX_VALUE;
-        float maxX = -Float.MAX_VALUE;
-        float maxY = -Float.MAX_VALUE;
-        boolean any = false;
-        for (Cube cube : loaded.cubes) {
-            boolean candle = cube.z0 <= -6.05f;
-            boolean slab = cube.z0 > -6.05f && cube.z0 <= -5.5f;
-            if (!candle && !slab) {
-                continue;
-            }
-            if (candle) {
-                any = true;
-                anchorX = Math.min(anchorX, cube.x0);
-                anchorY = Math.min(anchorY, cube.y0);
-            }
-            minX = Math.min(minX, cube.x0);
-            minY = Math.min(minY, cube.y0);
-            maxX = Math.max(maxX, cube.x1);
-            maxY = Math.max(maxY, cube.y1);
-        }
-        if (!any) {
-            return;
-        }
-        int ix0 = (int) Math.floor((minX - anchorX) / TEXEL) - 1;
-        int iy0 = (int) Math.floor((minY - anchorY) / TEXEL) - 1;
-        int ix1 = (int) Math.ceil((maxX - anchorX) / TEXEL) + 1;
-        int iy1 = (int) Math.ceil((maxY - anchorY) / TEXEL) + 1;
-        int nx = ix1 - ix0;
-        int ny = iy1 - iy0;
-        if (nx <= 0 || ny <= 0 || nx > 64 || ny > 64) {
-            return;
-        }
-        // 0 empty, 1 rind, 2 candle texel, 3 gap closed with the nearest flame texel.
-        byte[] kind = new byte[nx * ny];
-        for (int iy = iy0; iy < iy1; iy++) {
-            float cy = anchorY + (iy + 0.5f) * TEXEL;
-            for (int ix = ix0; ix < ix1; ix++) {
-                float cx = anchorX + (ix + 0.5f) * TEXEL;
-                int at = (iy - iy0) * nx + (ix - ix0);
-                if (frontCovers(loaded, cx, cy)) {
-                    kind[at] = 1;
-                } else if (candleUvAt(loaded, cx, cy) != null) {
-                    kind[at] = 2;
+    private static int carveClass(Model loaded, int frame, float su, float sv) {
+        SkinImages.Pixels glow = loaded.glowPixels;
+        if (glow != null) {
+            int x = Math.min(glow.width() - 1, Math.max(0, (int) Math.floor(su)));
+            int y = Math.min(glow.height() - 1, Math.max(0, Math.floorMod(frame, FRAMES) * (int) FRAME + (int) Math.floor(sv)));
+            int argb = glow.argb()[y * glow.width() + x];
+            int a = (argb >>> 24) & 255;
+            int r = (argb >> 16) & 255;
+            int g = (argb >> 8) & 255;
+            int b = argb & 255;
+            if (a > 10) {
+                if (g >= 64 && r > b) {
+                    return 1;
                 }
+                return 2;
             }
         }
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (int iy = iy0; iy < iy1; iy++) {
-                for (int ix = ix0; ix < ix1; ix++) {
-                    int at = (iy - iy0) * nx + (ix - ix0);
-                    if (kind[at] != 0) {
-                        continue;
-                    }
-                    int west = neighbor(kind, nx, ny, ix, iy, ix0, iy0, -1, 0);
-                    int east = neighbor(kind, nx, ny, ix, iy, ix0, iy0, 1, 0);
-                    int down = neighbor(kind, nx, ny, ix, iy, ix0, iy0, 0, -1);
-                    int up = neighbor(kind, nx, ny, ix, iy, ix0, iy0, 0, 1);
-                    boolean across = (solid(west) && solid(east) && (flame(west) || flame(east)))
-                            || (solid(down) && solid(up) && (flame(down) || flame(up)));
-                    int flames = (flame(west) ? 1 : 0) + (flame(east) ? 1 : 0) + (flame(down) ? 1 : 0) + (flame(up) ? 1 : 0);
-                    if (across || flames >= 2) {
-                        kind[at] = 3;
-                        changed = true;
-                    }
-                }
-            }
-        }
-        // Shell cells stay shell. The plane covers candle texels and the gaps between
-        // them, not the orange rind around the carving.
-        Vector3f normal = new Vector3f(0f, 0f, -1f);
-        normals.transform(normal);
-        if (normal.lengthSquared() > 0.0001f) {
-            normal.normalize();
-        }
-        for (int iy = iy0; iy < iy1; iy++) {
-            float y0 = anchorY + iy * TEXEL;
-            float y1 = y0 + TEXEL;
-            for (int ix = ix0; ix < ix1; ix++) {
-                int at = (iy - iy0) * nx + (ix - ix0);
-                if (kind[at] != 2 && kind[at] != 3) {
-                    continue;
-                }
-                float x0 = anchorX + ix * TEXEL;
-                float x1 = x0 + TEXEL;
-                float cx = (x0 + x1) * 0.5f;
-                float cy = (y0 + y1) * 0.5f;
-                Uv uv = kind[at] == 2 ? candleUvAt(loaded, cx, cy) : nearestCandleUv(loaded, cx, cy);
-                if (uv == null || (loaded.anyGlow && !uv.glow)) {
-                    continue;
-                }
-                float u = (uv.u1 + uv.u2) * 0.5f / FRAME;
-                float v = (uv.v1 + uv.v2) * 0.5f / FRAME;
-                float[] flame = flameUv(loaded, frame, u, v);
-                u = flame[0];
-                v = flame[1];
-                emit(consumer, view, light, normal, 0f, 0f, 0f, -1f, candleAlpha, u, v, u, v, FLAME_OVERLAP, 0f,
-                        x0, y1, FLAME_Z, x1, y1, FLAME_Z, x1, y0, FLAME_Z, x0, y0, FLAME_Z);
-            }
-        }
-    }
-
-    private static int neighbor(byte[] kind, int nx, int ny, int ix, int iy, int ix0, int iy0, int dx, int dy) {
-        int x = ix + dx - ix0;
-        int y = iy + dy - iy0;
-        if (x < 0 || y < 0 || x >= nx || y >= ny) {
+        SkinImages.Pixels shellPixels = loaded.shellPixels;
+        if (shellPixels == null) {
             return 0;
         }
-        return kind[y * nx + x];
-    }
-
-    private static boolean solid(int kind) {
-        return kind == 1 || kind == 2 || kind == 3;
-    }
-
-    private static boolean flame(int kind) {
-        return kind == 2 || kind == 3;
-    }
-
-    /** Cavity colours on the shell. The main rind is green 50 and up, so it is not a hole. */
-    private static boolean shellHole(Model loaded, float x, float y) {
-        int argb = shellArgb(loaded, x, y, loaded.shellPixels);
-        if (argb == Integer.MIN_VALUE) {
-            return false;
+        int sx = Math.min(shellPixels.width() - 1, Math.max(0, (int) Math.floor(su)));
+        int sy = Math.min((int) FRAME - 1, Math.max(0, (int) Math.floor(sv)));
+        int shell = shellPixels.argb()[sy * shellPixels.width() + sx];
+        if (((shell >>> 24) & 255) < 10) {
+            return -1;
         }
-        int a = (argb >>> 24) & 255;
-        int r = (argb >> 16) & 255;
-        int g = (argb >> 8) & 255;
-        int b = argb & 255;
-        return a < 10 || (r < 100 && g < 45 && b < 30);
+        return 0;
     }
 
     /**
-     * True when the front shell texel at this point samples an opaque glow texel.
-     * That texel is part of the carving, even when the candle cubes stop short of it.
-     */
-    private static boolean shellGlowOpaque(Model loaded, float x, float y) {
-        SkinImages.Pixels pixels = loaded.glowPixels;
-        if (pixels == null) {
-            return false;
-        }
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 <= -6.05f || cube.z0 > -5.5f) {
-                continue;
-            }
-            if (x < cube.x0 || x > cube.x1 || y < cube.y0 || y > cube.y1) {
-                continue;
-            }
-            Uv uv = cube.uv("north");
-            if (uv == null || cube.x1 <= cube.x0 || cube.y1 <= cube.y0) {
-                return false;
-            }
-            // Same corner mapping as the north face in emitTexels: u grows with x, v grows downward.
-            float u = (x - cube.x0) / (cube.x1 - cube.x0);
-            float v = (cube.y1 - y) / (cube.y1 - cube.y0);
-            float su = uv.u1 + u * (uv.u2 - uv.u1);
-            float sv = uv.v1 + v * (uv.v2 - uv.v1);
-            int argb = sample(pixels, su, sv);
-            return argb != 0 && ((argb >>> 24) & 255) > 10;
-        }
-        return false;
-    }
-
-    /** North-face texel of the front shell at this point, or {@link Integer#MIN_VALUE} when nothing covers it. */
-    private static int shellArgb(Model loaded, float x, float y, SkinImages.Pixels pixels) {
-        if (pixels == null) {
-            return Integer.MIN_VALUE;
-        }
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 <= -6.05f || cube.z0 > -5.5f) {
-                continue;
-            }
-            if (x < cube.x0 || x > cube.x1 || y < cube.y0 || y > cube.y1) {
-                continue;
-            }
-            Uv uv = cube.uv("north");
-            if (uv == null || cube.x1 <= cube.x0 || cube.y1 <= cube.y0) {
-                return Integer.MIN_VALUE;
-            }
-            float u = (x - cube.x0) / (cube.x1 - cube.x0);
-            float v = (cube.y1 - y) / (cube.y1 - cube.y0);
-            return sample(pixels, uv.u1 + u * (uv.u2 - uv.u1), uv.v1 + v * (uv.v2 - uv.v1));
-        }
-        return Integer.MIN_VALUE;
-    }
-
-    /** Opaque red, orange, yellow, or cream in this glow frame. Dark and clear texels are not the carving. */
-    private static boolean glowFlameSample(Model loaded, int frame, float su, float sv) {
-        SkinImages.Pixels pixels = loaded.glowPixels;
-        if (pixels == null) {
-            return false;
-        }
-        int x = Math.min(pixels.width() - 1, Math.max(0, (int) Math.floor(su)));
-        int y = Math.min(pixels.height() - 1, Math.max(0, Math.floorMod(frame, FRAMES) * (int) FRAME + (int) Math.floor(sv)));
-        int argb = pixels.argb()[y * pixels.width() + x];
-        int a = (argb >>> 24) & 255;
-        int r = (argb >> 16) & 255;
-        int g = (argb >> 8) & 255;
-        int b = argb & 255;
-        // Dark red (about 34–143) is most of the carving. Yellow and cream are the bright core.
-        return a > 10 && r > b && r > 24 && (r > g * 0.4f || g > 70);
-    }
-
-    /** Dark-red and clear texels are the cavity. The main rind is not. */
-    private static boolean holeSample(Model loaded, float su, float sv) {
-        if (loaded.shellPixels == null) {
-            return false;
-        }
-        int argb = sample(loaded.shellPixels, su, sv);
-        int a = (argb >>> 24) & 255;
-        int r = (argb >> 16) & 255;
-        int g = (argb >> 8) & 255;
-        int b = argb & 255;
-        return a < 10 || (r < 100 && g < 45 && b < 30);
-    }
-
-    private static int sample(SkinImages.Pixels pixels, float su, float sv) {
-        int tx = Math.min(pixels.width() - 1, Math.max(0, (int) Math.floor(su)));
-        int ty = Math.min((int) FRAME - 1, Math.max(0, (int) Math.floor(sv)));
-        return pixels.argb()[ty * pixels.width() + tx];
-    }
-
-    /** Front-shell cubes only. Deeper cavity faces are not the rind. */
-    private static boolean frontCovers(Model loaded, float x, float y) {
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 <= -6.05f || cube.z0 > -5.5f) {
-                continue;
-            }
-            if (x >= cube.x0 - 0.02f && x <= cube.x1 + 0.02f && y >= cube.y0 - 0.02f && y <= cube.y1 + 0.02f) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static Uv candleUvAt(Model loaded, float x, float y) {
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 > -6.05f) {
-                continue;
-            }
-            if (x >= cube.x0 - 0.02f && x <= cube.x1 + 0.02f && y >= cube.y0 - 0.02f && y <= cube.y1 + 0.02f) {
-                return cube.uv("north");
-            }
-        }
-        return null;
-    }
-
-    /** Clear and near-black samples are empty. Red, orange, yellow, and cream stay their own texel. */
-    private static float[] flameUv(Model loaded, int frame, float u, float v) {
-        SkinImages.Pixels pixels = loaded.glowPixels;
-        if (pixels == null) {
-            return new float[]{u, v};
-        }
-        int x = Math.min(pixels.width() - 1, Math.max(0, (int) Math.floor(u * FRAME)));
-        int row = Math.floorMod(frame, FRAMES) * (int) FRAME;
-        int y = Math.min(pixels.height() - 1, row + (int) Math.floor(v * FRAME));
-        int argb = pixels.argb()[y * pixels.width() + x];
-        int a = (argb >>> 24) & 255;
-        int r = (argb >> 16) & 255;
-        int g = (argb >> 8) & 255;
-        int b = argb & 255;
-        if (a < 10 || (r < 24 && g < 16 && b < 16)) {
-            return new float[]{FLAME_U, FLAME_V};
-        }
-        return new float[]{u, v};
-    }
-
-    private static Uv nearestCandleUv(Model loaded, float x, float y) {
-        Uv best = null;
-        float bestD = Float.MAX_VALUE;
-        for (Cube cube : loaded.cubes) {
-            if (cube.z0 > -6.05f) {
-                continue;
-            }
-            float cx = (cube.x0 + cube.x1) * 0.5f;
-            float cy = (cube.y0 + cube.y1) * 0.5f;
-            float d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
-            if (d < bestD) {
-                Uv uv = cube.uv("north");
-                if (uv != null) {
-                    bestD = d;
-                    best = uv;
-                }
-            }
-        }
-        return best;
-    }
-
-    /**
-     * Split a rind face on texel boundaries. A texel's step is its Euclidean distance, in
-     * texel-widths, to the nearest carving. Five rings span about three texels: the first is
-     * the candle frame minus 3, and each ring after that is one block-light level dimmer.
-     * Farther texels keep the world's light. The candle frame picks the top level, so the
-     * rings jump together when the flame steps. Every corner of a texel shares that one level.
+     * Split a face on texel boundaries. Each texel keeps its own UV. The shell uses the world's
+     * light. Carved texels use the glow strip's own colour. Yellow and cream cores are full bright.
      */
     private static void emitTexels(VertexConsumer consumer, Matrix4f view, int light, Model loaded, int frame,
-                                   Vector3f normal, float bias, float nx, float ny, float nz, int alpha, boolean lip, Uv uv,
+                                   Vector3f normal, float nx, float ny, float nz, int alpha, int kind, Uv uv,
                                    float x0, float y0, float z0, float x1, float y1, float z1,
                                    float x2, float y2, float z2, float x3, float y3, float z3) {
         float uSpan = uv.u2 - uv.u1;
@@ -556,7 +346,6 @@ public final class JackOLanternMask {
         if (ty1 <= ty0) {
             ty1 = ty0 + 1;
         }
-        int candle = loaded.frameLight[Math.floorMod(frame, loaded.frameLight.length)];
         for (int ty = ty0; ty < ty1; ty++) {
             float sv0 = Math.max(vMin, ty);
             float sv1 = Math.min(vMax, ty + 1f);
@@ -577,29 +366,22 @@ public final class JackOLanternMask {
                 float ub = (su1 - uv.u1) / uSpan;
                 float uLo = Math.min(ua, ub);
                 float uHi = Math.max(ua, ub);
-                float[] center = bilerp((uLo + uHi) * 0.5f, (vLo + vHi) * 0.5f,
-                        x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                // The full-bright pass is the carving only. Orange shell texels stay on the
-                // shell pass: their own texture, world light by day, the stepped halo at night.
-                boolean frontFace = nz < -0.5f;
-                boolean holeTexel = holeSample(loaded, tx + 0.5f, ty + 0.5f);
-                boolean glowFlame = glowFlameSample(loaded, frame, tx + 0.5f, ty + 0.5f);
-                boolean onLip = frontFace && (holeTexel || glowFlame);
-                if (lip != onLip) {
+                int cls = carveClass(loaded, frame, tx + 0.5f, ty + 0.5f);
+                if (kind == 0 ? cls != 0 : kind == 1 ? cls != 1 : cls != 2) {
                     continue;
                 }
-                int texelLight = ringLight(light, ringOf(loaded, center[0], center[1], center[2]), candle);
+                int texelLight = kind == 1 ? LightTexture.FULL_BRIGHT : light;
                 float[] p00 = bilerp(uLo, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p10 = bilerp(uHi, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p11 = bilerp(uHi, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p01 = bilerp(uLo, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                // A flame-coloured glow texel keeps its own colour. Only a dark cavity sample
-                // is pointed at one flame texel, and that quad does not spread onto the shell.
-                float tu = lip && !glowFlame ? FLAME_U : (tx + 0.5f) / FRAME;
-                float tv = lip && !glowFlame ? FLAME_V : (ty + 0.5f) / FRAME;
-                float overlap = !lip ? SHELL_OVERLAP : 0.02f;
-                float zNudge = lip ? 0.04f : 0f;
-                emit(consumer, view, texelLight, normal, bias, nx, ny, nz, alpha, tu, tv, tu, tv, overlap, zNudge,
+                // Entity textures with this mcmeta present one 80×80 frame. V stays inside that frame.
+                float tu = (tx + 0.5f) / FRAME;
+                float tv = (ty + 0.5f) / FRAME;
+                float overlap = kind == 0 ? SHELL_OVERLAP : 0.02f;
+                // The flame sits a hair in front of the red recess so the two do not fight for depth.
+                float bias = kind == 1 ? 0.08f : kind == 2 ? 0.04f : 0f;
+                emit(consumer, view, texelLight, normal, bias, nx, ny, nz, alpha, tu, tv, tu, tv, overlap, 0f,
                         p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],
                         p11[0], p11[1], p11[2], p01[0], p01[1], p01[2]);
             }
