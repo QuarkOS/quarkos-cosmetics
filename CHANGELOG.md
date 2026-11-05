@@ -2,11 +2,14 @@
 
 ## 1.0.0
 
-- Packed cosmetics are tapered pixel-art meshes with shaded 16×16 textures. Kite wings use the delivered GeckoLib geometry: folded at rest, and flapping while flying or sprinting.
-- One chick (`geometry.chick`) perches on the head or either shoulder. The wardrobe perch saves `chickPerch`. Other players see that choice as the equipment slot `hat`, `shoulder_left`, or `shoulder_right`.
-- Jack o' lantern mask equips in the hat slot. It is a GeckoLib armor model on the head bone, with a 24-frame candle. On 1.21.11 the rind and the candle are one mesh drawn into the main color target after the world, so the carvings stay lit on Fabric and Forge.
-- Packed wardrobe for hat, ears, left shoulder, right shoulder, back, and tail, with a live player preview.
-- Gallery browse, equip, publish, and report against `http://127.0.0.1:39221` (no `/v1` suffix).
-- Other players render from `GET /v1/equipment/{uuid}` and `GET /v1/cosmetics/{id}`.
-- Category toggles, per-item hide, hide-others, and a 64×64 second-skin shell. Settings persist without an access token.
-- Fabric and Forge for 1.21.1 and 1.21.11. The 1.21.11 wardrobe preview clears the scissor stack through the public getter on Forge. The two Forge versions sync shared sources in order, so one Gradle run can compile both.
+Client-only cosmetics for Minecraft Java 1.21.1 and 1.21.11, on Fabric and Forge. v1 packs five head cosmetics. Emilio approved the jack-o'-lantern night rim and the daylight body shade.
+
+- Chick. Hat perch only.
+- Jack-o'-lantern mask. The handoff png, mcmeta, geo, and animation bytes are unchanged. Carved depth, dark-red recesses, a cream mouth core, and an orange shell. A short warm spill flickers on the shell immediately around the eyes and mouth. By day the shell takes the same cardinal shade as the player, so it sits with the hands instead of washing out.
+- Scarecrow straw hat. Static head, copied from the Blockbench handoff.
+- Candle skull crown. The candle bones play `animation.candle_skull_crown.flicker`, and the glowmask lights the flames.
+- Ghost buddy. Drawn at 0.75 scale and shifted `(2.5, -6, -3)` in model space so it floats beside the head, above the shoulder. The bbmodel and textures are the handoff bytes.
+
+Lantern cap, paper boat, crescent circlet, fox tips, moth tufts, and ribbon bows are not in this catalog. Body cosmetics and wings are not equipped or listed. Nothing in this build is uploaded to Modrinth or CurseForge.
+
+Dependencies: GeckoLib 4.9.3 on 1.21.1 and 5.4.5 on 1.21.11. License: MIT.
