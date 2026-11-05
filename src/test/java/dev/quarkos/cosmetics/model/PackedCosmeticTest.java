@@ -28,6 +28,8 @@ class PackedCosmeticTest {
             String modelPath = item.path("model").asText();
             String texturePath = item.path("texture").asText();
             String marker = item.path("marker").asText();
+            String slot = item.path("slot").asText();
+            assertTrue(slot.equals("hat") || slot.equals("ears"), item.path("id").asText());
             if ("quarkos:jack_o_lantern_mask".equals(item.path("id").asText())) {
                 assertArmorMask(modelPath, texturePath);
                 continue;
@@ -80,7 +82,7 @@ class PackedCosmeticTest {
                 }
             }
         }
-        assertEquals(18, count);
+        assertEquals(8, count);
     }
 
     /** GeckoLib armor geo, one head bone, 24-frame strip. The png bytes are the handoff, not a 16×16 swatch. */

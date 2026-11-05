@@ -31,7 +31,7 @@ public final class ClientSettings {
     public final Map<Slot, String> equipped = new EnumMap<>(Slot.class);
     public final Map<Slot, Boolean> categoryOn = new EnumMap<>(Slot.class);
     public final Set<String> disabled = new LinkedHashSet<>();
-    /** hat, shoulder_left, or shoulder_right. The equipped slot is what other players see. */
+    /** v1 perch. The chick stays on the hat. */
     public String chickPerch = Slot.HAT.wire;
     public final Map<Slot, String> chickGallery = new EnumMap<>(Slot.class);
 
@@ -40,7 +40,6 @@ public final class ClientSettings {
             categoryOn.put(slot, true);
             equipped.put(slot, "");
         }
-        equipped.put(Slot.BACK, "quarkos:kite_wings");
     }
 
     public static ClientSettings get() {
@@ -79,13 +78,12 @@ public final class ClientSettings {
         settings.uuid = properties.getProperty("uuid", "");
         settings.playerName = properties.getProperty("playerName", "");
         for (Slot slot : Slot.values()) {
-            settings.equipped.put(slot, properties.getProperty("equipped." + slot.wire, slot == Slot.BACK ? "quarkos:kite_wings" : ""));
+            String equippedId = properties.getProperty("equipped." + slot.wire, "");
+            // Body cosmetics stay in the codebase. v1 does not equip them.
+            settings.equipped.put(slot, slot.wornOnHead() ? equippedId : "");
             settings.categoryOn.put(slot, Boolean.parseBoolean(properties.getProperty("category." + slot.wire, "true")));
         }
-        settings.chickPerch = properties.getProperty("chickPerch", Slot.HAT.wire);
-        if (Slot.parse(settings.chickPerch).filter(slot -> slot == Slot.HAT || slot == Slot.SHOULDER_LEFT || slot == Slot.SHOULDER_RIGHT).isEmpty()) {
-            settings.chickPerch = Slot.HAT.wire;
-        }
+        settings.chickPerch = Slot.HAT.wire;
         for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
             String published = properties.getProperty("chickGallery." + slot.wire, "");
             if (!published.isBlank()) {
@@ -194,6 +192,12 @@ public final class ClientSettings {
     }
 
     public void equip(Slot slot, String id) {
+        if (slot == null || !slot.wornOnHead()) {
+            if (slot != null) {
+                equipped.put(slot, "");
+            }
+            return;
+        }
         equipped.put(slot, id == null ? "" : id);
     }
 
@@ -201,9 +205,9 @@ public final class ClientSettings {
         return id != null && chickGallery.containsValue(id);
     }
 
-    /** Moves the packed chick onto the perch slot and remembers the choice. */
+    /** v1 keeps the hat perch. Shoulder perches are not equipped. */
     public void setChickPerch(Slot perch) {
-        if (perch != Slot.HAT && perch != Slot.SHOULDER_LEFT && perch != Slot.SHOULDER_RIGHT) {
+        if (perch != Slot.HAT) {
             return;
         }
         chickPerch = perch.wire;

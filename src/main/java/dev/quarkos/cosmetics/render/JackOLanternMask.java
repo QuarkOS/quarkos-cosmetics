@@ -489,6 +489,19 @@ public final class JackOLanternMask {
         return Integer.MIN_VALUE;
     }
 
+    /** Dark-red and clear texels are the cavity. The main rind is not. */
+    private static boolean holeSample(Model loaded, float su, float sv) {
+        if (loaded.shellPixels == null) {
+            return false;
+        }
+        int argb = sample(loaded.shellPixels, su, sv);
+        int a = (argb >>> 24) & 255;
+        int r = (argb >> 16) & 255;
+        int g = (argb >> 8) & 255;
+        int b = argb & 255;
+        return a < 10 || (r < 100 && g < 45 && b < 30);
+    }
+
     private static int sample(SkinImages.Pixels pixels, float su, float sv) {
         int tx = Math.min(pixels.width() - 1, Math.max(0, (int) Math.floor(su)));
         int ty = Math.min((int) FRAME - 1, Math.max(0, (int) Math.floor(sv)));
@@ -616,8 +629,16 @@ public final class JackOLanternMask {
                         x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 // A texel on the carving, or on the wall of the hole, is flame. The shell pass
                 // leaves it out and the candle pass draws it, so a 3/4 view has no dark lip.
-                boolean onLip = openingDistance(loaded, center[0], center[1], center[2]) <= TEXEL * 0.7f
-                        || (nz < -0.5f && bestXY(loaded, center[0], center[1]) <= TEXEL * 1.05f);
+                // Side, top, and bottom faces of the front shell sit beside the candle boxes,
+                // so the flat front test misses the wall you see at an angle.
+                float along = bestXY(loaded, center[0], center[1]);
+                // Front lip is one texel, so the rind stays pumpkin. The angled wall is a
+                // slightly wider band and does not use the front overlap, or it paints the face cream.
+                boolean holeTexel = holeSample(loaded, tx + 0.5f, ty + 0.5f);
+                boolean onLip = holeTexel
+                        || openingDistance(loaded, center[0], center[1], center[2]) <= TEXEL * 0.7f
+                        || (nz < -0.5f && along <= TEXEL * 1.05f)
+                        || (nz >= -0.5f && along <= TEXEL * 1.8f);
                 if (lip != onLip) {
                     continue;
                 }
@@ -630,7 +651,7 @@ public final class JackOLanternMask {
                 float tu = lip ? FLAME_U : (tx + 0.5f) / FRAME;
                 float tv = lip ? FLAME_V : (ty + 0.5f) / FRAME;
                 // A small overlap covers the dark seam between flame quads without painting the rind.
-                float overlap = lip ? 0.16f : SHELL_OVERLAP;
+                float overlap = !lip ? SHELL_OVERLAP : nz < -0.5f ? 0.16f : 0.02f;
                 float zNudge = lip && nz < -0.5f ? 0.15f : 0f;
                 emit(consumer, view, texelLight, normal, bias, nx, ny, nz, alpha, tu, tv, tu, tv, overlap, zNudge,
                         p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],

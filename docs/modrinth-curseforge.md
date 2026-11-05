@@ -1,6 +1,6 @@
 # Quarkos Cosmetics
 
-Free client cosmetics for Minecraft Java. Hats, ears, shoulders, backs, and tails, plus an optional gallery for cosmetics you publish yourself.
+Free client cosmetics for Minecraft Java. v1 packs hats and ears, plus an optional gallery for cosmetics you publish yourself.
 
 Local equip works offline. The gallery talks only to this project's server. The mod stores your UUID and does not store your Minecraft access token.
 
@@ -14,7 +14,7 @@ Local equip works offline. The gallery talks only to this project's server. The 
 ## Optional
 
 - Mod Menu (Fabric only) opens the wardrobe. Forge uses the `K` key and the pause-screen Cosmetics button.
-- Ears. If it is installed, equipped ear, tail, and wing slots ask Ears to hide its matching features. Ears is not bundled.
+- Ears is not part of this v1 claim and is not bundled.
 - A gallery at `http://127.0.0.1:39221`, or another base URL set with `galleryUrl`, `COSMETICS_GALLERY_URL`, or `-Dcosmetics.galleryUrl`. No `/v1` suffix.
 
 ## Not required

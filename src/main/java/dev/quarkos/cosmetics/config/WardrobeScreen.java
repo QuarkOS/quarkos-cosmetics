@@ -56,7 +56,7 @@ public final class WardrobeScreen extends Screen {
         this.regions = WardrobeLayout.regions(this.width, this.height);
         ClientSettings settings = ClientSettings.get();
         if (!pickedSlot) {
-            for (Slot value : Slot.values()) {
+            for (Slot value : headSlots()) {
                 if (!settings.equippedId(value).isBlank()) {
                     slot = value;
                     break;
@@ -74,9 +74,9 @@ public final class WardrobeScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("text.quarkos_cosmetics.done"), button -> close())
                 .bounds(header.x() + header.w() - 70, header.y(), 70, 20).build());
 
-        int tabW = Math.max(36, (tabs.w() - 8) / Slot.values().length);
+        int tabW = Math.max(36, (tabs.w() - 8) / headSlots().length);
         int tabX = tabs.x();
-        for (Slot value : Slot.values()) {
+        for (Slot value : headSlots()) {
             Slot chosen = value;
             String label = value == slot ? "[" + shortName(value) + "]" : shortName(value);
             addRenderableWidget(Button.builder(Component.literal(label), button -> {
@@ -202,19 +202,8 @@ public final class WardrobeScreen extends Screen {
             save();
             rebuild();
         }).bounds(settingsRect.x() + 218, sy, 90, 18).build());
-        Slot perch = Slot.parse(settings.chickPerch).orElse(Slot.HAT);
-        String perchLabel = switch (perch) {
-            case SHOULDER_LEFT -> "Perch left";
-            case SHOULDER_RIGHT -> "Perch right";
-            default -> "Perch head";
-        };
-        addRenderableWidget(Button.builder(Component.literal(perchLabel), button -> {
-            Slot next = switch (Slot.parse(settings.chickPerch).orElse(Slot.HAT)) {
-                case SHOULDER_LEFT -> Slot.SHOULDER_RIGHT;
-                case SHOULDER_RIGHT -> Slot.HAT;
-                default -> Slot.SHOULDER_LEFT;
-            };
-            GalleryWork.syncChick(next);
+        addRenderableWidget(Button.builder(Component.literal("Perch head"), button -> {
+            GalleryWork.syncChick(Slot.HAT);
             rebuild();
         }).bounds(settingsRect.x() + 114, sy + 22, 150, 18).build());
         addRenderableWidget(Button.builder(Component.literal(itemHidden() ? "Item hidden" : "Item shown"), button -> {
@@ -423,6 +412,10 @@ public final class WardrobeScreen extends Screen {
         //?}
     }
     //?}
+
+    private static Slot[] headSlots() {
+        return new Slot[] {Slot.HAT, Slot.EARS};
+    }
 
     private static String trim(String value, int max) {
         if (value == null) {

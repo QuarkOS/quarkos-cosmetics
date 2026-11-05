@@ -36,7 +36,7 @@ That test calls `createChallenge` and `completeSession` (the stub answers hasJoi
 DISPLAY=:1 LIBGL_ALWAYS_SOFTWARE=1 JAVA_HOME=/tmp/jdk25 ./gradlew :1.21.11:runClient -Pharness=true
 ```
 
-Expect PNGs under the `shots` path, third person, HUD off, the whole player in frame: `kite-wings-front.png`, `kite-wings-back.png`, and the same front/back pair for `lantern-cap`, `fox-ears`, `ribbon-tail`, `ink-wren`, and `pebble-moth`, plus `two-client.png`. Marker pixels: lantern `FF3366`, fox ears `33DD88`, ink wren `3388FF`, pebble moth `FFCC22`, kite wings `CC44FF`, ribbon tail `22E0E0`. Do not treat a settings-only screenshot as the portrait set.
+v1 portraits are head cosmetics only. Expect `<id>-front.png`, `<id>-three-quarter.png`, and `<id>-side.png` for lantern_cap, paper_boat, crescent_circlet, jack_o_lantern_mask, fox_tips, moth_tufts, ribbon_bows, and chick, plus the jack-o'-lantern night set and `two-client.png`. Third person, HUD off, head to feet. Do not treat a settings-only screenshot as the portrait set.
 
 ## Launch log
 

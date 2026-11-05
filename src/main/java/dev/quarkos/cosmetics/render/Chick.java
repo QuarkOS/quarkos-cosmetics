@@ -82,7 +82,7 @@ public final class Chick {
     }
 
     public static boolean isPerch(Slot slot) {
-        return slot == Slot.HAT || slot == Slot.SHOULDER_LEFT || slot == Slot.SHOULDER_RIGHT;
+        return slot == Slot.HAT;
     }
 
     public static boolean draws(String id) {

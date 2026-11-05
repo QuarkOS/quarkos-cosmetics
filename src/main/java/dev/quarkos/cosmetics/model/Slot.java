@@ -17,6 +17,11 @@ public enum Slot {
         this.wire = wire;
     }
 
+    /** v1 equips hats and ears. Body slots stay in the enum for the saved code path. */
+    public boolean wornOnHead() {
+        return this == HAT || this == EARS;
+    }
+
     public static Optional<Slot> parse(String wire) {
         if (wire == null) {
             return Optional.empty();

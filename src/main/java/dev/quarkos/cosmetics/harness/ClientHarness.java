@@ -58,6 +58,34 @@ public final class ClientHarness {
     public static boolean afterGui;
     private static Path pendingGui;
     private static final List<Shot> SHOTS = List.of(
+            new Shot("lantern_cap-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
+            new Shot("lantern_cap-three-quarter", Slot.HAT, "quarkos:lantern_cap", true, false, 40f, false),
+            new Shot("lantern_cap-side", Slot.HAT, "quarkos:lantern_cap", true, false, 90f, false),
+            new Shot("paper_boat-front", Slot.HAT, "quarkos:paper_boat", true, false, 0f, false),
+            new Shot("paper_boat-three-quarter", Slot.HAT, "quarkos:paper_boat", true, false, 40f, false),
+            new Shot("paper_boat-side", Slot.HAT, "quarkos:paper_boat", true, false, 90f, false),
+            new Shot("crescent_circlet-front", Slot.HAT, "quarkos:crescent_circlet", true, false, 0f, false),
+            new Shot("crescent_circlet-three-quarter", Slot.HAT, "quarkos:crescent_circlet", true, false, 40f, false),
+            new Shot("crescent_circlet-side", Slot.HAT, "quarkos:crescent_circlet", true, false, 90f, false),
+            new Shot("jack_o_lantern_mask-front", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("jack_o_lantern_mask-three-quarter", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("jack_o_lantern_mask-side", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 90f, false),
+            new Shot("jack_o_lantern_mask-front-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("jack_o_lantern_mask-three-quarter-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("jack_o_lantern_mask-side-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 90f, false),
+            new Shot("jack_o_lantern_mask-front-night-zoom", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("fox_tips-front", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false),
+            new Shot("fox_tips-three-quarter", Slot.EARS, "quarkos:fox_tips", true, false, 40f, false),
+            new Shot("fox_tips-side", Slot.EARS, "quarkos:fox_tips", true, false, 90f, false),
+            new Shot("moth_tufts-front", Slot.EARS, "quarkos:moth_tufts", true, false, 0f, false),
+            new Shot("moth_tufts-three-quarter", Slot.EARS, "quarkos:moth_tufts", true, false, 40f, false),
+            new Shot("moth_tufts-side", Slot.EARS, "quarkos:moth_tufts", true, false, 90f, false),
+            new Shot("ribbon_bows-front", Slot.EARS, "quarkos:ribbon_bows", true, false, 0f, false),
+            new Shot("ribbon_bows-three-quarter", Slot.EARS, "quarkos:ribbon_bows", true, false, 40f, false),
+            new Shot("ribbon_bows-side", Slot.EARS, "quarkos:ribbon_bows", true, false, 90f, false),
+            new Shot("chick-front", Slot.HAT, Chick.ID, true, false, 0f, false),
+            new Shot("chick-three-quarter", Slot.HAT, Chick.ID, true, false, 40f, false),
+            new Shot("chick-side", Slot.HAT, Chick.ID, true, false, 90f, false),
             new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, false),
             new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
             new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, false, 72f, false),
@@ -310,7 +338,7 @@ public final class ClientHarness {
         if (ticks - settledAt < settleWait) {
             return;
         }
-        if (shot.name.startsWith("chick-") && !chickReady(client, shot)) {
+        if (shot.name.startsWith("chick-") && !headShowcase(shot.name) && !chickReady(client, shot)) {
             return;
         }
         if (shot.name.equals("chick-to-chest")) {
@@ -366,6 +394,8 @@ public final class ClientHarness {
             client.player.connection.sendCommand("time set 6000");
             client.player.connection.sendCommand("weather clear");
             client.player.connection.sendCommand("gamemode creative");
+            client.player.connection.sendCommand("difficulty peaceful");
+            client.player.connection.sendCommand("kill @e[type=!player]");
             client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
@@ -431,8 +461,90 @@ public final class ClientHarness {
         settings.save(client.gameDirectory.toPath());
     }
 
+    private static boolean headShowcase(String name) {
+        return name.startsWith("lantern_cap-")
+                || name.startsWith("paper_boat-")
+                || name.startsWith("crescent_circlet-")
+                || name.startsWith("jack_o_lantern_mask-")
+                || name.startsWith("fox_tips-")
+                || name.startsWith("moth_tufts-")
+                || name.startsWith("ribbon_bows-")
+                || name.equals("chick-front")
+                || name.equals("chick-three-quarter")
+                || name.equals("chick-side");
+    }
+
+    /** Full-body F5 framing. Night shots use the same camera; the zoom is the face close-up. */
+    private static void frameHead(Minecraft client, Shot shot) {
+        portraitLock = false;
+        bodyPose = BodyPose.STAND;
+        afterGui = false;
+        KiteWings.hold(null, null);
+        if (Chick.ID.equals(shot.id)) {
+            Chick.hold("sit", 0.9f);
+        } else {
+            Chick.hold(null, null);
+        }
+        client.player.setSprinting(false);
+        client.player.getAbilities().mayfly = true;
+        client.player.getAbilities().flying = false;
+        client.player.setShiftKeyDown(false);
+        client.player.setSwimming(false);
+        client.player.setNoGravity(false);
+        client.player.setPose(net.minecraft.world.entity.Pose.STANDING);
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.item.ItemStack.EMPTY);
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.item.ItemStack.EMPTY);
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.item.ItemStack.EMPTY);
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.item.ItemStack.EMPTY);
+        client.options.hideGui = true;
+        client.options.bobView().set(false);
+        ClientSettings.get().skinLayers = false;
+        boolean night = shot.name.contains("night");
+        boolean zoom = shot.name.contains("zoom");
+        boolean side = shot.name.contains("-side");
+        boolean three = shot.name.contains("three-quarter");
+        client.options.gamma().set(night ? 0.0 : 1.0);
+        var server = client.getSingleplayerServer();
+        if (server != null) {
+            server.overworld().setDayTime(night ? 18000L : 6000L);
+        }
+        if (client.player.tickCount % 10 == 0) {
+            client.player.connection.sendCommand("kill @e[type=!player]");
+        }
+        client.player.setYRot(180f);
+        client.player.setYHeadRot(180f);
+        client.player.yRotO = 180f;
+        client.player.yHeadRotO = 180f;
+        client.player.setYBodyRot(180f);
+        client.player.yBodyRotO = 180f;
+        client.player.setXRot(0f);
+        client.player.xRotO = 0f;
+        client.setCameraEntity(client.player);
+        if (zoom) {
+            // Whole pumpkin, about three times the full-body framing, nearest texels.
+            portraitLock = true;
+            client.options.fov().set(54);
+            client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+            lockX = 0.5;
+            lockY = 102.82;
+            lockZ = 0.5 - 1.9;
+            lockYaw = 0f;
+            lockPitch = 0f;
+            return;
+        }
+        portraitDistance = 2.55f;
+        portraitDrop = 0.42f;
+        portraitOrbit = three ? 40f : side ? 90f : 0f;
+        client.options.fov().set(54);
+        client.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
+    }
+
     private static void frame(Minecraft client, Shot shot) {
         portraitLock = false;
+        if (headShowcase(shot.name)) {
+            frameHead(client, shot);
+            return;
+        }
         boolean chick = shot.name.startsWith("chick-");
         boolean kite = shot.name.startsWith("kite-wings");
         boolean wide = kite || shot.spread || shot.film || shot.orbit != 0f;
@@ -1002,8 +1114,8 @@ public final class ClientHarness {
             chickPair(client);
             return;
         }
-        // Folded rest pose, so the other player's wings match the packed idle shot.
-        KiteWings.hold("idle", 0f);
+        portraitLock = false;
+        KiteWings.hold(null, null);
         Chick.hold(null, null);
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
@@ -1038,19 +1150,11 @@ public final class ClientHarness {
             }
             return;
         }
-        boolean front = pairShot == 1;
-        anchorGuest(client, front ? 0f : 180f, 0f, front);
-        if (ticks < (pairShot == 0 ? 50 : 30)) {
+        anchorGuest(client, 0f, 0f, true);
+        if (ticks < 50) {
             return;
         }
-        String name = pairShot == 0 ? "two-client" : "two-client-front";
-        shootWhenReady(client, name, () -> {
-            if (pairShot == 0) {
-                pairShot = 1;
-                ticks = 0;
-                shotQueued = false;
-                return;
-            }
+        shootWhenReady(client, "two-client", () -> {
             String only = System.getProperty("quarkos_cosmetics.only", "");
             if (!only.isBlank() && !only.contains("wardrobe")) {
                 state = State.STOP;
@@ -1155,7 +1259,7 @@ public final class ClientHarness {
         List<String> bodies = new ArrayList<>();
         List<Slot> slots = new ArrayList<>();
         try {
-            for (String packed : List.of("quarkos:lantern_cap", "quarkos:kite_wings")) {
+            for (String packed : List.of("quarkos:lantern_cap")) {
                 ModelLibrary.Resolved resolved = ModelLibrary.resolve(packed);
                 if (resolved == null || resolved.png() == null) {
                     LOGGER.error("packed cosmetic missing for gallery publish: {}", packed);
@@ -1179,6 +1283,9 @@ public final class ClientHarness {
                 GalleryClient.Challenge challenge = gallery.createChallenge();
                 GalleryClient.Session session = gallery.completeSession("Ada", challenge.serverId());
                 String key = ClientSettings.hyphenate(session.uuid());
+                for (Slot slot : Slot.values()) {
+                    gallery.equip(session.token(), slot, null);
+                }
                 for (int i = 0; i < bodies.size(); i++) {
                     GalleryClient.Listed listed = gallery.publish(session.token(), bodies.get(i));
                     gallery.equip(session.token(), slots.get(i), listed.id());

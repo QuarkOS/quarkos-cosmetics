@@ -208,7 +208,7 @@ public final class GalleryWork {
 
     /** Publishes the one chick into the perch slot when signed in. The slot is the sync field. */
     public static void syncChick(Slot perch) {
-        if (perch != Slot.HAT && perch != Slot.SHOULDER_LEFT && perch != Slot.SHOULDER_RIGHT) {
+        if (perch != Slot.HAT) {
             return;
         }
         ClientSettings settings = ClientSettings.get();
