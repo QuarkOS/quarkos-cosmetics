@@ -101,8 +101,18 @@ public final class BlockbenchCosmetic {
         }
     }
 
+    /**
+     * The ghost bone is authored at {@code [8, 32, 0]}, so the cubes sit on top of the
+     * hair. This shifts that whole pose down to head height and forward of the shoulder.
+     * The bbmodel bytes stay as handed over.
+     */
+    private static final float[] GHOST_SHIFT = {0f, -10f, -5f};
+
     private static void paint(VertexConsumer consumer, Matrix4f view, int light, int alpha, Model model, float time, float inflate) {
         Matrix4f posed = new Matrix4f();
+        if (model.shift != null) {
+            posed.translate(model.shift[0], model.shift[1], model.shift[2]);
+        }
         walk(consumer, view, light, alpha, model, model.root, posed, time, inflate);
     }
 
@@ -148,9 +158,10 @@ public final class BlockbenchCosmetic {
         final float height;
         final float length;
         final Bone root;
+        final float[] shift;
 
         Model(Identifier texture, Identifier glow, boolean translucent, boolean onBody,
-              float width, float height, float length, Bone root) {
+              float width, float height, float length, Bone root, float[] shift) {
             this.texture = texture;
             this.glow = glow;
             this.translucent = translucent;
@@ -159,6 +170,7 @@ public final class BlockbenchCosmetic {
             this.height = height;
             this.length = length;
             this.root = root;
+            this.shift = shift;
         }
 
         static Model parse(Spec spec) {
@@ -200,7 +212,8 @@ public final class BlockbenchCosmetic {
             }
             Identifier texture = Identifier.fromNamespaceAndPath("quarkos_cosmetics", spec.texture);
             Identifier glow = spec.glow == null ? null : Identifier.fromNamespaceAndPath("quarkos_cosmetics", spec.glow);
-            return new Model(texture, glow, spec.translucent, onBody, width, height, length, bone);
+            float[] shift = "quarkos:ghost_buddy".equals(spec.id) ? GHOST_SHIFT : null;
+            return new Model(texture, glow, spec.translucent, onBody, width, height, length, bone, shift);
         }
     }
 
