@@ -1,31 +1,13 @@
 {
   "items": [
     {
-      "id": "quarkos:lantern_cap",
-      "name": "Lantern cap",
-      "description": "A folded paper lantern for the top of the head.",
+      "id": "quarkos:chick",
+      "name": "Chick",
+      "description": "A chick that sits on your head.",
       "slot": "hat",
-      "texture": "textures/cosmetics/lantern_cap.png",
-      "model": "cosmetics/lantern_cap.json",
-      "marker": "FF3366"
-    },
-    {
-      "id": "quarkos:paper_boat",
-      "name": "Paper boat",
-      "description": "A wide paper boat that sits on the hair.",
-      "slot": "hat",
-      "texture": "textures/cosmetics/paper_boat.png",
-      "model": "cosmetics/paper_boat.json",
-      "marker": "FFB15A"
-    },
-    {
-      "id": "quarkos:crescent_circlet",
-      "name": "Crescent circlet",
-      "description": "A thin brass crescent, open at the front.",
-      "slot": "hat",
-      "texture": "textures/cosmetics/crescent_circlet.png",
-      "model": "cosmetics/crescent_circlet.json",
-      "marker": "F4E2B0"
+      "texture": "textures/cosmetics/chick.png",
+      "model": "cosmetics/chick.json",
+      "marker": "F6C945"
     },
     {
       "id": "quarkos:jack_o_lantern_mask",
@@ -37,40 +19,31 @@
       "marker": "EAA269"
     },
     {
-      "id": "quarkos:fox_tips",
-      "name": "Fox tips",
-      "description": "Short russet tips, not a copy of any ears mod.",
-      "slot": "ears",
-      "texture": "textures/cosmetics/fox_tips.png",
-      "model": "cosmetics/fox_tips.json",
-      "marker": "33DD88"
-    },
-    {
-      "id": "quarkos:moth_tufts",
-      "name": "Moth tufts",
-      "description": "Soft tufts that sit above the temples.",
-      "slot": "ears",
-      "texture": "textures/cosmetics/moth_tufts.png",
-      "model": "cosmetics/moth_tufts.json",
-      "marker": "7DDFB0"
-    },
-    {
-      "id": "quarkos:ribbon_bows",
-      "name": "Ribbon bows",
-      "description": "Two paper bows tied at the sides of the head.",
-      "slot": "ears",
-      "texture": "textures/cosmetics/ribbon_bows.png",
-      "model": "cosmetics/ribbon_bows.json",
-      "marker": "F2A3C7"
-    },
-    {
-      "id": "quarkos:chick",
-      "name": "Chick",
-      "description": "A chick that sits on your head.",
+      "id": "quarkos:scarecrow_straw_hat",
+      "name": "Scarecrow straw hat",
+      "description": "A straw hat with a floppy brim.",
       "slot": "hat",
-      "texture": "textures/cosmetics/chick.png",
-      "model": "cosmetics/chick.json",
-      "marker": "F6C945"
+      "texture": "textures/cosmetics/scarecrow_straw_hat.png",
+      "model": "cosmetics/scarecrow_straw_hat.bbmodel",
+      "marker": "B98E36"
+    },
+    {
+      "id": "quarkos:candle_skull_crown",
+      "name": "Candle skull crown",
+      "description": "A bone crown with three candles that flicker.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/candle_skull_crown.png",
+      "model": "cosmetics/candle_skull_crown.bbmodel",
+      "marker": "FF8F2C"
+    },
+    {
+      "id": "quarkos:ghost_buddy",
+      "name": "Ghost buddy",
+      "description": "A small translucent ghost that keeps beside you.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/ghost_buddy.png",
+      "model": "cosmetics/ghost_buddy.bbmodel",
+      "marker": "C9C3E6"
     }
   ]
 }

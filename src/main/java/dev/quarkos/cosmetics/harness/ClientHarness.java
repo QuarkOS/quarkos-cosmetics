@@ -86,6 +86,17 @@ public final class ClientHarness {
             new Shot("chick-front", Slot.HAT, Chick.ID, true, false, 0f, false),
             new Shot("chick-three-quarter", Slot.HAT, Chick.ID, true, false, 40f, false),
             new Shot("chick-side", Slot.HAT, Chick.ID, true, false, 90f, false),
+            new Shot("scarecrow_straw_hat-front", Slot.HAT, "quarkos:scarecrow_straw_hat", true, false, 0f, false),
+            new Shot("scarecrow_straw_hat-three-quarter", Slot.HAT, "quarkos:scarecrow_straw_hat", true, false, 40f, false),
+            new Shot("scarecrow_straw_hat-side", Slot.HAT, "quarkos:scarecrow_straw_hat", true, false, 90f, false),
+            new Shot("candle_skull_crown-front", Slot.HAT, "quarkos:candle_skull_crown", true, false, 0f, false),
+            new Shot("candle_skull_crown-three-quarter", Slot.HAT, "quarkos:candle_skull_crown", true, false, 40f, false),
+            new Shot("candle_skull_crown-side", Slot.HAT, "quarkos:candle_skull_crown", true, false, 90f, false),
+            new Shot("candle_skull_crown-front-night", Slot.HAT, "quarkos:candle_skull_crown", true, false, 0f, false),
+            new Shot("ghost_buddy-front", Slot.HAT, "quarkos:ghost_buddy", true, false, 0f, false),
+            new Shot("ghost_buddy-three-quarter", Slot.HAT, "quarkos:ghost_buddy", true, false, 40f, false),
+            new Shot("ghost_buddy-side", Slot.HAT, "quarkos:ghost_buddy", true, false, 90f, false),
+            new Shot("ghost_buddy-front-night", Slot.HAT, "quarkos:ghost_buddy", true, false, 0f, false),
             new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, false),
             new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
             new Shot("kite-wings-side", Slot.BACK, "quarkos:kite_wings", false, false, 72f, false),
@@ -479,7 +490,10 @@ public final class ClientHarness {
                 || name.startsWith("ribbon_bows-")
                 || name.equals("chick-front")
                 || name.equals("chick-three-quarter")
-                || name.equals("chick-side");
+                || name.equals("chick-side")
+                || name.startsWith("scarecrow_straw_hat-")
+                || name.startsWith("candle_skull_crown-")
+                || name.startsWith("ghost_buddy-");
     }
 
     /** Full-body F5 framing. Night shots use the same camera; the zoom is the face close-up. */

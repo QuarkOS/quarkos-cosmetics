@@ -76,6 +76,10 @@ public final class CosmeticDrawer {
                 JackOLanternMask.draw(pose, submitter, light, part, placement.offsetX(), placement.offsetY(), placement.offsetZ());
                 continue;
             }
+            if (BlockbenchCosmetic.draws(placement.id())) {
+                BlockbenchCosmetic.draw(pose, submitter, light, age, head, body, placement.id());
+                continue;
+            }
             ModelLibrary.Resolved resolved = ModelLibrary.resolve(placement.id());
             if (resolved == null) {
                 continue;

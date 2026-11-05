@@ -99,7 +99,8 @@ public final class ModelLibrary {
             String json = new String(resources.getResource(Identifier.fromNamespaceAndPath("quarkos_cosmetics", modelPath)).orElseThrow().open().readAllBytes());
             com.fasterxml.jackson.databind.JsonNode modelNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
             // Armor geo is drawn by JackOLanternMask. The gallery cube format cannot hold an 80×1920 strip.
-            CosmeticModel model = modelNode.has("minecraft:geometry")
+            // Armor geo and Blockbench files are drawn by their own renderers.
+            CosmeticModel model = modelNode.has("minecraft:geometry") || modelPath.endsWith(".bbmodel")
                     ? new CosmeticModel(List.of(), List.of())
                     : CosmeticModel.parse(json);
             byte[] png = resources.getResource(Identifier.fromNamespaceAndPath("quarkos_cosmetics", texturePath)).orElseThrow().open().readAllBytes();

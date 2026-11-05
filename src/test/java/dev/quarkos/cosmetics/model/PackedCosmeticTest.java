@@ -29,9 +29,19 @@ class PackedCosmeticTest {
             String texturePath = item.path("texture").asText();
             String marker = item.path("marker").asText();
             String slot = item.path("slot").asText();
-            assertTrue(slot.equals("hat") || slot.equals("ears"), item.path("id").asText());
-            if ("quarkos:jack_o_lantern_mask".equals(item.path("id").asText())) {
+            String id = item.path("id").asText();
+            assertEquals("hat", slot, id);
+            assertTrue(!id.equals("quarkos:lantern_cap") && !id.equals("quarkos:paper_boat")
+                    && !id.equals("quarkos:crescent_circlet") && !id.equals("quarkos:fox_tips")
+                    && !id.equals("quarkos:moth_tufts") && !id.equals("quarkos:ribbon_bows")
+                    && !id.equals("quarkos:devil_horns_headband") && !id.equals("quarkos:bat_wings")
+                    && !id.equals("quarkos:witch_hat"), id);
+            if ("quarkos:jack_o_lantern_mask".equals(id)) {
                 assertArmorMask(modelPath, texturePath);
+                continue;
+            }
+            if (id.equals("quarkos:scarecrow_straw_hat") || id.equals("quarkos:candle_skull_crown") || id.equals("quarkos:ghost_buddy")) {
+                assertBlockbench(id, modelPath, texturePath);
                 continue;
             }
             JsonNode model;
@@ -67,7 +77,6 @@ class PackedCosmeticTest {
             assertTrue(names.size() >= 4, modelPath);
             try (InputStream stream = resource(texturePath)) {
                 BufferedImage image = ImageIO.read(stream);
-                String id = item.path("id").asText();
                 if ("quarkos:kite_wings".equals(id)) {
                     assertEquals(64, image.getWidth(), texturePath);
                     assertEquals(32, image.getHeight(), texturePath);
@@ -82,7 +91,38 @@ class PackedCosmeticTest {
                 }
             }
         }
-        assertEquals(8, count);
+        assertEquals(5, count);
+    }
+
+    /** Copied Blockbench file. The texture is the handoff png, not a redraw. */
+    private static void assertBlockbench(String id, String modelPath, String texturePath) throws Exception {
+        assertTrue(modelPath.endsWith(".bbmodel"), modelPath);
+        JsonNode model;
+        try (InputStream stream = resource(modelPath)) {
+            model = JSON.readTree(stream);
+        }
+        assertEquals("geckolib_model", model.path("meta").path("model_format").asText(), modelPath);
+        assertTrue(model.path("elements").size() >= 6, modelPath);
+        try (InputStream stream = resource(texturePath)) {
+            BufferedImage image = ImageIO.read(stream);
+            assertEquals(64, image.getWidth(), texturePath);
+            assertEquals(64, image.getHeight(), texturePath);
+        }
+        if ("quarkos:candle_skull_crown".equals(id)) {
+            assertEquals("animation.candle_skull_crown.flicker", model.path("animations").path(0).path("name").asText());
+            try (InputStream stream = resource("textures/cosmetics/candle_skull_crown_glow.png")) {
+                BufferedImage image = ImageIO.read(stream);
+                assertEquals(64, image.getWidth());
+            }
+        }
+        if ("quarkos:ghost_buddy".equals(id)) {
+            assertEquals("animation.ghost_buddy.idle", model.path("animations").path(0).path("name").asText());
+            assertEquals("bipedBody", model.path("outliner").path(0).path("name").asText());
+            try (InputStream stream = resource("textures/cosmetics/ghost_buddy_glow.png")) {
+                BufferedImage image = ImageIO.read(stream);
+                assertEquals(64, image.getWidth());
+            }
+        }
     }
 
     /** GeckoLib armor geo, one head bone, 24-frame strip. The png bytes are the handoff, not a 16×16 swatch. */

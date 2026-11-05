@@ -222,8 +222,8 @@ public final class JackOLanternMask {
     /** In-plane only, so neighboring flame texels share an edge and do not stack in Z. */
     private static final float FLAME_OVERLAP = 0.05f;
     /**
-     * Glow texel (72, 22) is flame-coloured in every frame (minimum green 150).
-     * Dark-red and near-black samples are the cavity lip, not the flame.
+     * Fallback for a clear or near-black cavity sample. Coloured glow texels keep
+     * their own UV: the carving is the texture's red, orange, yellow, and cream.
      */
     private static final float FLAME_U = 72.5f / FRAME;
     private static final float FLAME_V = 22.5f / FRAME;
@@ -437,7 +437,8 @@ public final class JackOLanternMask {
         int r = (argb >> 16) & 255;
         int g = (argb >> 8) & 255;
         int b = argb & 255;
-        return a > 10 && r > b && (r > 140 || g > 70);
+        // Dark red (about 34–143) is most of the carving. Yellow and cream are the bright core.
+        return a > 10 && r > b && r > 24 && (r > g * 0.4f || g > 70);
     }
 
     /** Dark-red and clear texels are the cavity. The main rind is not. */
@@ -484,7 +485,7 @@ public final class JackOLanternMask {
         return null;
     }
 
-    /** Dark-red and near-black glow samples are the cavity lip. Point them at a flame texel. */
+    /** Clear and near-black samples are empty. Red, orange, yellow, and cream stay their own texel. */
     private static float[] flameUv(Model loaded, int frame, float u, float v) {
         SkinImages.Pixels pixels = loaded.glowPixels;
         if (pixels == null) {
@@ -498,7 +499,7 @@ public final class JackOLanternMask {
         int r = (argb >> 16) & 255;
         int g = (argb >> 8) & 255;
         int b = argb & 255;
-        if (a < 10 || (g < 89 && b < 64 && r < 180)) {
+        if (a < 10 || (r < 24 && g < 16 && b < 16)) {
             return new float[]{FLAME_U, FLAME_V};
         }
         return new float[]{u, v};
