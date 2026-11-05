@@ -891,22 +891,34 @@ public final class ClientHarness {
             chickPair(client);
             return;
         }
-        KiteWings.hold(null, null);
+        // Folded rest pose, so the other player's wings match the packed idle shot.
+        KiteWings.hold("idle", 0f);
         Chick.hold(null, null);
         client.player.setSprinting(false);
         client.player.getAbilities().flying = false;
         if (!pairStarted) {
             pairStarted = true;
+            for (Slot slot : Slot.values()) {
+                ClientSettings.get().equip(slot, "");
+            }
             publishAda(client);
         }
-        // Looser than the single-cosmetic portraits so the lantern finial stays inside the frame.
-        portraitDistance = 3.4f;
-        portraitDrop = 0.05f;
+        // Same studio as the portraits. The chick clips leave a bed at y=101; Ada was standing in it.
+        portraitDistance = 3.7f;
+        portraitDrop = 0.4f;
         portraitOrbit = 0f;
-        client.options.fov().set(62);
+        client.options.fov().set(54);
         client.options.hideGui = true;
-        if (ticks % 20 == 0) {
-            client.player.connection.sendCommand("tp @s 0.5 90 0.5 180 0");
+        if (ticks == 1 || ticks % 10 == 0) {
+            if (client.player.isSleeping()) {
+                client.player.stopSleeping();
+            }
+            client.player.connection.sendCommand("time set 6000");
+            client.player.connection.sendCommand("weather clear");
+            client.player.connection.sendCommand("gamemode creative");
+            client.player.connection.sendCommand("tp @s 0.5 70 24 180 0");
+            client.player.connection.sendCommand("fill -8 100 -8 8 100 8 white_concrete");
+            client.player.connection.sendCommand("fill -8 101 -8 8 108 8 air");
         }
         if (!pairReady) {
             if (pairFailed || ticks > 20 * 40) {
@@ -916,7 +928,7 @@ public final class ClientHarness {
             return;
         }
         boolean front = pairShot == 1;
-        anchorGuest(client, front ? 225f : 180f, 3f, front);
+        anchorGuest(client, front ? 0f : 180f, 0f, front);
         if (ticks < (pairShot == 0 ? 50 : 30)) {
             return;
         }
@@ -1082,6 +1094,8 @@ public final class ClientHarness {
             LOGGER.info("spawned gallery player Ada {}", pairKey);
         }
         guest.setPos(0.5, 101.0, 0.5);
+        guest.setPose(net.minecraft.world.entity.Pose.STANDING);
+        guest.setShiftKeyDown(false);
         guest.setYRot(yaw);
         guest.setXRot(pitch);
         guest.setYHeadRot(yaw);

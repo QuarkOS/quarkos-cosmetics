@@ -32,6 +32,27 @@ public final class CosmeticDrawer {
     private CosmeticDrawer() {
     }
 
+    /** Packed id, or a gallery copy of the same wings (the cube mesh is the folded rest pose). */
+    private static boolean kiteWings(String id) {
+        if ("quarkos:kite_wings".equals(id)) {
+            return true;
+        }
+        ModelLibrary.Resolved resolved = ModelLibrary.resolve(id);
+        if (resolved == null) {
+            return false;
+        }
+        if ("Kite wings".equals(resolved.name())) {
+            return true;
+        }
+        for (var element : resolved.model().elements) {
+            String name = element.name();
+            if (name != null && name.contains("wing_left_flap")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
                                  List<Worn.Placement> placed, boolean wingsFlap) {
@@ -42,7 +63,7 @@ public final class CosmeticDrawer {
                 case LEFT_ARM -> leftArm;
                 case RIGHT_ARM -> rightArm;
             };
-            if ("quarkos:kite_wings".equals(placement.id())) {
+            if (kiteWings(placement.id())) {
                 KiteWings.draw(pose, submitter, light, age, wingsFlap, part,
                         placement.offsetX(), placement.offsetY(), placement.offsetZ());
                 continue;

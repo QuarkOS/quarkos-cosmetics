@@ -145,6 +145,10 @@ public final class JackOLanternMask {
             com.mojang.blaze3d.systems.RenderSystem.outputDepthTextureOverride = previousDepth;
             GLOW_BYTES.clear();
             stack.popMatrix();
+            // Drop the pose after this frame. Otherwise the last mask keeps painting on later cosmetics.
+            heldView = null;
+            heldNormals = null;
+            heldModel = null;
         }
     }
 
