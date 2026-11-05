@@ -51,6 +51,8 @@ public final class JackOLanternMask {
     private static int maskAlpha = 255;
     private static DynamicTexture glowFrame;
     private static int uploadedFrame = -1;
+    /** Night spill on the rind around the carving. Off only for the comparison shot. */
+    private static boolean spill = true;
     /** One shell texel, in bedrock pixels. The candle cubes and the face grid share this step. */
     private static final float TEXEL = 0.9224f;
 
@@ -109,6 +111,11 @@ public final class JackOLanternMask {
     /** The shell and the candle share one custom-geometry map, so the shell can paint over the flame. Draw the flame after entities instead. */
     public static void useDeferredGlow() {
         deferred = true;
+    }
+
+    /** Comparison shots turn this off. The cores stay full bright either way. */
+    public static void setSpill(boolean on) {
+        spill = on;
     }
 
     public static void flush() {
@@ -370,11 +377,17 @@ public final class JackOLanternMask {
                 if (kind == 0 ? cls != 0 : kind == 1 ? cls != 1 : cls != 2) {
                     continue;
                 }
-                int texelLight = kind == 1 ? LightTexture.FULL_BRIGHT : light;
                 float[] p00 = bilerp(uLo, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p10 = bilerp(uHi, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p11 = bilerp(uHi, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p01 = bilerp(uLo, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
+                int texelLight = kind == 1 ? LightTexture.FULL_BRIGHT : light;
+                if (kind != 1 && spill) {
+                    float cx = (p00[0] + p10[0] + p11[0] + p01[0]) * 0.25f;
+                    float cy = (p00[1] + p10[1] + p11[1] + p01[1]) * 0.25f;
+                    float cz = (p00[2] + p10[2] + p11[2] + p01[2]) * 0.25f;
+                    texelLight = spillLight(loaded, frame, light, kind, cx, cy, cz);
+                }
                 // Entity textures with this mcmeta present one 80×80 frame. V stays inside that frame.
                 float tu = (tx + 0.5f) / FRAME;
                 float tv = (ty + 0.5f) / FRAME;
@@ -388,67 +401,55 @@ public final class JackOLanternMask {
         }
     }
 
-    /** How many flat rings sit around a carving, and how far the outer one reaches. */
-    private static final int RINGS = 5;
-    private static final float HALO = 3f;
+    /**
+     * Spill reaches this many texels past a carving quad. Three steps, so the rind is banded
+     * and the outer band is gone on the dim candle frame.
+     */
+    private static final float SPILL_RADIUS = 1.55f;
+    private static final int SPILL_STEPS = 3;
+    /** Closest shell step sits this many block-light levels under the candle. Cores stay full bright. */
+    private static final int SPILL_FIRST_DROP = 5;
+    private static final int SPILL_STEP_DROP = 2;
+
+    /**
+     * Block light for a shell or recess texel near the eyes and mouth. Day sky light is left alone.
+     * A recess is one step dimmer than the rind at the same distance. Outside the radius, the world wins.
+     */
+    private static int spillLight(Model loaded, int frame, int world, int kind, float x, float y, float z) {
+        // Sky light level stays 15 on the surface at night. The lightmap darkens that column.
+        // Block light is what still glows, so the spill is extra block light, not a sky test.
+        float dist = openingDistance(loaded, x, y, z);
+        if (dist == Float.MAX_VALUE) {
+            return world;
+        }
+        float texels = dist / TEXEL;
+        if (texels >= SPILL_RADIUS) {
+            return world;
+        }
+        int step = (int) Math.floor(texels / (SPILL_RADIUS / SPILL_STEPS));
+        if (step >= SPILL_STEPS) {
+            step = SPILL_STEPS - 1;
+        }
+        int candle = 0;
+        if (loaded.frameLight != null && loaded.frameLight.length > 0) {
+            candle = loaded.frameLight[Math.floorMod(frame, loaded.frameLight.length)];
+        }
+        int drop = SPILL_FIRST_DROP + step * SPILL_STEP_DROP + (kind == 2 ? 2 : 0);
+        int block = candle - drop;
+        if (block <= 0) {
+            return world;
+        }
+        if (block <= LightTexture.block(world)) {
+            return world;
+        }
+        return LightTexture.pack(block, LightTexture.sky(world));
+    }
+
     /**
      * In-plane only. Neighbors share a covered edge so a raster crack cannot show the dark
      * cavity. Z is not grown, so the margin is not a second surface at a new depth.
      */
     private static final float SHELL_OVERLAP = 0.05f;
-    /** Ring 1 is this many block-light levels under the candle. Each next ring drops one more. */
-    private static final int RING_DROP = 3;
-
-    /** 0 is inside a carving. 1..5 are the halo. Anything else keeps the world's light. */
-    private static int ringOf(Model loaded, float x, float y, float z) {
-        float[] openings = loaded.openings;
-        if (openings.length == 0) {
-            return RINGS + 1;
-        }
-        float best = Float.MAX_VALUE;
-        for (int i = 0; i < openings.length; i += 6) {
-            float dx = outside(x, openings[i], openings[i + 3]);
-            float dy = outside(y, openings[i + 1], openings[i + 4]);
-            float dz = outside(z, openings[i + 2], openings[i + 5]);
-            float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist < best) {
-                best = dist;
-            }
-        }
-        float texels = best / TEXEL;
-        // On the carving's own column, even a deep wall texel is part of the opening.
-        if (bestXY(loaded, x, y) < 0.05f || texels < 0.05f) {
-            return 0;
-        }
-        if (texels >= HALO) {
-            return RINGS + 1;
-        }
-        int ring = (int) Math.floor(texels / (HALO / RINGS)) + 1;
-        if (ring > RINGS) {
-            return RINGS;
-        }
-        return ring;
-    }
-
-    /** Block light for a ring, one level dimmer per step down from this candle frame. Sky light stays the world's. */
-    private static int ringLight(int world, int ring, int candle) {
-        // A texel inside the opening is uncovered shell. It still has to read as the carving.
-        if (ring == 0) {
-            ring = 1;
-        }
-        if (ring < 1 || ring > RINGS) {
-            return world;
-        }
-        int block = candle - (RING_DROP + ring - 1);
-        if (block < 0) {
-            block = 0;
-        }
-        int have = LightTexture.block(world);
-        if (block <= have) {
-            return world;
-        }
-        return LightTexture.pack(block, LightTexture.sky(world));
-    }
 
     /** Distance from a point to the nearest carving box. Zero means the point is inside one. */
     private static float openingDistance(Model loaded, float x, float y, float z) {
@@ -459,21 +460,6 @@ public final class JackOLanternMask {
             float dy = outside(y, openings[i + 1], openings[i + 4]);
             float dz = outside(z, openings[i + 2], openings[i + 5]);
             float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist < best) {
-                best = dist;
-            }
-        }
-        return best;
-    }
-
-    /** Euclidean distance in the front plane to the nearest carving rectangle. */
-    private static float bestXY(Model loaded, float x, float y) {
-        float[] openings = loaded.openings;
-        float best = Float.MAX_VALUE;
-        for (int i = 0; i < openings.length; i += 6) {
-            float dx = outside(x, openings[i], openings[i + 3]);
-            float dy = outside(y, openings[i + 1], openings[i + 4]);
-            float dist = (float) Math.sqrt(dx * dx + dy * dy);
             if (dist < best) {
                 best = dist;
             }

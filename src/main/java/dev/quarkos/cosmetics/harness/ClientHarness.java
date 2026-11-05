@@ -90,6 +90,11 @@ public final class ClientHarness {
             new Shot("gif-night-front-close-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
             new Shot("gif-night-three-quarter-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
             new Shot("gif-night-three-quarter-close-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("spill-night-three-quarter-on-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("spill-night-three-quarter-off-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("spill-night-three-quarter-on-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("spill-night-three-quarter-close-on-f12", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
+            new Shot("spill-night-three-quarter-close-on-f15", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 40f, false),
             new Shot("fox_tips-front", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false),
             new Shot("fox_tips-three-quarter", Slot.EARS, "quarkos:fox_tips", true, false, 40f, false),
             new Shot("fox_tips-side", Slot.EARS, "quarkos:fox_tips", true, false, 90f, false),
@@ -395,7 +400,7 @@ public final class ClientHarness {
                 return;
             }
         }
-        if (shot.name.startsWith("gif-") && !shotQueued) {
+        if ((shot.name.startsWith("gif-") || shot.name.startsWith("spill-")) && !shotQueued) {
             int candle = Math.floorMod(client.player.tickCount / 2, 24);
             int wanted = gifFrame(shot.name);
             if (candle != wanted) {
@@ -523,6 +528,7 @@ public final class ClientHarness {
                 || name.startsWith("crescent_circlet-")
                 || name.startsWith("jack_o_lantern_mask-")
                 || name.startsWith("gif-")
+                || name.startsWith("spill-")
                 || name.startsWith("fox_tips-")
                 || name.startsWith("moth_tufts-")
                 || name.startsWith("ribbon_bows-")
@@ -562,6 +568,7 @@ public final class ClientHarness {
         boolean night = shot.name.contains("night");
         boolean zoom = shot.name.contains("zoom");
         boolean close = shot.name.contains("close");
+        dev.quarkos.cosmetics.render.JackOLanternMask.setSpill(!shot.name.contains("-off-"));
         boolean side = shot.name.contains("-side");
         boolean three = shot.name.contains("three-quarter");
         client.options.gamma().set(night ? 0.0 : 1.0);
@@ -583,12 +590,14 @@ public final class ClientHarness {
         client.setCameraEntity(client.player);
         if (zoom || close) {
             // Close sits on the pumpkin, a little above, so the carved walls read the way the GIF does.
+            // Spill closes stay far enough that the stem and the chin both stay in frame.
             portraitLock = true;
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
-            float dist = close ? 1.55f : 1.9f;
-            client.options.fov().set(close ? 30 : 54);
-            lockY = close ? 103.05f : 102.82f;
-            lockPitch = close ? (three ? 18f : 8f) : 0f;
+            boolean spillClose = close && shot.name.startsWith("spill-");
+            float dist = spillClose ? 2.55f : close ? 1.55f : 1.9f;
+            client.options.fov().set(close ? (spillClose ? 40 : 30) : 54);
+            lockY = spillClose ? 102.55f : close ? 103.05f : 102.82f;
+            lockPitch = spillClose ? 4f : close ? (three ? 18f : 8f) : 0f;
             if (three) {
                 double rad = Math.toRadians(40);
                 lockX = 0.5 - Math.sin(rad) * dist;
