@@ -9,7 +9,8 @@
     "PauseScreenMixin",
     "ClientTickMixin",
     "CameraZoomMixin",
-    "InventoryPreviewAccess"
+    "InventoryPreviewAccess",
+    "HarnessPoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

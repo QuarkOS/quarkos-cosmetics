@@ -13,6 +13,7 @@ buildscript {
 data class ForgeNode(
     val forgeCoordinate: String,
     val forgeDep: String,
+    val geckolibVersion: String,
     val packMeta: String,
 )
 
@@ -21,12 +22,14 @@ val forgeNode = when (minecraftVersion) {
     "1.21.1" -> ForgeNode(
         "1.21.1-52.1.20",
         "52.1.20",
+        "4.9.3",
         """{"pack":{"description":"Quarkos Cosmetics","pack_format":34}}""" + "\n",
     )
     "1.21.11" -> ForgeNode(
         "1.21.11-61.2.4",
         "61.2.4",
-        """{"pack":{"description":"Quarkos Cosmetics","min_format":[75,0],"max_format":[75,0]}}""" + "\n",
+        "5.4.5",
+        """{"pack":{"description":"Quarkos Cosmetics","min_format":[94,0],"max_format":[94,1]}}""" + "\n",
     )
     else -> null
 }
@@ -121,8 +124,9 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             forRepository { maven("https://repo.unascribed.com") { name = "Unascribed" } }
             filter { includeGroup("com.unascribed") }
         }
-        maven("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/") {
-            content { includeGroup("software.bernie.geckolib") }
+        exclusiveContent {
+            forRepository { maven("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/") { name = "GeckoLib" } }
+            filter { includeGroup("software.bernie.geckolib") }
         }
     }
 
@@ -132,8 +136,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         add("implementation", "com.fasterxml.jackson.core:jackson-databind:2.18.3")
         add("implementation", "com.fasterxml.jackson.core:jackson-core:2.18.3")
         add("implementation", "com.fasterxml.jackson.core:jackson-annotations:2.18.3")
-        val geckoVersion = if (minecraftVersion == "1.21.1") "4.9.3" else "5.4.5"
-        add("implementation", "software.bernie.geckolib:geckolib-forge-$minecraftVersion:$geckoVersion")
+        add("implementation", "software.bernie.geckolib:geckolib-forge-$minecraftVersion:${node.geckolibVersion}")
     }
 
     tasks.named<Jar>("jar") {
@@ -162,7 +165,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             "version" to "1.0.0+$minecraftVersion",
             "forge_dep" to node.forgeDep,
             "minecraft" to minecraftVersion,
-            "geckolib" to if (minecraftVersion == "1.21.1") "4.9.3" else "5.4.5",
+            "geckolib" to node.geckolibVersion,
         )
         inputs.property("forge_dep", node.forgeDep)
         inputs.property("minecraft", minecraftVersion)
@@ -171,17 +174,36 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         }
         exclude("fabric.mod.json")
         exclude("pack.mcmeta")
-        from(forgePack)
+        val packText = node.packMeta
+        doLast {
+            val dest = destinationDir
+            dest.resolve("pack.mcmeta").writeText(packText)
+            // This Mixin build's Forge agent ignores mods.toml, so the config has to be on the manifest.
+            val manifest = dest.resolve("META-INF/MANIFEST.MF")
+            manifest.parentFile.mkdirs()
+            manifest.writeText("Manifest-Version: 1.0\r\nMixinConfigs: quarkos_cosmetics.mixins.json\r\n\r\n")
+        }
     }
 
     tasks.withType<JavaExec>().configureEach {
         val shots = providers.gradleProperty("shots").orNull
-            ?: "/cursor/stores/bc-1243ce51-36c9-58c7-8fa4-153844455530/media/fabric"
+            ?: "/cursor/stores/bc-1243ce51-36c9-58c7-8fa4-153844455530/media/forge"
         systemProperty("quarkos_cosmetics.shots", shots)
         systemProperty("quarkos_cosmetics.loader", "forge")
-        systemProperty("cosmetics.galleryUrl", "http://127.0.0.1:39221")
+        val gallery = providers.gradleProperty("galleryUrl").orNull ?: "http://127.0.0.1:39221"
+        systemProperty("cosmetics.galleryUrl", gallery)
         if (providers.gradleProperty("harness").orNull == "true") {
             systemProperty("quarkos_cosmetics.harness", "true")
+            val width = providers.gradleProperty("width").orNull ?: "960"
+            val height = providers.gradleProperty("height").orNull ?: "540"
+            args("--width", width, "--height", height)
+        }
+        val only = providers.gradleProperty("only").orNull
+        if (!only.isNullOrBlank()) {
+            systemProperty("quarkos_cosmetics.only", only)
+        }
+        if (providers.gradleProperty("launchCheck").orNull == "true") {
+            systemProperty("quarkos_cosmetics.launchCheck", "true")
         }
         val display = providers.gradleProperty("display").orNull
         val xauth = providers.gradleProperty("xauth").orNull
@@ -191,12 +213,57 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         if (!xauth.isNullOrBlank()) {
             environment("XAUTHORITY", xauth)
         }
+        environment("vblank_mode", "0")
+        environment("__GL_SYNC_TO_VBLANK", "0")
         if (name == "runClient") {
             doFirst {
-                val eula = workingDir.resolve("eula.txt")
-                eula.parentFile?.mkdirs()
-                eula.writeText("eula=true\n")
+                val dir = workingDir
+                dir.mkdirs()
+                dir.resolve("eula.txt").writeText("eula=true\n")
+                dir.resolve("client.properties").writeText("galleryUrl=$gallery\n")
+                if (providers.gradleProperty("harness").orNull == "true") {
+                    val options = dir.resolve("options.txt")
+                    val existing = if (options.exists()) options.readText() else ""
+                    options.writeText(seedHarnessOptions(existing))
+                }
             }
         }
     }
+}
+
+fun seedHarnessOptions(existing: String): String {
+    val wanted = linkedMapOf(
+        "pauseOnLostFocus" to "false",
+        "onboardAccessibility" to "false",
+        "menuBackgroundBlurriness" to "0",
+        "guiScale" to "2",
+        "maxFps" to "30",
+        "enableVsync" to "false",
+        "renderDistance" to "8",
+        "simulationDistance" to "6",
+        "fov" to "54",
+        "mipmapLevels" to "0",
+        "entityShadows" to "false",
+        "renderClouds" to "\"false\"",
+        "particles" to "2",
+        "graphicsPreset" to "\"fast\"",
+        "inactivityFpsLimit" to "\"minimized\"",
+        "fullscreen" to "false",
+        "narrator" to "0",
+    )
+    val lines = existing.lines().toMutableList()
+    val seen = mutableSetOf<String>()
+    for (i in lines.indices) {
+        val line = lines[i]
+        val key = line.substringBefore(':')
+        val value = wanted[key] ?: continue
+        lines[i] = "$key:$value"
+        seen += key
+    }
+    for ((key, value) in wanted) {
+        if (key !in seen) {
+            lines += "$key:$value"
+        }
+    }
+    return lines.filter { it.isNotBlank() }.joinToString("\n") + "\n"
 }

@@ -2,7 +2,7 @@
   "format": "cosmetics-model-1",
   "elements": [
     {
-      "name": "geometry_chick",
+      "name": "geometry.chick",
       "from": [
         6,
         14,
