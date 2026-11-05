@@ -53,6 +53,11 @@ public final class JackOLanternMask {
     private static int uploadedFrame = -1;
     /** Night spill on the rind around the carving. Off only for the comparison shot. */
     private static boolean spill = true;
+
+    /** Comparison shots turn this off. The cores stay full bright either way. */
+    public static void setSpill(boolean on) {
+        spill = on;
+    }
     /** One shell texel, in bedrock pixels. The candle cubes and the face grid share this step. */
     private static final float TEXEL = 0.9224f;
 
@@ -111,11 +116,6 @@ public final class JackOLanternMask {
     /** The shell and the candle share one custom-geometry map, so the shell can paint over the flame. Draw the flame after entities instead. */
     public static void useDeferredGlow() {
         deferred = true;
-    }
-
-    /** Comparison shots turn this off. The cores stay full bright either way. */
-    public static void setSpill(boolean on) {
-        spill = on;
     }
 
     public static void flush() {
