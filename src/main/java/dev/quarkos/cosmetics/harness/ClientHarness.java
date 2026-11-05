@@ -360,6 +360,14 @@ public final class ClientHarness {
                 return;
             }
         }
+        // The candle strip includes cream frames that wash the carving out.
+        // Night shots wait for a frame whose flame texel is orange, so the eyes stay readable.
+        if (shot.name.startsWith("jack_o_lantern_mask") && shot.name.contains("night") && !shotQueued) {
+            int candle = Math.floorMod(client.player.tickCount / 2, 24);
+            if (candle != 7 && candle != 12 && candle != 20) {
+                return;
+            }
+        }
         shootWhenReady(client, shot.name, () -> {
             shotIndex++;
             ticks = 0;

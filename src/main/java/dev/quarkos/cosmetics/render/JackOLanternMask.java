@@ -627,18 +627,21 @@ public final class JackOLanternMask {
                 float uHi = Math.max(ua, ub);
                 float[] center = bilerp((uLo + uHi) * 0.5f, (vLo + vHi) * 0.5f,
                         x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                // A texel on the carving, or on the wall of the hole, is flame. The shell pass
-                // leaves it out and the candle pass draws it, so a 3/4 view has no dark lip.
-                // Side, top, and bottom faces of the front shell sit beside the candle boxes,
-                // so the flat front test misses the wall you see at an angle.
+                // The front face carries the carving. A side, top, or back texel is flame
+                // only on the opening or on the front rim of that face. The rest of the
+                // side face is the shell, and painting it leaves flame bars in profile.
                 float along = bestXY(loaded, center[0], center[1]);
-                // Front lip is one texel, so the rind stays pumpkin. The angled wall is a
-                // slightly wider band and does not use the front overlap, or it paints the face cream.
+                boolean frontFace = nz < -0.5f;
                 boolean holeTexel = holeSample(loaded, tx + 0.5f, ty + 0.5f);
-                boolean onLip = holeTexel
+                // Keep |x| inside the carving. The outer side is past that, and painting it
+                // turns a side view into a flame slab.
+                boolean frontRim = center[2] < -4.5f && along <= TEXEL * 2.2f && Math.abs(center[0]) < 4.6f;
+                boolean innerWall = !frontFace && (along <= TEXEL * 0.55f || frontRim
+                        || (holeTexel && along <= TEXEL * 1.6f));
+                boolean onLip = (frontFace && (holeTexel
                         || openingDistance(loaded, center[0], center[1], center[2]) <= TEXEL * 0.7f
-                        || (nz < -0.5f && along <= TEXEL * 1.05f)
-                        || (nz >= -0.5f && along <= TEXEL * 1.8f);
+                        || along <= TEXEL * 1.05f))
+                        || innerWall;
                 if (lip != onLip) {
                     continue;
                 }
