@@ -219,6 +219,8 @@ if (minecraftVersion == "forge" || forgeNode == null) {
             val width = providers.gradleProperty("width").orNull ?: "960"
             val height = providers.gradleProperty("height").orNull ?: "540"
             args("--width", width, "--height", height)
+            // Same offline player as the other head shots, so the default skin does not change.
+            args("--username", "Player546")
         }
         val only = providers.gradleProperty("only").orNull
         if (!only.isNullOrBlank()) {

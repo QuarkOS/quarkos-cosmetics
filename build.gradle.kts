@@ -127,6 +127,8 @@ tasks {
             systemProperty("quarkos_cosmetics.harness", "true")
             val wide = providers.gradleProperty("wide").orNull == "true"
             args("--width", if (wide) "1920" else "960", "--height", if (wide) "1080" else "540")
+            // Same offline player as the other head shots, so the default skin does not change.
+            args("--username", "Player546")
         }
         if (providers.gradleProperty("wardrobeOnly").orNull == "true") {
             systemProperty("quarkos_cosmetics.wardrobeOnly", "true")
