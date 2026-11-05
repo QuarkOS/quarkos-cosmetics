@@ -38,7 +38,9 @@ public final class MaskGlow {
                         .withVertexShader("core/entity")
                         .withFragmentShader(net.minecraft.resources.Identifier.fromNamespaceAndPath("quarkos_cosmetics", "core/mask"))
                         .withShaderDefine("NO_OVERLAY")
-                        .withShaderDefine("NO_CARDINAL_LIGHTING")
+                        // Same cardinal shade as the player. NO_CARDINAL_LIGHTING left the shell at full
+                        // texture brightness in daylight, so the head sat above the kimono. Candle cores
+                        // ignore vertex color in mask.fsh and stay full bright.
                         .withSampler("Sampler0")
                         .withSampler("Sampler1")
                         .withSampler("Sampler2")
