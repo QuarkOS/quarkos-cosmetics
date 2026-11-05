@@ -102,11 +102,12 @@ public final class BlockbenchCosmetic {
     }
 
     /**
-     * The ghost bone is authored at {@code [8, 32, 0]}, so the cubes sit on top of the
-     * hair. This shifts that whole pose down to head height and forward of the shoulder.
+     * The ghost bone is authored at {@code [8, 32, 0]}, so the cubes sit on the hair.
+     * Scale it around that pivot, then shift it out beside the head, above the shoulder.
      * The bbmodel bytes stay as handed over.
      */
-    private static final float[] GHOST_SHIFT = {0f, -10f, -5f};
+    private static final float GHOST_SCALE = 0.75f;
+    private static final float[] GHOST_SHIFT = {2.5f, -6f, -3f};
 
     private static void paint(VertexConsumer consumer, Matrix4f view, int light, int alpha, Model model, float time, float inflate) {
         Matrix4f posed = new Matrix4f();
@@ -125,7 +126,8 @@ public final class BlockbenchCosmetic {
         local.translate(bone.ox, bone.oy, bone.oz);
         local.translate(position[0], position[1], position[2]);
         local.rotateXYZ((float) Math.toRadians(rotation[0]), (float) Math.toRadians(rotation[1]), (float) Math.toRadians(rotation[2]));
-        local.scale(scale[0], scale[1], scale[2]);
+        float fit = "ghost".equals(bone.name) ? GHOST_SCALE : 1f;
+        local.scale(scale[0] * fit, scale[1] * fit, scale[2] * fit);
         local.translate(-bone.ox, -bone.oy, -bone.oz);
         for (Cube cube : bone.cubes) {
             Matrix4f cubeMatrix = new Matrix4f(local);
