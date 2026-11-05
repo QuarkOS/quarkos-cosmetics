@@ -37,10 +37,14 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
                 && (player.isSprinting() || player.isFallFlying() || player.getAbilities().flying);
         Chick.bind(entity instanceof net.minecraft.world.entity.player.Player player ? player : null, helmet, state.showHat);
         PlayerModel model = this.getParentModel();
-        CosmeticDrawer.Submitter submitter = (stack, texture, translucent, cull, draw) -> {
-            var type = translucent
-                    ? RenderTypes.entityTranslucent(texture)
-                    : cull ? RenderTypes.entityCutout(texture) : RenderTypes.entityCutoutNoCull(texture);
+        CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
+            var type = switch (pass) {
+                case EYES -> RenderTypes.eyes(texture);
+                case GLOW -> MaskGlow.type(texture);
+                case TRANSLUCENT -> RenderTypes.entityTranslucent(texture);
+                case CUTOUT -> RenderTypes.entityCutout(texture);
+                case CUTOUT_NO_CULL -> RenderTypes.entityCutoutNoCull(texture);
+            };
             collector.submitCustomGeometry(stack, type, (entry, consumer) -> draw.accept(consumer));
         };
         CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
@@ -88,10 +92,14 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
         boolean wingsFlap = player.isSprinting() || player.isFallFlying() || player.getAbilities().flying;
         Chick.bind(player, helmet, player.isModelPartShown(PlayerModelPart.HAT));
         PlayerModel<AbstractClientPlayer> model = this.getParentModel();
-        CosmeticDrawer.Submitter submitter = (stack, texture, translucent, cull, draw) -> {
-            RenderType type = translucent
-                    ? RenderType.entityTranslucent(texture)
-                    : cull ? RenderType.entityCutout(texture) : RenderType.entityCutoutNoCull(texture);
+        CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
+            RenderType type = switch (pass) {
+                case EYES -> RenderType.eyes(texture);
+                case GLOW -> MaskGlow.type(texture);
+                case TRANSLUCENT -> RenderType.entityTranslucent(texture);
+                case CUTOUT -> RenderType.entityCutout(texture);
+                case CUTOUT_NO_CULL -> RenderType.entityCutoutNoCull(texture);
+            };
             draw.accept(buffer.getBuffer(type));
         };
         CosmeticAttach.draw(pose, submitter, light, ageInTicks, model.head, model.body, model.leftArm, model.rightArm,

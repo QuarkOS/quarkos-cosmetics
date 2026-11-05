@@ -28,6 +28,10 @@ class PackedCosmeticTest {
             String modelPath = item.path("model").asText();
             String texturePath = item.path("texture").asText();
             String marker = item.path("marker").asText();
+            if ("quarkos:jack_o_lantern_mask".equals(item.path("id").asText())) {
+                assertArmorMask(modelPath, texturePath);
+                continue;
+            }
             JsonNode model;
             try (InputStream stream = resource(modelPath)) {
                 model = JSON.readTree(stream);
@@ -76,7 +80,44 @@ class PackedCosmeticTest {
                 }
             }
         }
-        assertEquals(17, count);
+        assertEquals(18, count);
+    }
+
+    /** GeckoLib armor geo, one head bone, 24-frame strip. The png bytes are the handoff, not a 16×16 swatch. */
+    private static void assertArmorMask(String modelPath, String texturePath) throws Exception {
+        JsonNode model;
+        try (InputStream stream = resource(modelPath)) {
+            model = JSON.readTree(stream);
+        }
+        JsonNode geometry = model.path("minecraft:geometry").path(0);
+        assertEquals("geometry.jack_o_lantern_mask", geometry.path("description").path("identifier").asText());
+        assertEquals(80, geometry.path("description").path("texture_width").asInt());
+        assertEquals(80, geometry.path("description").path("texture_height").asInt());
+        JsonNode head = null;
+        for (JsonNode bone : geometry.path("bones")) {
+            if ("armorHead".equals(bone.path("name").asText())) {
+                head = bone;
+            }
+        }
+        assertTrue(head != null, "armorHead bone");
+        assertEquals("bipedHead", head.path("parent").asText());
+        // 60 shell cubes, plus one cube per lit texel of the five candle north faces.
+        assertEquals(85, head.path("cubes").size());
+        try (InputStream stream = resource(texturePath)) {
+            BufferedImage image = ImageIO.read(stream);
+            assertEquals(80, image.getWidth(), texturePath);
+            assertEquals(1920, image.getHeight(), texturePath);
+        }
+        try (InputStream stream = resource("textures/cosmetics/jack_o_lantern_mask.png.mcmeta")) {
+            JsonNode meta = JSON.readTree(stream);
+            assertEquals(2, meta.path("animation").path("frametime").asInt());
+            assertEquals(false, meta.path("animation").path("interpolate").asBoolean());
+        }
+        try (InputStream stream = resource("textures/cosmetics/jack_o_lantern_mask_glow.png.mcmeta")) {
+            JsonNode meta = JSON.readTree(stream);
+            assertEquals(2, meta.path("animation").path("frametime").asInt());
+            assertEquals(false, meta.path("animation").path("interpolate").asBoolean());
+        }
     }
 
     private static boolean contains(BufferedImage image, int rgb) {

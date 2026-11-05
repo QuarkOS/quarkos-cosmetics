@@ -142,11 +142,33 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     tasks.named<Jar>("jar") {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+        exclude("META-INF/MANIFEST.MF")
+        manifest {
+            attributes("MixinConfigs" to "quarkos_cosmetics.mixins.json")
+        }
         from({
             configurations.getByName("runtimeClasspath")
                 .filter { it.name.startsWith("jackson-") }
                 .map { zipTree(it) }
         })
+    }
+
+    // Mixin 0.8 on Forge reads MixinConfigs from the jar manifest. mods.toml
+    // [[mixins]] is not consulted, and the userdev mod is a classes directory,
+    // so the same manifest has to land next to the classes or the client mixins
+    // never apply and the mask is never drawn.
+    val forgeManifest = layout.buildDirectory.dir("generated/forge-manifest")
+    val writeForgeManifest = tasks.register("writeForgeManifest") {
+        outputs.dir(forgeManifest)
+        doLast {
+            val file = forgeManifest.get().asFile.resolve("META-INF/MANIFEST.MF")
+            file.parentFile.mkdirs()
+            file.writeText(
+                "Manifest-Version: 1.0\n" +
+                    "MixinConfigs: quarkos_cosmetics.mixins.json\n" +
+                    "\n"
+            )
+        }
     }
 
     val forgePack = layout.buildDirectory.dir("generated/forge-pack")
@@ -160,7 +182,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     }
 
     tasks.named<ProcessResources>("processResources") {
-        dependsOn(writeForgePack)
+        dependsOn(writeForgePack, writeForgeManifest)
         val props = mapOf(
             "version" to "1.0.0+$minecraftVersion",
             "forge_dep" to node.forgeDep,

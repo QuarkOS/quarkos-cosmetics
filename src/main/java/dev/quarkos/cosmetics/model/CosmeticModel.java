@@ -95,6 +95,9 @@ public final class CosmeticModel {
         if (png == null || png.length == 0 || png.length > 65536) {
             throw new ModelException("model.textures", "The PNG must be present and at most 64 KiB.");
         }
+        if (elements.isEmpty()) {
+            throw new ModelException("model.elements", "This cosmetic is a client armor model and is not published as gallery cubes.");
+        }
         ObjectNode root = JSON.createObjectNode();
         root.put("name", name);
         root.put("description", description == null ? "" : description);

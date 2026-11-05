@@ -189,7 +189,7 @@ public final class Chick {
         // `light` is the player's packed light. The overlay is the normal white one.
         Matrix3f normals = new Matrix3f();
         view.normal(normals);
-        submitter.submit(pose, TEXTURE, false, true, consumer -> {
+        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> {
             int quads = render(consumer, view, normals, light, loaded, sample);
             notePaint(quads);
         });
