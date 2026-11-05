@@ -1,0 +1,17 @@
+# Copy to gallery.properties in the working directory, or set GALLERY_CONFIG.
+# Environment variables of the same settings override this file.
+# Default bind is loopback. This project does not deploy the service.
+
+bind=127.0.0.1
+port=39221
+data=data
+mojangSessionRoot=https://sessionserver.mojang.com
+maxUploadBytes=262144
+maxElements=64
+maxTriangles=768
+maxTextures=4
+maxTextureEdge=128
+maxTextureBytes=65536
+maxPublicPerPlayer=24
+maxRecordsPerPlayer=48
+reportThreshold=5

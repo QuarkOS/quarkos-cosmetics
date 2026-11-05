@@ -1,0 +1,730 @@
+openapi: 3.0.3
+info:
+  title: Cosmetics gallery
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
+  description: |
+    Free public gallery for player-supplied cosmetics. The player key is the
+    Mojang UUID returned by hasJoined. This service issues a one-time serverId.
+    The game client posts that serverId to the Mojang session server with its
+    existing access token. This service then calls hasJoined and stores only
+    the UUID and current name. It never accepts or stores an access token, and
+    it never accepts another service's serverId.
+
+    There is no account system beyond that Mojang check, and there are no likes,
+    follows, prices, or imported catalogs.
+servers:
+  - url: http://127.0.0.1:39221
+    description: Local loopback default
+tags:
+  - name: Session
+  - name: Gallery
+  - name: Equipment
+paths:
+  /health:
+    get:
+      summary: Process health
+      operationId: health
+      responses:
+        "200":
+          description: The process is listening.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: cosmetics-gallery
+  /v1/info:
+    get:
+      summary: Live limits, slots, and auth mode
+      operationId: info
+      responses:
+        "200":
+          description: Service description. Limits here override the documented defaults when configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Info"
+  /v1/session/challenges:
+    post:
+      tags: [Session]
+      summary: Issue a one-time serverId
+      operationId: createChallenge
+      description: |
+        Returns a serverId that only this process will accept. The game client
+        posts it to https://sessionserver.mojang.com/session/minecraft/join as
+        `serverId`, along with `accessToken` and `selectedProfile`. Do not send
+        the access token to this service. The challenge expires in 90 seconds
+        and succeeds at most once.
+      responses:
+        "201":
+          description: Challenge issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Challenge"
+        "429":
+          $ref: "#/components/responses/Error"
+  /v1/session:
+    post:
+      tags: [Session]
+      summary: Complete sign-in after Mojang join
+      operationId: completeSession
+      description: |
+        Calls https://sessionserver.mojang.com/session/minecraft/hasJoined
+        with the username and the serverId issued above. The UUID in that
+        response is the player key. The returned token is a gallery session,
+        not a Minecraft access token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionRequest"
+      responses:
+        "200":
+          description: Gallery session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+    get:
+      tags: [Session]
+      summary: Current gallery session
+      operationId: currentSession
+      security:
+        - gallerySession: []
+      responses:
+        "200":
+          description: The UUID and name bound to this token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Player"
+        "401":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Session]
+      summary: Drop the gallery session
+      operationId: deleteSession
+      security:
+        - gallerySession: []
+      responses:
+        "200":
+          description: Signed out.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: signed_out
+        "401":
+          $ref: "#/components/responses/Error"
+  /v1/cosmetics:
+    get:
+      tags: [Gallery]
+      summary: Browse public cosmetics
+      operationId: listCosmetics
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+            maxLength: 48
+          description: Case-insensitive match on name and description.
+        - in: query
+          name: slot
+          schema:
+            $ref: "#/components/schemas/Slot"
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Offset returned as nextCursor.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Public cosmetics, newest first. Taken-down entries are omitted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CosmeticPage"
+        "400":
+          $ref: "#/components/responses/Error"
+    post:
+      tags: [Gallery]
+      summary: Publish a cosmetic
+      operationId: publishCosmetic
+      security:
+        - gallerySession: []
+      description: |
+        The author is the UUID from hasJoined. The model must be
+        cosmetics-model-1. Upload size, cube count, triangle count, and PNG
+        size are capped. The body must not include an access token, a price,
+        or social fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRequest"
+      responses:
+        "201":
+          description: Published.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cosmetic"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "413":
+          $ref: "#/components/responses/Error"
+        "415":
+          $ref: "#/components/responses/Error"
+  /v1/cosmetics/{id}:
+    get:
+      tags: [Gallery]
+      summary: Fetch one public cosmetic, including its model
+      operationId: getCosmetic
+      parameters:
+        - $ref: "#/components/parameters/CosmeticId"
+      responses:
+        "200":
+          description: Cosmetic and model.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CosmeticDetail"
+        "404":
+          $ref: "#/components/responses/Error"
+  /v1/cosmetics/{id}/reports:
+    post:
+      tags: [Gallery]
+      summary: Report a public cosmetic
+      operationId: reportCosmetic
+      security:
+        - gallerySession: []
+      parameters:
+        - $ref: "#/components/parameters/CosmeticId"
+      description: |
+        One report per player. At the configured threshold (default 5) the
+        cosmetic is taken down. The author cannot report their own cosmetic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "201":
+          description: Report stored. galleryStatus is taken_down when the threshold is met.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /v1/cosmetics/{id}/takedown:
+    post:
+      tags: [Gallery]
+      summary: Author takedown
+      operationId: takedownCosmetic
+      security:
+        - gallerySession: []
+      parameters:
+        - $ref: "#/components/parameters/CosmeticId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 280
+      responses:
+        "200":
+          description: Removed from the gallery and from equipment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Takedown"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /v1/equipment:
+    put:
+      tags: [Equipment]
+      summary: Store the signed-in player's selection
+      operationId: equip
+      security:
+        - gallerySession: []
+      description: |
+        Saves one slot for the session UUID. cosmeticId null clears the slot.
+        The cosmetic must be public and published for that slot. Any player
+        may wear any public cosmetic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EquipRequest"
+      responses:
+        "200":
+          description: The player's current selection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+    get:
+      tags: [Equipment]
+      summary: Selection for the signed-in player
+      operationId: myEquipment
+      security:
+        - gallerySession: []
+      responses:
+        "200":
+          description: Current selection. Taken-down cosmetics are returned as null.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "401":
+          $ref: "#/components/responses/Error"
+  /v1/equipment/{uuid}:
+    get:
+      tags: [Equipment]
+      summary: Selection for any player UUID
+      operationId: playerEquipment
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+          description: Mojang UUID, 32 hex characters, hyphens optional.
+      responses:
+        "200":
+          description: Selection, or empty slots when the player has not equipped anything.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "400":
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    gallerySession:
+      type: http
+      scheme: bearer
+      description: Gallery session token from POST /v1/session. Not a Minecraft access token.
+  parameters:
+    CosmeticId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{32}$"
+  responses:
+    Error:
+      description: Request failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        violations:
+          type: array
+          items:
+            type: object
+            required: [path, message]
+            properties:
+              path:
+                type: string
+              message:
+                type: string
+    Info:
+      type: object
+      required: [service, version, free, auth, playerKey, modelFormat, slots, limits]
+      properties:
+        service:
+          type: string
+        version:
+          type: string
+        free:
+          type: boolean
+        auth:
+          type: string
+          example: mojang-join
+        playerKey:
+          type: string
+          example: uuid
+        modelFormat:
+          type: string
+          example: cosmetics-model-1
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Slot"
+        limits:
+          $ref: "#/components/schemas/Limits"
+    Limits:
+      type: object
+      properties:
+        maxUploadBytes:
+          type: integer
+          example: 262144
+        maxElements:
+          type: integer
+          example: 64
+        maxTriangles:
+          type: integer
+          example: 768
+        maxTextures:
+          type: integer
+          example: 4
+        maxTextureEdge:
+          type: integer
+          example: 128
+        maxTextureBytes:
+          type: integer
+          example: 65536
+        maxPublicPerPlayer:
+          type: integer
+          example: 24
+        maxRecordsPerPlayer:
+          type: integer
+          example: 48
+        reportThreshold:
+          type: integer
+          example: 5
+    Challenge:
+      type: object
+      required: [serverId, expiresAt, mojangJoinUrl]
+      properties:
+        serverId:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        expiresAt:
+          type: string
+          format: date-time
+        mojangJoinUrl:
+          type: string
+          example: https://sessionserver.mojang.com/session/minecraft/join
+    SessionRequest:
+      type: object
+      required: [username, serverId]
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          pattern: "^[A-Za-z0-9_]{3,16}$"
+        serverId:
+          type: string
+          description: The serverId from POST /v1/session/challenges. Any other value is rejected.
+    Session:
+      type: object
+      required: [token, tokenType, uuid, name, expiresAt]
+      properties:
+        token:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        uuid:
+          type: string
+        name:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    Player:
+      type: object
+      required: [uuid, name, expiresAt]
+      properties:
+        uuid:
+          type: string
+        name:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    Slot:
+      type: string
+      enum: [hat, ears, shoulder_left, shoulder_right, back, tail]
+    Author:
+      type: object
+      required: [uuid, name]
+      properties:
+        uuid:
+          type: string
+          description: Hyphenated Mojang UUID.
+        name:
+          type: string
+    Cosmetic:
+      type: object
+      required: [id, name, description, slot, author, elements, triangles, createdAt, href]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        slot:
+          $ref: "#/components/schemas/Slot"
+        author:
+          $ref: "#/components/schemas/Author"
+        elements:
+          type: integer
+        triangles:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        href:
+          type: string
+    CosmeticDetail:
+      allOf:
+        - $ref: "#/components/schemas/Cosmetic"
+        - type: object
+          required: [model]
+          properties:
+            model:
+              $ref: "#/components/schemas/Model"
+    CosmeticPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Cosmetic"
+        nextCursor:
+          type: string
+          nullable: true
+    PublishRequest:
+      type: object
+      required: [name, slot, model]
+      properties:
+        name:
+          type: string
+          maxLength: 48
+        description:
+          type: string
+          maxLength: 280
+        slot:
+          $ref: "#/components/schemas/Slot"
+        model:
+          $ref: "#/components/schemas/Model"
+    Model:
+      type: object
+      required: [format, elements]
+      properties:
+        format:
+          type: string
+          enum: [cosmetics-model-1]
+        textures:
+          type: array
+          maxItems: 4
+          items:
+            type: object
+            required: [name, png]
+            properties:
+              name:
+                type: string
+              png:
+                type: string
+                description: Base64 PNG, or a data:image/png;base64, URL. Remote URLs are rejected.
+        elements:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            type: object
+            required: [from, to]
+            properties:
+              name:
+                type: string
+              from:
+                $ref: "#/components/schemas/Vec3"
+              to:
+                $ref: "#/components/schemas/Vec3"
+              origin:
+                $ref: "#/components/schemas/Vec3"
+              rotation:
+                type: array
+                minItems: 3
+                maxItems: 3
+                items:
+                  type: number
+              faces:
+                type: object
+                description: |
+                  north, south, east, west, up, down. Each face is two triangles.
+                  Omitted faces count as a full cube (12 triangles).
+                additionalProperties:
+                  type: object
+                  properties:
+                    uv:
+                      type: array
+                      minItems: 4
+                      maxItems: 4
+                      items:
+                        type: number
+                    texture:
+                      type: integer
+    Vec3:
+      type: array
+      minItems: 3
+      maxItems: 3
+      items:
+        type: number
+        minimum: -64
+        maximum: 64
+    ReportRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [spam, stolen, inappropriate, malicious, other]
+        detail:
+          type: string
+          maxLength: 280
+    Report:
+      type: object
+      required: [id, cosmeticId, status, galleryStatus]
+      properties:
+        id:
+          type: string
+        cosmeticId:
+          type: string
+        status:
+          type: string
+          enum: [open, taken_down]
+        galleryStatus:
+          type: string
+          enum: [public, taken_down]
+    Takedown:
+      type: object
+      required: [id, status, by]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          example: taken_down
+        by:
+          type: string
+          example: author
+    EquipRequest:
+      type: object
+      required: [slot, cosmeticId]
+      properties:
+        slot:
+          $ref: "#/components/schemas/Slot"
+        cosmeticId:
+          type: string
+          nullable: true
+    Equipment:
+      type: object
+      required: [playerUuid, playerName, slots, updatedAt]
+      properties:
+        playerUuid:
+          type: string
+        playerName:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        slots:
+          type: object
+          required: [hat, ears, shoulder_left, shoulder_right, back, tail]
+          properties:
+            hat:
+              type: string
+              nullable: true
+            ears:
+              type: string
+              nullable: true
+            shoulder_left:
+              type: string
+              nullable: true
+            shoulder_right:
+              type: string
+              nullable: true
+            back:
+              type: string
+              nullable: true
+            tail:
+              type: string
+              nullable: true

@@ -1,0 +1,3 @@
+# Read by a local Fabric or Forge client. This gallery process does not read it.
+# Base URL only. Routes are under /v1.
+galleryUrl=http://127.0.0.1:39221
