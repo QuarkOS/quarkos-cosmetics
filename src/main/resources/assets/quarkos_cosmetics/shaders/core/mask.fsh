@@ -20,6 +20,13 @@ void main() {
     // so a dipped frame stays the texture's own red instead of flashing off.
     if (vertexColor.a < 0.5) {
         vec4 glow = texture(Sampler1, texCoord0);
+        // The glow strip's lip is dark red, and a dipped frame goes near black.
+        // Texel (72, 22) stays a flame colour in every frame, so the carving
+        // is solid flame out to the edge. The png and mcmeta are unchanged.
+        bool hole = glow.a < 0.1 || (glow.g < (89.0 / 255.0) && glow.b < (64.0 / 255.0) && glow.r < (180.0 / 255.0));
+        if (hole) {
+            glow = texture(Sampler1, vec2(72.5 / 80.0, 22.5 / 80.0));
+        }
         if (glow.a < 0.1) {
             discard;
         }

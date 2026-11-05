@@ -21,7 +21,31 @@ public class HarnessPoseMixin {
     @Inject(method = "extractEntity", at = @At("HEAD"))
     private void quarkos$pose(Entity entity, float partialTick, CallbackInfoReturnable<EntityRenderState> ci) {
         if (entity instanceof Player player && player == Minecraft.getInstance().player) {
+            dev.quarkos.cosmetics.harness.ClientHarness.holdBody(player);
             snap(player);
+        }
+    }
+
+    @Inject(method = "extractEntity", at = @At("RETURN"))
+    private void quarkos$poseState(Entity entity, float partialTick, CallbackInfoReturnable<EntityRenderState> ci) {
+        if (!Boolean.getBoolean("quarkos_cosmetics.harness") || !(entity instanceof Player player) || player != Minecraft.getInstance().player) {
+            return;
+        }
+        EntityRenderState state = ci.getReturnValue();
+        if (!(state instanceof net.minecraft.client.renderer.entity.state.HumanoidRenderState human)) {
+            return;
+        }
+        dev.quarkos.cosmetics.harness.ClientHarness.BodyPose mode = dev.quarkos.cosmetics.harness.ClientHarness.bodyPose;
+        if (mode == dev.quarkos.cosmetics.harness.ClientHarness.BodyPose.SNEAK) {
+            human.isCrouching = true;
+            human.pose = Pose.CROUCHING;
+        } else if (mode == dev.quarkos.cosmetics.harness.ClientHarness.BodyPose.SWIM) {
+            human.isVisuallySwimming = true;
+            human.swimAmount = 1f;
+            human.pose = Pose.SWIMMING;
+        } else if (mode == dev.quarkos.cosmetics.harness.ClientHarness.BodyPose.FLY) {
+            human.isFallFlying = true;
+            human.pose = Pose.FALL_FLYING;
         }
     }
 
@@ -76,6 +100,7 @@ public class HarnessPoseMixin {
     private void quarkos$pose(DeltaTracker tracker, boolean renderLevel, CallbackInfo ci) {
         Player player = Minecraft.getInstance().player;
         if (player != null) {
+            dev.quarkos.cosmetics.harness.ClientHarness.holdBody(player);
             snap(player);
         }
     }

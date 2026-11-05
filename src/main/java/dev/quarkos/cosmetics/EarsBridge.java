@@ -27,8 +27,9 @@ public final class EarsBridge {
                 return false;
             });
             registry.getMethod("register", String.class, inhibitor).invoke(null, "quarkos_cosmetics", proxy);
-        } catch (Throwable ignored) {
-            // Ears is not installed. The wardrobe still works.
+            org.slf4j.LoggerFactory.getLogger("quarkos_cosmetics").info("Ears hide-hook registered");
+        } catch (Throwable ex) {
+            org.slf4j.LoggerFactory.getLogger("quarkos_cosmetics").info("Ears hide-hook not installed: {}", ex.toString());
         }
     }
 

@@ -66,7 +66,7 @@ class ClientSettingsTest {
             equipped.put(slot, "");
         }
         equipped.put(Slot.BACK, "quarkos:kite_wings");
-        equipped.put(Slot.TAIL, "quarkos:ribbon_tail");
+        equipped.put(Slot.TAIL, "quarkos:bead_chain");
         equipped.put(Slot.HAT, "quarkos:lantern_cap");
         var hidden = Worn.plan(equipped, Set.of(), Map.of(), true, true, true, false, false);
         assertTrue(hidden.stream().noneMatch(item -> item.slot() == Slot.BACK));

@@ -10,7 +10,9 @@
     "ClientTickMixin",
     "CameraZoomMixin",
     "InventoryPreviewAccess",
-    "HarnessPoseMixin"
+    "HarnessPoseMixin",
+    "GuiCaptureMixin",
+    "PoseStateMixin"
   ],
   "injectors": {
     "defaultRequire": 1

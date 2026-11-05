@@ -51,6 +51,12 @@ public final class ClientHarness {
     public static double lockZ;
     public static float lockYaw;
     public static float lockPitch;
+    /** Harness pose applied again at render, so a tick cannot stand the player back up. */
+    public enum BodyPose { STAND, SNEAK, SWIM, FLY }
+    public static BodyPose bodyPose = BodyPose.STAND;
+    /** Wardrobe captures after the screen is drawn. World portraits stay on the frame-end hook. */
+    public static boolean afterGui;
+    private static Path pendingGui;
     private static final List<Shot> SHOTS = List.of(
             new Shot("kite-wings-front", Slot.BACK, "quarkos:kite_wings", true, false, 0f, false),
             new Shot("kite-wings-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
@@ -63,8 +69,6 @@ public final class ClientHarness {
             new Shot("lantern-cap-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, false),
             new Shot("fox-ears-front", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false),
             new Shot("fox-ears-back", Slot.EARS, "quarkos:fox_tips", false, false, 0f, false),
-            new Shot("ribbon-tail-front", Slot.TAIL, "quarkos:ribbon_tail", true, false, 0f, false),
-            new Shot("ribbon-tail-back", Slot.TAIL, "quarkos:ribbon_tail", false, false, 0f, false),
             new Shot("ink-wren-front", Slot.SHOULDER_LEFT, "quarkos:ink_wren", true, false, 0f, false),
             new Shot("ink-wren-back", Slot.SHOULDER_LEFT, "quarkos:ink_wren", false, false, 0f, false),
             new Shot("pebble-moth-front", Slot.SHOULDER_RIGHT, "quarkos:pebble_moth", true, false, 0f, false),
@@ -87,8 +91,6 @@ public final class ClientHarness {
             new Shot("folded-cloak-back", Slot.BACK, "quarkos:folded_cloak", false, false, 0f, false),
             new Shot("paper-fan-front", Slot.BACK, "quarkos:paper_fan", true, false, 0f, false),
             new Shot("paper-fan-back", Slot.BACK, "quarkos:paper_fan", false, false, 0f, false),
-            new Shot("fern-plume-front", Slot.TAIL, "quarkos:fern_plume", true, false, 0f, false),
-            new Shot("fern-plume-back", Slot.TAIL, "quarkos:fern_plume", false, false, 0f, false),
             new Shot("bead-chain-front", Slot.TAIL, "quarkos:bead_chain", true, false, 0f, false),
             new Shot("bead-chain-back", Slot.TAIL, "quarkos:bead_chain", false, false, 0f, false),
             new Shot("pet-chick-front", Slot.HAT, Chick.ID, true, false, 0f, false),
@@ -114,7 +116,21 @@ public final class ClientHarness {
             new Shot("chick-head-side", Slot.HAT, Chick.ID, false, false, 0f, false),
             new Shot("chick-shoulder-side", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, false),
             new Shot("chick-chest-asleep", Slot.HAT, Chick.ID, false, false, 0f, false),
-            new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, false)
+            new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, false),
+            new Shot("jack-o-lantern/mask-front-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("jack-o-lantern/mask-three-quarter-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("jack-o-lantern/mask-side-night", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("jack-o-lantern/mask-front-night-zoom", Slot.HAT, "quarkos:jack_o_lantern_mask", true, false, 0f, false),
+            new Shot("sneak-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
+            new Shot("sneak-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, false),
+            new Shot("swim-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
+            new Shot("swim-back", Slot.HAT, "quarkos:lantern_cap", false, false, 0f, false),
+            new Shot("elytra-flight", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
+            new Shot("elytra-hides-back", Slot.BACK, "quarkos:kite_wings", false, false, 0f, false),
+            new Shot("armor-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
+            new Shot("armor-back", Slot.BACK, "quarkos:folded_cloak", false, false, 0f, false),
+            new Shot("skin-layer-front", Slot.HAT, "", true, false, 0f, false),
+            new Shot("ears-hook", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false)
     );
 
     private static List<Shot> active;
@@ -251,10 +267,10 @@ public final class ClientHarness {
         if (shotIndex >= activeShots().size()) {
             String only = System.getProperty("quarkos_cosmetics.only", "");
             if (!only.isBlank()) {
-                if (only.contains("wardrobe")) {
-                    state = State.WARDROBE;
-                } else if (only.contains("two-client")) {
+                if (only.contains("two-client")) {
                     state = State.PAIR;
+                } else if (only.contains("wardrobe")) {
+                    state = State.WARDROBE;
                 } else {
                     state = State.STOP;
                 }
@@ -360,10 +376,19 @@ public final class ClientHarness {
             client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
         } else if (shot.name.contains("sleep")) {
             client.player.connection.sendCommand("tp @s 0.5 102.2 0.5 180 8");
+        } else if (shot.name.equals("elytra-flight")) {
+            client.player.connection.sendCommand("tp @s 0.5 108 0.5 180 20");
         } else if (!shot.name.contains("scared")) {
             client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 8");
         } else {
             client.player.connection.sendCommand("tp @s 0.5 116 0.5 180 12");
+        }
+        if (shot.name.contains("night")) {
+            client.player.connection.sendCommand("time set 18000");
+            client.options.gamma().set(0.0);
+        } else {
+            client.player.connection.sendCommand("time set 6000");
+            client.options.gamma().set(1.0);
         }
         client.player.connection.sendCommand("item replace entity @s armor.head with air");
         client.player.connection.sendCommand("item replace entity @s armor.chest with air");
@@ -440,6 +465,92 @@ public final class ClientHarness {
         client.player.yBodyRotO = 180f;
         client.player.setXRot(8f);
         client.setCameraEntity(client.player);
+        afterGui = false;
+        bodyPose = BodyPose.STAND;
+        client.player.setShiftKeyDown(false);
+        client.player.setSwimming(false);
+        client.player.setNoGravity(false);
+        ClientSettings.get().skinLayers = false;
+        if (shot.name.startsWith("sneak-")) {
+            bodyPose = BodyPose.SNEAK;
+            client.player.setShiftKeyDown(true);
+            client.player.setPose(net.minecraft.world.entity.Pose.CROUCHING);
+            portraitDistance = 3.4f;
+            portraitDrop = 0.2f;
+            // A side angle shows the body pitch. Front-on, the crouch reads as a shorter stand.
+            portraitOrbit = shot.front ? 70f : 250f;
+            client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
+        } else if (shot.name.startsWith("swim-")) {
+            bodyPose = BodyPose.SWIM;
+            portraitLock = true;
+            client.options.fov().set(46);
+            // The crawl lies along the look axis. A three-quarter shows head and feet.
+            boolean back = shot.name.endsWith("back");
+            lockX = back ? 2.6 : -2.2;
+            lockY = 102.35;
+            lockZ = back ? 2.4 : -1.6;
+            // Camera looks at the player: yaw = atan2(-(playerX-camX), playerZ-camZ).
+            lockYaw = back ? 132f : 308f;
+            lockPitch = 16f;
+        } else if (shot.name.equals("elytra-flight")) {
+            bodyPose = BodyPose.FLY;
+            KiteWings.hold("flap", null);
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.ELYTRA));
+            portraitLock = true;
+            client.options.fov().set(42);
+            lockX = 2.8;
+            lockY = 109.6;
+            lockZ = 3.8;
+            lockYaw = 145f;
+            lockPitch = 22f;
+        } else if (shot.name.equals("elytra-hides-back")) {
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.ELYTRA));
+            KiteWings.hold("idle", 0f);
+            portraitDistance = 3.2f;
+            portraitDrop = 0.45f;
+        } else if (shot.name.startsWith("armor-")) {
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_HELMET));
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_CHESTPLATE));
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND_LEGGINGS));
+            portraitDistance = 2.7f;
+        } else if (shot.name.startsWith("skin-layer")) {
+            ClientSettings.get().skinLayers = true;
+            portraitDistance = 2.55f;
+        } else if (shot.name.contains("night")) {
+            client.player.setXRot(0f);
+            client.player.xRotO = 0f;
+            portraitLock = true;
+            boolean zoom = shot.name.contains("zoom");
+            boolean side = shot.name.contains("side");
+            boolean three = shot.name.contains("three-quarter");
+            float dist = zoom ? 1.12f : 1.28f;
+            client.options.fov().set(zoom ? 30 : 40);
+            var server = client.getSingleplayerServer();
+            if (server != null) {
+                server.overworld().setDayTime(18000L);
+            }
+            client.options.gamma().set(0.0);
+            if (side) {
+                lockX = 0.5 - dist;
+                lockY = 102.52;
+                lockZ = 0.5;
+                lockYaw = 270f;
+                lockPitch = 0f;
+            } else if (three) {
+                double rad = Math.toRadians(40);
+                lockX = 0.5 - Math.sin(rad) * dist;
+                lockZ = 0.5 - Math.cos(rad) * dist;
+                lockY = 102.52;
+                lockYaw = 320f;
+                lockPitch = 0f;
+            } else {
+                lockX = 0.5;
+                lockY = 102.52;
+                lockZ = 0.5 - dist;
+                lockYaw = 0f;
+                lockPitch = 0f;
+            }
+        }
         if (!chick) {
             Chick.hold(null, null);
             return;
@@ -965,7 +1076,16 @@ public final class ClientHarness {
             return;
         }
         client.options.hideGui = true;
+        afterGui = true;
+        bodyPose = BodyPose.STAND;
         portraitOrbit = 0f;
+        if (client.player != null) {
+            client.player.setPose(net.minecraft.world.entity.Pose.STANDING);
+            client.player.setSwimming(false);
+            client.player.setShiftKeyDown(false);
+            client.player.stopFallFlying();
+            client.player.setNoGravity(false);
+        }
         if (client.options.guiScale().get() != 1) {
             client.setScreen(null);
             client.options.guiScale().set(1);
@@ -990,6 +1110,7 @@ public final class ClientHarness {
                     settings.categoryOn.put(slot, true);
                     settings.equip(slot, "");
                 }
+                settings.skinLayers = true;
                 settings.equip(Slot.BACK, "quarkos:kite_wings");
                 settings.save(client.gameDirectory.toPath());
             }
@@ -1003,6 +1124,15 @@ public final class ClientHarness {
             return;
         }
         if (!(client.screen instanceof WardrobeScreen)) {
+            ClientSettings settings = ClientSettings.get();
+            settings.skinLayers = true;
+            for (Slot slot : Slot.values()) {
+                settings.equip(slot, "");
+            }
+            settings.equip(Slot.BACK, "quarkos:kite_wings");
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.item.ItemStack.EMPTY);
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.item.ItemStack.EMPTY);
+            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.item.ItemStack.EMPTY);
             client.setScreen(new WardrobeScreen(null));
             screenAt = ticks;
             return;
@@ -1099,9 +1229,12 @@ public final class ClientHarness {
         guest.setYRot(yaw);
         guest.setXRot(pitch);
         guest.setYHeadRot(yaw);
+        // Wings parent to the body. Head yaw alone leaves the body at 0, so the folded fan sits on one side.
+        guest.setYBodyRot(yaw);
         guest.yRotO = yaw;
         guest.xRotO = pitch;
         guest.yHeadRotO = yaw;
+        guest.yBodyRotO = yaw;
         guest.xo = guest.getX();
         guest.yo = guest.getY();
         guest.zo = guest.getZ();
@@ -1143,6 +1276,59 @@ public final class ClientHarness {
         frameEndShots = true;
     }
 
+    /** Called at the end of GameRenderer.render, after the wardrobe screen is on the target. */
+    public static void captureGuiPending() {
+        Path path = pendingGui;
+        if (path == null) {
+            return;
+        }
+        pendingGui = null;
+        Minecraft client = Minecraft.getInstance();
+        //? if >=1.21.11 {
+        writeTargetNow(client, path);
+        //?} else {
+        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        //?}
+    }
+
+    public static void holdBody(net.minecraft.world.entity.player.Player player) {
+        if (bodyPose == BodyPose.STAND) {
+            return;
+        }
+        player.setDeltaMovement(0.0, 0.0, 0.0);
+        player.setYRot(180f);
+        player.yRotO = 180f;
+        player.setYHeadRot(180f);
+        player.yHeadRotO = 180f;
+        player.setYBodyRot(180f);
+        player.yBodyRotO = 180f;
+        if (bodyPose == BodyPose.SNEAK) {
+            player.setShiftKeyDown(true);
+            player.setPose(net.minecraft.world.entity.Pose.CROUCHING);
+            player.setOnGround(true);
+            return;
+        }
+        if (bodyPose == BodyPose.SWIM) {
+            player.setSwimming(true);
+            player.setPose(net.minecraft.world.entity.Pose.SWIMMING);
+            player.setXRot(0f);
+            player.xRotO = 0f;
+            player.setOnGround(false);
+            return;
+        }
+        player.setPos(0.5, 108.0, 0.5);
+        player.xo = 0.5;
+        player.yo = 108.0;
+        player.zo = 0.5;
+        player.setNoGravity(true);
+        player.setOnGround(false);
+        player.setXRot(20f);
+        player.xRotO = 20f;
+        player.setPose(net.minecraft.world.entity.Pose.FALL_FLYING);
+        player.startFallFlying();
+    }
+
     public static void capturePending() {
         Path path = pendingShot;
         if (path == null) {
@@ -1159,6 +1345,10 @@ public final class ClientHarness {
     }
 
     private static void requestShot(Minecraft client, Path path) {
+        if (afterGui) {
+            pendingGui = path;
+            return;
+        }
         if (frameEndShots) {
             pendingShot = path;
             return;
