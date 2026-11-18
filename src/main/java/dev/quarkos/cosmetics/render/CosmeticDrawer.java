@@ -26,7 +26,7 @@ public final class CosmeticDrawer {
     public interface Submitter {
         /**
          * @param pass cutout for the chick, cutout-no-cull for wings and packed meshes,
-         *             glow for the jack-o'-lantern candle, translucent for the skin shell.
+         *             glow for the jack-o'-lantern candle, translucent for the ghost.
          */
         void submit(PoseStack pose, Identifier texture, Pass pass, Consumer<VertexConsumer> draw);
     }
@@ -95,53 +95,21 @@ public final class CosmeticDrawer {
             }
             pose.pushPose();
             part.translateAndRotate(pose);
-            pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
-            pose.translate(placement.offsetX(), placement.offsetY(), placement.offsetZ());
-            Matrix4f view = new Matrix4f(pose.last().pose());
-            Matrix3f normals = new Matrix3f(pose.last().normal());
-            submitter.submit(pose, resolved.texture(), Pass.CUTOUT_NO_CULL, consumer ->
-                    MeshDraw.model(consumer, view, normals, light, resolved.model(), resolved.width(), resolved.height(), age, tint));
+            packed(pose, submitter, light, age, resolved, tint, placement.offsetX(), placement.offsetY(), placement.offsetZ());
             pose.popPose();
         }
     }
 
-    public static void shellAll(PoseStack pose, Submitter submitter, int light,
-                               ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
-                               ModelPart leftLeg, ModelPart rightLeg, Identifier texture,
-                               List<SkinShell.Voxel> voxels) {
-        shell(pose, submitter, light, head, texture, filter(voxels, SkinShell.Part.HEAD));
-        shell(pose, submitter, light, body, texture, filter(voxels, SkinShell.Part.BODY));
-        shell(pose, submitter, light, leftArm, texture, filter(voxels, SkinShell.Part.LEFT_ARM));
-        shell(pose, submitter, light, rightArm, texture, filter(voxels, SkinShell.Part.RIGHT_ARM));
-        shell(pose, submitter, light, leftLeg, texture, filter(voxels, SkinShell.Part.LEFT_LEG));
-        shell(pose, submitter, light, rightLeg, texture, filter(voxels, SkinShell.Part.RIGHT_LEG));
-    }
-
-    private static List<SkinShell.Voxel> filter(List<SkinShell.Voxel> voxels, SkinShell.Part part) {
-        List<SkinShell.Voxel> list = new java.util.ArrayList<>();
-        for (SkinShell.Voxel voxel : voxels) {
-            if (voxel.part() == part) {
-                list.add(voxel);
-            }
-        }
-        return list;
-    }
-
-    public static void shell(PoseStack pose, Submitter submitter, int light, ModelPart part,
-                             Identifier texture, List<SkinShell.Voxel> voxels) {
-        if (voxels.isEmpty()) {
-            return;
-        }
+    static void packed(PoseStack pose, Submitter submitter, int light, float age, ModelLibrary.Resolved model, int tint,
+                       float offsetX, float offsetY, float offsetZ) {
         pose.pushPose();
-        part.translateAndRotate(pose);
+        // MeshDraw reverses the quad order to match the winding of the reflected model.
         pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
+        pose.translate(offsetX, offsetY, offsetZ);
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
-        submitter.submit(pose, texture, Pass.TRANSLUCENT, consumer -> {
-            for (SkinShell.Voxel voxel : voxels) {
-                MeshDraw.voxel(consumer, view, normals, light, voxel.x(), voxel.y(), voxel.z(), 1.02f, voxel.u(), voxel.v(), 64, 64);
-            }
-        });
+        submitter.submit(pose, model.texture(), Pass.CUTOUT_NO_CULL, consumer ->
+                MeshDraw.model(consumer, view, normals, light, model.model(), model.width(), model.height(), age, tint));
         pose.popPose();
     }
 }

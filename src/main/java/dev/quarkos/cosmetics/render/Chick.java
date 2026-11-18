@@ -184,17 +184,30 @@ public final class Chick {
         pose.scale(scale, scale, scale);
         Matrix4f view = new Matrix4f(pose.last().pose());
         logPoseDet(slot, view);
-        // Rebuild the normal matrix from the pose. PoseStack.normal() cube-roots the
-        // determinant, and a negative product (the old Y mirror) came back unusable.
-        // `light` is the player's packed light. The overlay is the normal white one.
-        Matrix3f normals = new Matrix3f();
-        view.normal(normals);
+        Matrix3f normals = new Matrix3f(pose.last().normal());
         submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> {
             int quads = render(consumer, view, normals, light, loaded, sample);
             notePaint(quads);
         });
         pose.popPose();
     }
+
+    //? if >=1.21.11 {
+    static void portrait(PoseStack pose, CosmeticDrawer.Submitter submitter, int light) {
+        Model loaded = load();
+        if (loaded == null) {
+            return;
+        }
+        pose.pushPose();
+        bedrock(pose);
+        Matrix4f view = new Matrix4f(pose.last().pose());
+        Matrix3f normals = new Matrix3f(pose.last().normal());
+        Sample sample = new Sample("sit", 0, null, 0, 1f);
+        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT,
+                consumer -> render(consumer, view, normals, light, loaded, sample));
+        pose.popPose();
+    }
+    //?}
 
     /** Bedrock pixels, upright, no mirror. Uniform and positive on every axis. */
     private static void bedrock(PoseStack pose) {
@@ -894,7 +907,8 @@ public final class Chick {
             u0 = u1;
             u1 = swap;
         }
-        Vector3f normal = new Vector3f(mirror ? -nx : nx, ny, nz);
+        // The mirror exchanges UVs. The vertices and their outward normal stay on the same face.
+        Vector3f normal = new Vector3f(nx, ny, nz);
         if (turn != null) {
             turn.transform(normal);
         }

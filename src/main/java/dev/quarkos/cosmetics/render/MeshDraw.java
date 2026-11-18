@@ -1,15 +1,19 @@
 package dev.quarkos.cosmetics.render;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import dev.quarkos.cosmetics.config.TintColor;
 import dev.quarkos.cosmetics.model.CosmeticModel;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
+import java.util.List;
+
 /** Draws a cosmetics-model-1 cube in a pose matrix captured before the stack is popped. */
 public final class MeshDraw {
+    private static final SkinShell.Face[] SKIN_FACES = SkinShell.Face.values();
+
     private MeshDraw() {
     }
 
@@ -80,51 +84,45 @@ public final class MeshDraw {
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
+        // The format is Y-up and the attachment reflects Y. Keep the UV on each
+        // corner and reverse the order so the exterior gets front-face lighting.
         vertex(consumer, view, x0, y0, z0, u0, v1, light, normal, tint);
-        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, tint);
-        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, tint);
         vertex(consumer, view, x3, y3, z3, u0, v0, light, normal, tint);
-        // 1.21.11 eyes() culls. The wing has to read from both sides, at the texture color.
-        //? if >=1.21.11 {
-        if (element.name() != null && element.name().contains("flap")) {
-            vertex(consumer, view, x0, y0, z0, u0, v1, light, normal, tint);
-            vertex(consumer, view, x3, y3, z3, u0, v0, light, normal, tint);
-            vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, tint);
-            vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, tint);
-        }
-        //?}
+        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, tint);
+        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, tint);
     }
 
-    public static void voxel(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light,
-                             float x, float y, float z, float size, float u, float v, int textureWidth, int textureHeight) {
-        float u0 = u / textureWidth;
-        float v0 = v / textureHeight;
-        float u1 = (u + 1f) / textureWidth;
-        float v1 = (v + 1f) / textureHeight;
-        float x1 = x + size;
-        float y1 = y + size;
-        float z1 = z + size;
-        face(consumer, view, normals, light, u0, v0, u1, v1, x, y, z1, x1, y, z1, x1, y1, z1, x, y1, z1, 0, 0, 1);
-        face(consumer, view, normals, light, u0, v0, u1, v1, x1, y, z, x, y, z, x, y1, z, x1, y1, z, 0, 0, -1);
-        face(consumer, view, normals, light, u0, v0, u1, v1, x1, y, z1, x1, y, z, x1, y1, z, x1, y1, z1, 1, 0, 0);
-        face(consumer, view, normals, light, u0, v0, u1, v1, x, y, z, x, y, z1, x, y1, z1, x, y1, z, -1, 0, 0);
-        face(consumer, view, normals, light, u0, v0, u1, v1, x, y1, z1, x1, y1, z1, x1, y1, z, x, y1, z, 0, 1, 0);
-        face(consumer, view, normals, light, u0, v0, u1, v1, x, y, z, x1, y, z, x1, y, z1, x, y, z1, 0, -1, 0);
-    }
-
-    private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light,
-                             float u0, float v0, float u1, float v1,
-                             float x0, float y0, float z0, float x1, float y1, float z1,
-                             float x2, float y2, float z2, float x3, float y3, float z3,
-                             float nx, float ny, float nz) {
-        Vector3f normal = new Vector3f(nx, ny, nz).mul(normals);
-        if (normal.lengthSquared() > 0.0001f) {
-            normal.normalize();
+    static void skin(VertexConsumer consumer, PoseStack.Pose pose, int light, int overlay, int color,
+                     List<SkinShell.Voxel> voxels) {
+        Vector3f[] normals = new Vector3f[SKIN_FACES.length];
+        for (SkinShell.Face face : SKIN_FACES) {
+            normals[face.ordinal()] = pose.normal().transform(new Vector3f(face.x, face.y, face.z)).normalize();
         }
-        vertex(consumer, view, x0, y0, z0, u0, v1, light, normal, TintColor.DEFAULT);
-        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, TintColor.DEFAULT);
-        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, TintColor.DEFAULT);
-        vertex(consumer, view, x3, y3, z3, u0, v0, light, normal, TintColor.DEFAULT);
+        Matrix4f view = pose.pose();
+        Vector3f position = new Vector3f();
+        for (SkinShell.Voxel voxel : voxels) {
+            float x0 = voxel.minX() / 16f;
+            float y0 = voxel.minY() / 16f;
+            float z0 = voxel.minZ() / 16f;
+            float x1 = voxel.maxX() / 16f;
+            float y1 = voxel.maxY() / 16f;
+            float z1 = voxel.maxZ() / 16f;
+            float u = (voxel.u() + 0.5f) / SkinShell.SKIN_SIZE;
+            float v = (voxel.v() + 0.5f) / SkinShell.SKIN_SIZE;
+            for (SkinShell.Face face : SKIN_FACES) {
+                if (!voxel.exposes(face)) {
+                    continue;
+                }
+                Vector3f normal = normals[face.ordinal()];
+                for (int i = 0; i < 4; i++) {
+                    int corner = face.corner(i);
+                    view.transformPosition((corner & 1) == 0 ? x0 : x1, (corner & 2) == 0 ? y0 : y1,
+                            (corner & 4) == 0 ? z0 : z1, position);
+                    consumer.addVertex(position.x, position.y, position.z, color, u, v, overlay, light,
+                            normal.x, normal.y, normal.z);
+                }
+            }
+        }
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,

@@ -10,6 +10,8 @@ public final class FabricQuarkosCosmetics implements ClientModInitializer {
     public void onInitializeClient() {
         MaskGlow.boot();
         //? if >=1.21.11 {
+        net.fabricmc.fabric.api.client.rendering.v1.SpecialGuiElementRegistry.register(context ->
+                new dev.quarkos.cosmetics.config.ui.ThumbnailRenderer(context.vertexConsumers()));
         dev.quarkos.cosmetics.render.JackOLanternMask.useDeferredGlow();
         dev.quarkos.cosmetics.harness.ClientHarness.shotAtFrameEnd();
         // After the shell is in the framebuffer, so the candle is not covered by the rind.

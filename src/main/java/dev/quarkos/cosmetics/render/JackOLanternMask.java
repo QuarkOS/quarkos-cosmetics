@@ -199,16 +199,16 @@ public final class JackOLanternMask {
         for (int y = 0; y < (int) FRAME; y++) {
             for (int x = 0; x < (int) FRAME; x++) {
                 int argb = glow.argb()[(y0 + y) * glow.width() + x];
-                int alpha = (argb >>> 24) & 255;
+                //? if >=1.21.11 {
+                image.setPixel(x, y, argb);
+                //?} else {
+                /*int alpha = (argb >>> 24) & 255;
                 int red = (argb >> 16) & 255;
                 int green = (argb >> 8) & 255;
                 int blue = argb & 255;
                 int abgr = (alpha << 24) | (blue << 16) | (green << 8) | red;
-                //? if >=1.21.11 {
-                image.setPixel(x, y, abgr);
-                //?} else {
                 image.setPixelRGBA(x, y, abgr);
-                //?}
+                *///?}
             }
         }
         if (glowFrame == null) {
@@ -240,14 +240,46 @@ public final class JackOLanternMask {
         submitter.submit(pose, glow, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
     }
 
+    //? if >=1.21.11 {
+    static void portrait(PoseStack pose, CosmeticDrawer.Submitter submitter, int light) {
+        Model loaded = load();
+        if (loaded == null) {
+            return;
+        }
+        pose.pushPose();
+        pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
+        pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
+        Matrix4f view = new Matrix4f(pose.last().pose());
+        Matrix3f normals = new Matrix3f(pose.last().normal());
+        // Use frame zero of the original strips without touching the player's animated glow texture.
+        float shellHeight = loaded.shellPixels == null ? FRAME * FRAMES : loaded.shellPixels.height();
+        float glowHeight = loaded.glowPixels == null ? FRAME * FRAMES : loaded.glowPixels.height();
+        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT,
+                consumer -> paint(consumer, view, normals, light, loaded, 0, 0, shellHeight, 255));
+        if (loaded.anyGlow) {
+            submitter.submit(pose, GLOW, CosmeticDrawer.Pass.CUTOUT, consumer -> {
+                paint(consumer, view, normals, light, loaded, 0, 2, glowHeight, 255);
+                paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, 0, 1, glowHeight, 255);
+            });
+        }
+        pose.popPose();
+    }
+    //?}
+
     /** kind 0 is the shell. kind 1 is the yellow and cream cores. kind 2 is the red recess and orange carved texels. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
+        paint(consumer, view, normals, light, loaded, frame, kind, FRAME, kind == 0 ? 255 : maskAlpha);
+    }
+
+    private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded,
+                              int frame, int kind, float samplerHeight, int alpha) {
         for (Cube cube : loaded.cubes) {
-            paintCube(consumer, view, normals, light, loaded, cube, frame, kind);
+            paintCube(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha);
         }
     }
 
-    private static void paintCube(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube, int frame, int kind) {
+    private static void paintCube(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube,
+                                  int frame, int kind, float samplerHeight, int alpha) {
         float x0 = cube.x0;
         float y0 = cube.y0;
         float z0 = cube.z0;
@@ -255,16 +287,16 @@ public final class JackOLanternMask {
         float y1 = cube.y1;
         float z1 = cube.z1;
         // Same outward winding as the chick cubes, in bedrock space.
-        face(consumer, view, normals, light, loaded, cube, frame, kind, "east", x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, "west", x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, "north", x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, "south", x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, "up", x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, "down", x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "east", x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "west", x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "north", x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "south", x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "up", x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "down", x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
     }
 
     private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube,
-                             int frame, int kind, String name,
+                             int frame, int kind, float samplerHeight, int alpha, String name,
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3,
                              float nx, float ny, float nz) {
@@ -285,8 +317,7 @@ public final class JackOLanternMask {
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
-        int alpha = kind == 0 ? 255 : maskAlpha;
-        emitTexels(consumer, view, light, loaded, frame, normal, nx, ny, nz, alpha, kind, uv,
+        emitTexels(consumer, view, light, loaded, frame, normal, nx, ny, nz, alpha, kind, uv, samplerHeight,
                 x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
     }
 
@@ -331,7 +362,7 @@ public final class JackOLanternMask {
      * light. Carved texels use the glow strip's own colour. Yellow and cream cores are full bright.
      */
     private static void emitTexels(VertexConsumer consumer, Matrix4f view, int light, Model loaded, int frame,
-                                   Vector3f normal, float nx, float ny, float nz, int alpha, int kind, Uv uv,
+                                   Vector3f normal, float nx, float ny, float nz, int alpha, int kind, Uv uv, float samplerHeight,
                                    float x0, float y0, float z0, float x1, float y1, float z1,
                                    float x2, float y2, float z2, float x3, float y3, float z3) {
         float uSpan = uv.u2 - uv.u1;
@@ -388,9 +419,8 @@ public final class JackOLanternMask {
                     float cz = (p00[2] + p10[2] + p11[2] + p01[2]) * 0.25f;
                     texelLight = spillLight(loaded, frame, light, kind, cx, cy, cz);
                 }
-                // Entity textures with this mcmeta present one 80×80 frame. V stays inside that frame.
                 float tu = (tx + 0.5f) / FRAME;
-                float tv = (ty + 0.5f) / FRAME;
+                float tv = (ty + 0.5f) / samplerHeight;
                 float overlap = kind == 0 ? SHELL_OVERLAP : 0.02f;
                 // The flame sits a hair in front of the red recess so the two do not fight for depth.
                 float bias = kind == 1 ? 0.08f : kind == 2 ? 0.04f : 0f;

@@ -9,7 +9,9 @@ import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +26,11 @@ public final class GalleryWork {
         thread.setDaemon(true);
         return thread;
     });
+    private static final ExecutorService PREVIEW_EXEC = Executors.newFixedThreadPool(2, runnable -> {
+        Thread thread = new Thread(runnable, "quarkos-gallery-preview");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private static volatile String bearer;
     private static volatile String status = "Gallery idle.";
@@ -31,6 +38,7 @@ public final class GalleryWork {
     private static volatile SignInStatus signInStatus = SignInStatus.SIGNED_OUT;
     private static volatile BrowseView browseView = new BrowseView(null, BrowseStatus.IDLE);
     private static int reportIndex;
+    private static final Set<String> PREVIEW_REQUESTS = new HashSet<>();
 
     public enum SignInStatus { SIGNED_OUT, SIGNING_IN, SIGNED_IN, ERROR }
 
@@ -98,6 +106,7 @@ public final class GalleryWork {
     public static void browse(Slot slot, String query) {
         BrowseView request = new BrowseView(slot, BrowseStatus.LOADING);
         browseView = request;
+        PREVIEW_REQUESTS.clear();
         status = "Loading the gallery…";
         EXEC.execute(() -> {
             try {
@@ -110,6 +119,32 @@ public final class GalleryWork {
                 });
             } catch (Exception ex) {
                 fail(ex, () -> finishBrowse(request, BrowseStatus.ERROR));
+            }
+        });
+    }
+
+    /** The listing contains only metadata. Fetch a model when its card becomes visible. */
+    public static void loadPreview(String id) {
+        BrowseView view = browseView;
+        if (view.status() != BrowseStatus.READY || ModelLibrary.resolve(id) != null || !PREVIEW_REQUESTS.add(id)) {
+            return;
+        }
+        String url = ClientSettings.get().galleryUrl;
+        PREVIEW_EXEC.execute(() -> {
+            // Requests queued for an old search can be skipped before opening a connection.
+            if (browseView != view) {
+                return;
+            }
+            try {
+                GalleryClient.Detail detail = new GalleryClient(url).cosmetic(id);
+                onClient(() -> {
+                    if (url.equals(ClientSettings.get().galleryUrl) && ModelLibrary.resolve(id) == null) {
+                        remember(detail);
+                        refreshScreen();
+                    }
+                });
+            } catch (Exception ignored) {
+                // The slot icon stays until the gallery is searched again.
             }
         });
     }

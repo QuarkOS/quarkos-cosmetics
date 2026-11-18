@@ -208,6 +208,7 @@ public final class ClientHarness {
             new UiShot("ui-gallery", WardrobeScreen.View.GALLERY, Slot.HAT, Chick.ID, 2, false),
             new UiShot("ui-settings", WardrobeScreen.View.SETTINGS, Slot.HAT, "quarkos:ghost_buddy", 2, false),
             new UiShot("ui-wardrobe-scale4", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:scarecrow_straw_hat", 4, false),
+            new UiShot("ui-cards-zoom", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:scarecrow_straw_hat", 4, false),
             skinPreview("skin-preview-0", 0f, true),
             skinPreview("skin-preview-90", 90f, true),
             skinPreview("skin-preview-180", 180f, true),

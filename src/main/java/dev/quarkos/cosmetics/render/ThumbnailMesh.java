@@ -1,0 +1,180 @@
+package dev.quarkos.cosmetics.render;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import dev.quarkos.cosmetics.config.TintColor;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.Identifier;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
+//? if >=1.21.11 {
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+//?} else {
+/*import net.minecraft.client.renderer.RenderType;
+*///?}
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+/** The cosmetic's own mesh in a fixed three-quarter pose. */
+public final class ThumbnailMesh {
+    private static final int CACHE_LIMIT = 64;
+    private static final Map<ModelLibrary.Resolved, Optional<ThumbnailMesh>> CACHE = new LinkedHashMap<>(16, 0.75f, true);
+    //? if >=1.21.11 {
+    private static final ModelPart ORIGIN = new ModelPart(List.of(), Map.of());
+    //?}
+    private final List<Batch> batches;
+    private final Vector3f min = new Vector3f(Float.POSITIVE_INFINITY);
+    private final Vector3f max = new Vector3f(Float.NEGATIVE_INFINITY);
+
+    private ThumbnailMesh(List<Batch> batches) {
+        this.batches = List.copyOf(batches);
+        for (Batch batch : batches) {
+            for (Vertex vertex : batch.vertices()) {
+                min.set(Math.min(min.x, vertex.x()), Math.min(min.y, vertex.y()), Math.min(min.z, vertex.z()));
+                max.set(Math.max(max.x, vertex.x()), Math.max(max.y, vertex.y()), Math.max(max.z, vertex.z()));
+            }
+        }
+    }
+
+    public static ThumbnailMesh of(ModelLibrary.Resolved model) {
+        Optional<ThumbnailMesh> mesh = CACHE.computeIfAbsent(model, ThumbnailMesh::build);
+        if (CACHE.size() > CACHE_LIMIT) {
+            CACHE.remove(CACHE.keySet().iterator().next());
+        }
+        return mesh.orElse(null);
+    }
+
+    private static Optional<ThumbnailMesh> build(ModelLibrary.Resolved model) {
+        PoseStack pose = new PoseStack();
+        pose.mulPose(new Quaternionf().rotateX(0.26f).rotateY(0.57f));
+        List<Batch> batches = new ArrayList<>();
+        CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
+            Capture capture = new Capture();
+            draw.accept(capture);
+            if (!capture.vertices.isEmpty()) {
+                batches.add(new Batch(texture, pass, List.copyOf(capture.vertices)));
+            }
+        };
+        int light = LightTexture.FULL_BRIGHT;
+        //? if >=1.21.11 {
+        if (Chick.draws(model.id())) {
+            Chick.portrait(pose, submitter, light);
+        } else if (JackOLanternMask.ID.equals(model.id())) {
+            JackOLanternMask.portrait(pose, submitter, light);
+        } else if (BlockbenchCosmetic.draws(model.id())) {
+            BlockbenchCosmetic.draw(pose, submitter, light, 0f, ORIGIN, ORIGIN, model.id(), TintColor.DEFAULT);
+        } else {
+            CosmeticDrawer.packed(pose, submitter, light, 0f, model, TintColor.DEFAULT, 0f, 0f, 0f);
+        }
+        //?} else {
+        /*CosmeticDrawer.packed(pose, submitter, light, 0f, model, TintColor.DEFAULT, 0f, 0f, 0f);
+        *///?}
+        return batches.isEmpty() ? Optional.empty() : Optional.of(new ThumbnailMesh(batches));
+    }
+
+    public float scaleToFit(int width, int height) {
+        float x = width / Math.max(0.001f, max.x - min.x);
+        float y = height / Math.max(0.001f, max.y - min.y);
+        return Math.min(x, y) * 0.88f;
+    }
+
+    public void render(PoseStack pose, MultiBufferSource buffer) {
+        pose.translate(-(min.x + max.x) / 2f, -(min.y + max.y) / 2f, -(min.z + max.z) / 2f);
+        PoseStack.Pose entry = pose.last();
+        Vector3f position = new Vector3f();
+        Vector3f normal = new Vector3f();
+        for (Batch batch : batches) {
+            //? if >=1.21.11 {
+            var type = switch (batch.pass()) {
+                case CUTOUT, GLOW -> RenderTypes.entityCutout(batch.texture());
+                case CUTOUT_NO_CULL -> RenderTypes.entityCutoutNoCull(batch.texture());
+                case TRANSLUCENT -> RenderTypes.entityTranslucent(batch.texture());
+                case EYES -> RenderTypes.eyes(batch.texture());
+            };
+            //?} else {
+            /*var type = RenderType.entityCutoutNoCull(batch.texture());
+            *///?}
+            VertexConsumer consumer = buffer.getBuffer(type);
+            for (Vertex vertex : batch.vertices()) {
+                entry.pose().transformPosition(vertex.x(), vertex.y(), vertex.z(), position);
+                entry.transformNormal(vertex.nx(), vertex.ny(), vertex.nz(), normal);
+                consumer.addVertex(position.x, position.y, position.z, vertex.color(), vertex.u(), vertex.v(),
+                        OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, normal.x, normal.y, normal.z);
+            }
+        }
+    }
+
+    public static void clearCache() {
+        CACHE.clear();
+    }
+
+    private record Batch(Identifier texture, CosmeticDrawer.Pass pass, List<Vertex> vertices) {
+    }
+
+    private record Vertex(float x, float y, float z, int color, float u, float v, float nx, float ny, float nz) {
+    }
+
+    /** The shared cosmetic emitters write the normal last for each vertex. */
+    private static final class Capture implements VertexConsumer {
+        private final List<Vertex> vertices = new ArrayList<>();
+        private float x, y, z, u, v;
+        private int color = -1;
+
+        @Override
+        public VertexConsumer addVertex(float x, float y, float z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setColor(int r, int g, int b, int a) {
+            return setColor(a << 24 | r << 16 | g << 8 | b);
+        }
+
+        @Override
+        public VertexConsumer setColor(int color) {
+            this.color = color;
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv(float u, float v) {
+            this.u = u;
+            this.v = v;
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv1(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setUv2(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer setNormal(float nx, float ny, float nz) {
+            vertices.add(new Vertex(x, y, z, color, u, v, nx, ny, nz));
+            return this;
+        }
+
+        //? if >=1.21.11 {
+        @Override
+        public VertexConsumer setLineWidth(float width) {
+            return this;
+        }
+        //?}
+    }
+}

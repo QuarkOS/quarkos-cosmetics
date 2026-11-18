@@ -9,10 +9,16 @@ import net.minecraft.server.packs.resources.Resource;
 import java.io.InputStream;
 import java.util.Optional;
 
-/** Reads a skin into ARGB. Mojang stores pixels as ABGR. */
+/** Reads a texture into ARGB. */
 public final class SkinImages {
     public record Pixels(int width, int height, int[] argb) {
     }
+
+    //? if <1.21.11 {
+    /*public interface LegacyTexture {
+        Pixels quarkos$skinPixels();
+    }
+    *///?}
 
     private SkinImages() {
     }
@@ -23,6 +29,11 @@ public final class SkinImages {
         }
         Minecraft minecraft = Minecraft.getInstance();
         var texture = minecraft.getTextureManager().getTexture(location);
+        //? if <1.21.11 {
+        /*if (texture instanceof LegacyTexture legacy) {
+            return legacy.quarkos$skinPixels();
+        }
+        *///?}
         if (texture instanceof DynamicTexture dynamic && dynamic.getPixels() != null) {
             return from(dynamic.getPixels());
         }
@@ -49,15 +60,15 @@ public final class SkinImages {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 //? if >=1.21.11 {
-                int pixel = image.getPixel(x, y);
+                argb[y * width + x] = image.getPixel(x, y);
                 //?} else {
-                int pixel = image.getPixelRGBA(x, y);
-                //?}
+                /*int pixel = image.getPixelRGBA(x, y);
                 int alpha = (pixel >>> 24) & 255;
                 int blue = (pixel >>> 16) & 255;
                 int green = (pixel >>> 8) & 255;
                 int red = pixel & 255;
                 argb[y * width + x] = (alpha << 24) | (red << 16) | (green << 8) | blue;
+                *///?}
             }
         }
         return new Pixels(width, height, argb);

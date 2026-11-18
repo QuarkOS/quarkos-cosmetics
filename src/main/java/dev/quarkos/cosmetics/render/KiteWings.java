@@ -219,9 +219,16 @@ public final class KiteWings {
             normal.normalize();
         }
         vertex(consumer, view, x0, y0, z0, u0, v0, light, normal);
-        vertex(consumer, view, x1, y1, z1, u1, v0, light, normal);
-        vertex(consumer, view, x2, y2, z2, u1, v1, light, normal);
-        vertex(consumer, view, x3, y3, z3, u0, v1, light, normal);
+        if (ny != 0) {
+            // The vertical faces already account for the Y reflection. The caps need reversed winding as well.
+            vertex(consumer, view, x3, y3, z3, u0, v1, light, normal);
+            vertex(consumer, view, x2, y2, z2, u1, v1, light, normal);
+            vertex(consumer, view, x1, y1, z1, u1, v0, light, normal);
+        } else {
+            vertex(consumer, view, x1, y1, z1, u1, v0, light, normal);
+            vertex(consumer, view, x2, y2, z2, u1, v1, light, normal);
+            vertex(consumer, view, x3, y3, z3, u0, v1, light, normal);
+        }
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,

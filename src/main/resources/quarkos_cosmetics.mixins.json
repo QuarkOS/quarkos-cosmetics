@@ -5,6 +5,10 @@
   "compatibilityLevel": "JAVA_21",
     "client": [
     "PlayerCosmeticsMixin",
+    "SkinShellMixin",
+    "LegacySkinUploadMixin",
+    "TextureReloadMixin",
+    "ThumbnailRenderFinishMixin",
     "CosmeticLayerAccess",
     "PauseScreenMixin",
     "ClientTickMixin",

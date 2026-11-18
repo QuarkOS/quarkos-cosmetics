@@ -1,10 +1,7 @@
 package dev.quarkos.cosmetics.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Items;
-
-import java.util.List;
 
 //? if >=1.21.11 {
 import net.minecraft.client.Minecraft;
@@ -49,15 +46,6 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
         };
         CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
                 CosmeticAttach.placements(entity == null ? null : entity.getUUID(), self, elytra, helmet, chest, legs), wingsFlap, self);
-        if (CosmeticAttach.showSkin(self, state.distanceToCameraSq) && state.skin != null && state.skin.body() != null) {
-            Identifier skin = state.skin.body().texturePath();
-            SkinImages.Pixels pixels = SkinImages.read(skin);
-            if (pixels != null) {
-                List<SkinShell.Voxel> voxels = SkinShell.build(pixels.width(), pixels.height(), pixels.argb(),
-                        state.showHat, state.showJacket, state.showRightSleeve, state.showLeftSleeve, state.showRightPants, state.showLeftPants);
-                CosmeticDrawer.shellAll(pose, submitter, light, model.head, model.body, model.leftArm, model.rightArm, model.leftLeg, model.rightLeg, skin, voxels);
-            }
-        }
     }
 }
 //?} else {
@@ -104,22 +92,6 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
         };
         CosmeticAttach.draw(pose, submitter, light, ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
                 CosmeticAttach.placements(player.getUUID(), self, elytra, helmet, chest, legs), wingsFlap, self);
-        var camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        double distance = player.distanceToSqr(camera.x, camera.y, camera.z);
-        if (CosmeticAttach.showSkin(self, distance) && player.getSkin() != null && player.getSkin().texture() != null) {
-            Identifier skin = player.getSkin().texture();
-            SkinImages.Pixels pixels = SkinImages.read(skin);
-            if (pixels != null) {
-                List<SkinShell.Voxel> voxels = SkinShell.build(pixels.width(), pixels.height(), pixels.argb(),
-                        player.isModelPartShown(PlayerModelPart.HAT),
-                        player.isModelPartShown(PlayerModelPart.JACKET),
-                        player.isModelPartShown(PlayerModelPart.RIGHT_SLEEVE),
-                        player.isModelPartShown(PlayerModelPart.LEFT_SLEEVE),
-                        player.isModelPartShown(PlayerModelPart.RIGHT_PANTS_LEG),
-                        player.isModelPartShown(PlayerModelPart.LEFT_PANTS_LEG));
-                CosmeticDrawer.shellAll(pose, submitter, light, model.head, model.body, model.leftArm, model.rightArm, model.leftLeg, model.rightLeg, skin, voxels);
-            }
-        }
     }
 }
 //?}

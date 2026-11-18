@@ -10,6 +10,8 @@ public final class ForgeQuarkosCosmetics {
     public ForgeQuarkosCosmetics() {
         MaskGlow.boot();
         //? if >=1.21.11 {
+        net.minecraftforge.client.event.RegisterPictureInPictureRendererEvent.BUS.addListener(event ->
+                event.register(new dev.quarkos.cosmetics.config.ui.ThumbnailRenderer.Forge(event.getBufferSource())));
         // The entity batch never puts the candle in the main color target. Draw it after the world.
         dev.quarkos.cosmetics.render.JackOLanternMask.useDeferredGlow();
         dev.quarkos.cosmetics.harness.ClientHarness.shotAtFrameEnd();

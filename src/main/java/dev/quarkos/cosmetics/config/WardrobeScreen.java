@@ -672,12 +672,15 @@ public final class WardrobeScreen extends Screen {
         int labelHeight = galleryCard ? 26 : 16;
         Rect art = new Rect(rect.x() + 2, rect.y() + 2, rect.w() - 4, rect.h() - labelHeight - 2);
         UiTheme.fill(graphics, art, UiTheme.STAGE);
-        if (card.thumbnail() != null) {
-            card.thumbnail().draw(graphics, art.inset(3));
-        } else if (card.id().isBlank()) {
-            UiTheme.emptyIcon(graphics, art.x() + (art.w() - 22) / 2, art.y() + (art.h() - 22) / 2);
-        } else {
-            UiTheme.slotIcon(graphics, slot, art.x() + (art.w() - 12) / 2, art.y() + (art.h() - 12) / 2, UiTheme.MUTED);
+        if (card.thumbnail() == null || !card.thumbnail().draw(graphics, art.inset(3))) {
+            if (card.id().isBlank()) {
+                UiTheme.emptyIcon(graphics, art.x() + (art.w() - 22) / 2, art.y() + (art.h() - 22) / 2);
+            } else {
+                if (galleryCard && !studioGallery && card.thumbnail() == null) {
+                    GalleryWork.loadPreview(card.id());
+                }
+                UiTheme.slotIcon(graphics, slot, art.x() + (art.w() - 12) / 2, art.y() + (art.h() - 12) / 2, UiTheme.MUTED);
+            }
         }
         if (worn) {
             UiTheme.check(graphics, rect.right() - 16, rect.y() + 4);
