@@ -15,6 +15,7 @@
     "ClientTickMixin",
     "CameraZoomMixin",
     "InventoryPreviewAccess",
+    "WardrobePreviewStateMixin",
     "HarnessPoseMixin",
     "HarnessSkinMixin",
     "GuiCaptureMixin",

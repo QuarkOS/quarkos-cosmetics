@@ -30,11 +30,7 @@ import net.minecraft.client.renderer.LightTexture;
 import static net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
 //?}
 
-/**
- * GeckoLib armor mask. The head bone follows the player head. Bedrock +Y is up;
- * a 180° roll stands it on the head. The scale is uniform and positive, so the
- * pose determinant stays positive and culling keeps the outward faces.
- */
+/** GeckoLib armor mask. A 180° roll and positive scale align the Bedrock cubes with the player head. */
 public final class JackOLanternMask {
     public static final String ID = "quarkos:jack_o_lantern_mask";
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
@@ -43,12 +39,18 @@ public final class JackOLanternMask {
     private static final Identifier GLOW = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/cosmetics/jack_o_lantern_mask_glow.png");
     /** One 80×80 candle frame, copied out of the strip. The entity sampler does not advance mcmeta. */
     private static final Identifier GLOW_FRAME = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "dynamic/jack_o_lantern_glow_frame");
-    /** One square of the vertical strip. The mcmeta asks for this, but entity textures upload the whole strip. */
+    /** The width and height of one frame in the vertical strips. */
     private static final float FRAME = 80f;
     private static final int FRAMES = 24;
     /** Holds each candle frame for this many ticks. Matches the mcmeta frametime, with interpolation off. */
     private static final int FRAME_TICKS = 2;
     private static final String[] FACES = {"north", "south", "east", "west", "up", "down"};
+    private static final int MENU = 3;
+    //? if >=26.3 {
+    /*private static final boolean SHADE_MENU_CORES = true;
+    *///?} else {
+    private static final boolean SHADE_MENU_CORES = false;
+    //?}
 
     private static Model model;
     private static boolean failed;
@@ -67,6 +69,13 @@ public final class JackOLanternMask {
     public static void setSpill(boolean on) {
         spill = on;
     }
+
+    public static void clearCache() {
+        model = null;
+        failed = false;
+        uploadedFrame = -1;
+    }
+
     /** One shell texel, in bedrock pixels. The candle cubes and the face grid share this step. */
     private static final float TEXEL = 0.9224f;
 
@@ -74,7 +83,7 @@ public final class JackOLanternMask {
     }
 
     public static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, ModelPart head,
-                            float offsetX, float offsetY, float offsetZ) {
+                            float offsetX, float offsetY, float offsetZ, boolean wardrobePreview) {
         Model loaded = load();
         if (loaded == null) {
             return;
@@ -91,8 +100,15 @@ public final class JackOLanternMask {
         //?}
         pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
         pose.translate(-offsetX, -24f + offsetY, offsetZ);
-        Matrix4f view = new Matrix4f(pose.last().pose());
         int frame = Math.floorMod(tick / FRAME_TICKS, FRAMES);
+        //? if >=1.21.11 {
+        if (wardrobePreview) {
+            submitMenu(pose, submitter, loaded, frame);
+            pose.popPose();
+            return;
+        }
+        //?}
+        Matrix4f view = new Matrix4f(pose.last().pose());
         uploadGlowFrame(loaded, frame);
         if (!loggedDet) {
             loggedDet = true;
@@ -192,8 +208,8 @@ public final class JackOLanternMask {
     //?}
 
     /**
-     * The glow png is an 80×1920 strip. A plain entity texture stays on frame 0, so the candle
-     * frame the CPU picked is copied into an 80×80 texture and that is what the mesh samples.
+     * Copy the selected glow frame into an 80×80 texture so the world pass samples the
+     * same frame that selected its carved texels.
      */
     private static void uploadGlowFrame(Model loaded, int frame) {
         SkinImages.Pixels glow = loaded == null ? null : loaded.glowPixels;
@@ -254,7 +270,7 @@ public final class JackOLanternMask {
     }
 
     //? if >=1.21.11 {
-    static void portrait(PoseStack pose, CosmeticDrawer.Submitter submitter, int light) {
+    static void portrait(PoseStack pose, CosmeticDrawer.Submitter submitter) {
         Model loaded = load();
         if (loaded == null) {
             return;
@@ -266,44 +282,35 @@ public final class JackOLanternMask {
         pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
         //?}
         pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
+        submitMenu(pose, submitter, loaded, 0);
+        pose.popPose();
+    }
+
+    private static void submitMenu(PoseStack pose, CosmeticDrawer.Submitter submitter, Model loaded, int frame) {
+        if (loaded.shellPixels == null) {
+            return;
+        }
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
-        // Use frame zero of the original strips without touching the player's animated glow texture.
-        float shellHeight = loaded.shellPixels == null ? FRAME * FRAMES : loaded.shellPixels.height();
-        float glowHeight = loaded.glowPixels == null ? FRAME * FRAMES : loaded.glowPixels.height();
-        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT,
-                consumer -> paint(consumer, view, normals, light, loaded, 0, 0, shellHeight, 255));
-        if (loaded.anyGlow) {
-            //? if >=26.3 {
-            /*submitter.submit(pose, GLOW, CosmeticDrawer.Pass.CUTOUT,
-                    consumer -> paint(consumer, view, normals, light, loaded, 0, 2, glowHeight, 255));
-            submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW,
-                    consumer -> paint(consumer, view, normals, FULL_BRIGHT, loaded, 0, 1, glowHeight, 255));
-            *///?} else {
-            submitter.submit(pose, GLOW, CosmeticDrawer.Pass.CUTOUT, consumer -> {
-                paint(consumer, view, normals, light, loaded, 0, 2, glowHeight, 255);
-                paint(consumer, view, normals, FULL_BRIGHT, loaded, 0, 1, glowHeight, 255);
-            });
-            //?}
-        }
-        pose.popPose();
+        submitter.submit(pose, null, CosmeticDrawer.Pass.MASK_MENU,
+                consumer -> paint(consumer, view, normals, FULL_BRIGHT, loaded, frame, MENU, 255));
     }
     //?}
 
-    /** kind 0 is the shell. kind 1 is the yellow and cream cores. kind 2 is the red recess and orange carved texels. */
+    /** World batches select one of the shell, bright cores, or red recesses. */
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, int frame, int kind) {
-        paint(consumer, view, normals, light, loaded, frame, kind, FRAME, kind == 0 ? 255 : maskAlpha);
+        paint(consumer, view, normals, light, loaded, frame, kind, kind == 0 ? 255 : maskAlpha);
     }
 
     private static void paint(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded,
-                              int frame, int kind, float samplerHeight, int alpha) {
+                              int frame, int kind, int alpha) {
         for (Cube cube : loaded.cubes) {
-            paintCube(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha);
+            paintCube(consumer, view, normals, light, loaded, cube, frame, kind, alpha);
         }
     }
 
     private static void paintCube(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube,
-                                  int frame, int kind, float samplerHeight, int alpha) {
+                                  int frame, int kind, int alpha) {
         float x0 = cube.x0;
         float y0 = cube.y0;
         float z0 = cube.z0;
@@ -311,16 +318,16 @@ public final class JackOLanternMask {
         float y1 = cube.y1;
         float z1 = cube.z1;
         // Same outward winding as the chick cubes, in bedrock space.
-        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "east", x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "west", x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "north", x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "south", x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "up", x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
-        face(consumer, view, normals, light, loaded, cube, frame, kind, samplerHeight, alpha, "down", x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, alpha, "east", x1, y1, z0, x1, y1, z1, x1, y0, z1, x1, y0, z0, 1, 0, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, alpha, "west", x0, y1, z1, x0, y1, z0, x0, y0, z0, x0, y0, z1, -1, 0, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, alpha, "north", x0, y1, z0, x1, y1, z0, x1, y0, z0, x0, y0, z0, 0, 0, -1);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, alpha, "south", x1, y1, z1, x0, y1, z1, x0, y0, z1, x1, y0, z1, 0, 0, 1);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, alpha, "up", x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
+        face(consumer, view, normals, light, loaded, cube, frame, kind, alpha, "down", x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
     }
 
     private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Cube cube,
-                             int frame, int kind, float samplerHeight, int alpha, String name,
+                             int frame, int kind, int alpha, String name,
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3,
                              float nx, float ny, float nz) {
@@ -330,18 +337,15 @@ public final class JackOLanternMask {
             return;
         }
         Uv uv = cube.uv(name);
-        if (uv == null || kind < 0 || kind > 2) {
+        if (uv == null) {
             return;
         }
-        // GeckoLib keeps an animated mcmeta texture as one 80×80 frame and swaps the pixels itself.
-        // Offsetting V down the strip samples empty rows of that frame, so the flame drops out.
-        // Every texel samples its own center, so a linear filter cannot pull in a clear neighbor.
         Vector3f normal = new Vector3f(nx, ny, nz);
         normals.transform(normal);
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
-        emitTexels(consumer, view, light, loaded, frame, normal, nx, ny, nz, alpha, kind, uv, samplerHeight,
+        emitTexels(consumer, view, light, loaded, frame, normal, nx, ny, nz, alpha, kind, uv,
                 x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
     }
 
@@ -356,16 +360,9 @@ public final class JackOLanternMask {
         if (glow != null) {
             int x = Math.min(glow.width() - 1, Math.max(0, (int) Math.floor(su)));
             int y = Math.min(glow.height() - 1, Math.max(0, Math.floorMod(frame, FRAMES) * (int) FRAME + (int) Math.floor(sv)));
-            int argb = glow.argb()[y * glow.width() + x];
-            int a = (argb >>> 24) & 255;
-            int r = (argb >> 16) & 255;
-            int g = (argb >> 8) & 255;
-            int b = argb & 255;
-            if (a > 10) {
-                if (g >= 64 && r > b) {
-                    return 1;
-                }
-                return 2;
+            int glowKind = MaskTexels.glowKind(glow.argb()[y * glow.width() + x]);
+            if (glowKind != MaskTexels.SHELL) {
+                return glowKind;
             }
         }
         SkinImages.Pixels shellPixels = loaded.shellPixels;
@@ -386,7 +383,7 @@ public final class JackOLanternMask {
      * light. Carved texels use the glow strip's own colour. Yellow and cream cores are full bright.
      */
     private static void emitTexels(VertexConsumer consumer, Matrix4f view, int light, Model loaded, int frame,
-                                   Vector3f normal, float nx, float ny, float nz, int alpha, int kind, Uv uv, float samplerHeight,
+                                   Vector3f normal, float nx, float ny, float nz, int alpha, int kind, Uv uv,
                                    float x0, float y0, float z0, float x1, float y1, float z1,
                                    float x2, float y2, float z2, float x3, float y3, float z3) {
         float uSpan = uv.u2 - uv.u1;
@@ -408,6 +405,9 @@ public final class JackOLanternMask {
         if (ty1 <= ty0) {
             ty1 = ty0 + 1;
         }
+        boolean menu = kind == MENU;
+        // Keep the level's daylight shade on each outward face as the menu camera orbits.
+        float faceShade = menu ? MaskTexels.daylight(nx, ny, nz) : 1f;
         for (int ty = ty0; ty < ty1; ty++) {
             float sv0 = Math.max(vMin, ty);
             float sv1 = Math.min(vMax, ty + 1f);
@@ -428,31 +428,46 @@ public final class JackOLanternMask {
                 float ub = (su1 - uv.u1) / uSpan;
                 float uLo = Math.min(ua, ub);
                 float uHi = Math.max(ua, ub);
-                int cls = carveClass(loaded, frame, tx + 0.5f, ty + 0.5f);
-                if (kind == 0 ? cls != 0 : kind == 1 ? cls != 1 : cls != 2) {
+                int surface = kind;
+                int color = (alpha << 24) | 0xffffff;
+                if (menu) {
+                    int glow = menuTexel(loaded.glowPixels, frame, tx, ty);
+                    surface = MaskTexels.glowKind(glow);
+                    int texel = surface == MaskTexels.SHELL ? menuTexel(loaded.shellPixels, frame, tx, ty) : glow;
+                    float shade = surface == MaskTexels.CORE && !SHADE_MENU_CORES ? 1f : faceShade;
+                    color = MaskTexels.cutoutColor(texel, shade);
+                    if (color == 0) {
+                        continue;
+                    }
+                } else if (carveClass(loaded, frame, tx + 0.5f, ty + 0.5f) != kind) {
                     continue;
                 }
                 float[] p00 = bilerp(uLo, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p10 = bilerp(uHi, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p11 = bilerp(uHi, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p01 = bilerp(uLo, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                int texelLight = kind == 1 ? FULL_BRIGHT : light;
-                if (kind != 1 && spill) {
+                int texelLight = surface == MaskTexels.CORE ? FULL_BRIGHT : light;
+                if (!menu && surface != MaskTexels.CORE && spill) {
                     float cx = (p00[0] + p10[0] + p11[0] + p01[0]) * 0.25f;
                     float cy = (p00[1] + p10[1] + p11[1] + p01[1]) * 0.25f;
                     float cz = (p00[2] + p10[2] + p11[2] + p01[2]) * 0.25f;
-                    texelLight = spillLight(loaded, frame, light, kind, cx, cy, cz);
+                    texelLight = spillLight(loaded, frame, light, surface, cx, cy, cz);
                 }
+                // The world samplers address one 80×80 frame. Sample the center of each texel.
                 float tu = (tx + 0.5f) / FRAME;
-                float tv = (ty + 0.5f) / samplerHeight;
-                float overlap = kind == 0 ? SHELL_OVERLAP : 0.02f;
+                float tv = (ty + 0.5f) / FRAME;
+                float overlap = surface == MaskTexels.SHELL ? SHELL_OVERLAP : 0.02f;
                 // The flame sits a hair in front of the red recess so the two do not fight for depth.
-                float bias = kind == 1 ? 0.08f : kind == 2 ? 0.04f : 0f;
-                emit(consumer, view, texelLight, normal, bias, nx, ny, nz, alpha, tu, tv, tu, tv, overlap, 0f,
+                float bias = surface == MaskTexels.CORE ? 0.08f : surface == MaskTexels.RECESS ? 0.04f : 0f;
+                emit(consumer, view, texelLight, normal, bias, nx, ny, nz, color, tu, tv, tu, tv, overlap, 0f,
                         p00[0], p00[1], p00[2], p10[0], p10[1], p10[2],
                         p11[0], p11[1], p11[2], p01[0], p01[1], p01[2]);
             }
         }
+    }
+
+    private static int menuTexel(SkinImages.Pixels strip, int frame, int x, int y) {
+        return strip == null ? 0 : MaskTexels.framePixel(strip.argb(), strip.width(), (int) FRAME, frame, x, y);
     }
 
     /**
@@ -548,7 +563,7 @@ public final class JackOLanternMask {
     }
 
     private static void emit(VertexConsumer consumer, Matrix4f view, int light, Vector3f normal, float bias,
-                             float nx, float ny, float nz, int alpha,
+                             float nx, float ny, float nz, int color,
                              float u0, float v0, float u1, float v1, float overlap, float zNudge,
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3) {
@@ -572,16 +587,16 @@ public final class JackOLanternMask {
             }
             zs[i] -= zNudge;
         }
-        vertex(consumer, view, xs[0] + nx * bias, ys[0] + ny * bias, zs[0] + nz * bias, u0, v0, light, alpha, normal);
-        vertex(consumer, view, xs[1] + nx * bias, ys[1] + ny * bias, zs[1] + nz * bias, u1, v0, light, alpha, normal);
-        vertex(consumer, view, xs[2] + nx * bias, ys[2] + ny * bias, zs[2] + nz * bias, u1, v1, light, alpha, normal);
-        vertex(consumer, view, xs[3] + nx * bias, ys[3] + ny * bias, zs[3] + nz * bias, u0, v1, light, alpha, normal);
+        vertex(consumer, view, xs[0] + nx * bias, ys[0] + ny * bias, zs[0] + nz * bias, u0, v0, light, color, normal);
+        vertex(consumer, view, xs[1] + nx * bias, ys[1] + ny * bias, zs[1] + nz * bias, u1, v0, light, color, normal);
+        vertex(consumer, view, xs[2] + nx * bias, ys[2] + ny * bias, zs[2] + nz * bias, u1, v1, light, color, normal);
+        vertex(consumer, view, xs[3] + nx * bias, ys[3] + ny * bias, zs[3] + nz * bias, u0, v1, light, color, normal);
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,
-                               float u, float v, int light, int alpha, Vector3f normal) {
+                               float u, float v, int light, int color, Vector3f normal) {
         consumer.addVertex(view, x, y, z)
-                .setColor(255, 255, 255, alpha)
+                .setColor(color)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.pack(0, 10))
                 .setLight(light)
@@ -605,23 +620,20 @@ public final class JackOLanternMask {
         final float textureWidth;
         final float textureHeight;
         final List<Cube> cubes;
-        /** False when the glow strip could not be read. The pass then draws every face and lets alpha discard. */
-        final boolean anyGlow;
-        /** Frame 0 of the glow strip. Lit texels are the same rectangle on every frame. */
+        /** Glow strip. The alpha mask is the same on every bundled frame. */
         final SkinImages.Pixels glowPixels;
-        /** Frame 0 of the shell. Hole colours on the carving lip are covered with flame. */
+        /** Shell strip. The world uses frame zero for its alpha mask. */
         final SkinImages.Pixels shellPixels;
         /** x0, y0, z0, x1, y1, z1 of each carving cube. */
         final float[] openings;
         /** Block light of a bright candle frame, one entry per glow frame. Rings subtract from this. */
         final int[] frameLight;
 
-        Model(float textureWidth, float textureHeight, List<Cube> cubes, boolean anyGlow, SkinImages.Pixels glowPixels,
+        Model(float textureWidth, float textureHeight, List<Cube> cubes, SkinImages.Pixels glowPixels,
               SkinImages.Pixels shellPixels, float[] openings, int[] frameLight) {
             this.textureWidth = textureWidth;
             this.textureHeight = textureHeight;
             this.cubes = cubes;
-            this.anyGlow = anyGlow;
             this.glowPixels = glowPixels;
             this.shellPixels = shellPixels;
             this.openings = openings;
@@ -675,7 +687,7 @@ public final class JackOLanternMask {
             float[] openings = openingsOf(cubes);
             int[] frameLight = frameLight(glowPixels);
             LOGGER.info("mask cubes {} glow faces {} glow texels {} candle steps {}", cubes.size(), lit, texels, java.util.Arrays.toString(frameLight));
-            return new Model(width, height, cubes, texels > 0 && lit > 0, glowPixels, shellPixels, openings, frameLight);
+            return new Model(width, height, cubes, glowPixels, shellPixels, openings, frameLight);
         }
 
         private static float[] openingsOf(List<Cube> cubes) {

@@ -2,18 +2,31 @@ package dev.quarkos.cosmetics.render;
 
 import net.minecraft.resources.Identifier;
 
+//? if >=1.21.11 {
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
+//? if >=26.3 {
+/*import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import net.minecraft.client.renderer.BindGroupLayouts;
+*///?} else {
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.shaders.UniformType;
+import com.mojang.blaze3d.vertex.VertexFormat;
+//?}
+//?}
+
 //? if <26.3 {
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 //?}
 
-/**
- * 1.21.11 draws the rind and the candle in one mesh, after the world, into the main
- * color target. Candle vertices are marked with alpha 0; the mask shader samples the
- * glow strip and skips the lightmap. Everywhere else the candle is a full-bright
- * cutout of that strip. Eyes is a translucent pass, and on 1.21.11 it never lands in
- * the main color target, so the carved texels stay the rind's dark brown.
- */
+/** Render types for the mask's world and menu draws. */
 public final class MaskGlow {
     private MaskGlow() {
     }
@@ -21,6 +34,44 @@ public final class MaskGlow {
     /** Present so client setup can touch the class before the first frame. */
     public static void boot() {
     }
+
+    //? if >=1.21.11 {
+    private static RenderType menu;
+
+    /** The mesh supplies its shaded texel colors and the PIP depth buffer resolves the visible faces. */
+    static RenderType menu() {
+        if (menu == null) {
+            //? if >=26.3 {
+            /*var builder = RenderPipeline.builder()
+                    .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                    .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+                    .withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
+                    .withPrimitiveTopology(PrimitiveTopology.QUADS)
+                    .withColorTargetState(ColorTargetState.DEFAULT)
+                    .withDepthStencilState(DepthStencilState.DEFAULT);
+            *///?} else {
+            var builder = RenderPipeline.builder()
+                    .withUniform("Projection", UniformType.UNIFORM_BUFFER)
+                    .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+                    .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
+                    .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+                    .withDepthWrite(true);
+            //?}
+            var pipeline = builder.withLocation(Identifier.fromNamespaceAndPath("quarkos_cosmetics", "pipeline/mask_menu"))
+                    .withVertexShader("core/position_color")
+                    .withFragmentShader("core/position_color")
+                    .withCull(true)
+                    .build();
+            //? if fabric {
+            RenderPipelines.register(pipeline);
+            //?} else {
+            /*RenderPipelines.PIPELINES_BY_LOCATION.put(pipeline.getLocation(), pipeline);
+            *///?}
+            menu = RenderType.create("mask_menu", RenderSetup.builder(pipeline).createRenderSetup());
+        }
+        return menu;
+    }
+    //?}
 
     //? if >=26.3 {
     /*public static net.minecraft.client.renderer.rendertype.RenderType type(Identifier texture) {

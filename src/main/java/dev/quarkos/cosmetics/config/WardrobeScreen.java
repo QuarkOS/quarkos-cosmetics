@@ -35,9 +35,6 @@ import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 //?}
-//? if >=1.21.11 && <26.3 {
-import dev.quarkos.cosmetics.render.JackOLanternMask;
-//?}
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -617,13 +614,6 @@ public final class WardrobeScreen extends Screen {
         if (minecraft != null && minecraft.player != null) {
             preview.draw(graphics, stage.inset(1), minecraft.player);
             UiTheme.text(graphics, font, "Drag to turn", new Rect(stage.x(), panel.bottom() - 24, panel.w() - 67, 17), UiTheme.MUTED);
-            //? if >=1.21.11 && <26.3 {
-            ClientSettings settings = ClientSettings.get();
-            if (JackOLanternMask.ID.equals(settings.equippedId(Slot.HAT)) && settings.shown(Slot.HAT, JackOLanternMask.ID)) {
-                UiTheme.centered(graphics, font, "Mask shown in-world",
-                        new Rect(stage.x() + 4, stage.bottom() - 16, stage.w() - 8, 14), UiTheme.MUTED);
-            }
-            //?}
         } else {
             UiTheme.centered(graphics, font, "Join a world", new Rect(stage.x(), stage.y() + stage.h() / 2 - 12, stage.w(), 12), UiTheme.TEXT);
             UiTheme.centered(graphics, font, "to preview your skin", new Rect(stage.x(), stage.y() + stage.h() / 2 + 1, stage.w(), 12), UiTheme.MUTED);

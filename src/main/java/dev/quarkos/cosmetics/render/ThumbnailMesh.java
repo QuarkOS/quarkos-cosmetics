@@ -81,7 +81,7 @@ public final class ThumbnailMesh {
         if (Chick.draws(model.id())) {
             Chick.portrait(pose, submitter, light);
         } else if (JackOLanternMask.ID.equals(model.id())) {
-            JackOLanternMask.portrait(pose, submitter, light);
+            JackOLanternMask.portrait(pose, submitter);
         } else if (BlockbenchCosmetic.draws(model.id())) {
             BlockbenchCosmetic.draw(pose, submitter, light, 0f, ORIGIN, ORIGIN, model.id(), TintColor.DEFAULT);
         } else {
@@ -107,6 +107,7 @@ public final class ThumbnailMesh {
                 case CUTOUT -> RenderTypes.entityCutoutCull(batch.texture());
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutout(batch.texture());
                 case GLOW -> MaskGlow.type(batch.texture());
+                case MASK_MENU -> MaskGlow.menu();
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(batch.texture());
                 case EYES -> RenderTypes.eyes(batch.texture());
             };
@@ -124,6 +125,7 @@ public final class ThumbnailMesh {
             //? if >=1.21.11 {
             var type = switch (batch.pass()) {
                 case CUTOUT, GLOW -> RenderTypes.entityCutout(batch.texture());
+                case MASK_MENU -> MaskGlow.menu();
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutoutNoCull(batch.texture());
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(batch.texture());
                 case EYES -> RenderTypes.eyes(batch.texture());

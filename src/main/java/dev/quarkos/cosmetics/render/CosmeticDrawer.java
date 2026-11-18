@@ -20,13 +20,17 @@ public final class CosmeticDrawer {
         EYES,
         /** Emissive candle. Same frames as the base strip, biased forward so it does not z-fight. */
         GLOW,
+        //? if >=1.21.11 {
+        MASK_MENU,
+        //?}
         TRANSLUCENT
     }
 
     public interface Submitter {
         /**
+         * @param texture texture to bind, or null for vertex-colored geometry
          * @param pass cutout for the chick, cutout-no-cull for wings and packed meshes,
-         *             glow for the jack-o'-lantern candle, translucent for the ghost.
+         *             glow for the jack-o'-lantern candle, translucent for the ghost
          */
         void submit(PoseStack pose, Identifier texture, Pass pass, Consumer<VertexConsumer> draw);
     }
@@ -63,7 +67,7 @@ public final class CosmeticDrawer {
 
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
-                                 List<Worn.Placement> placed, boolean wingsFlap, boolean self) {
+                                 List<Worn.Placement> placed, boolean wingsFlap, boolean self, boolean wardrobePreview) {
         for (Worn.Placement placement : placed) {
             ModelPart part = switch (placement.anchor()) {
                 case HEAD -> head;
@@ -81,7 +85,8 @@ public final class CosmeticDrawer {
                 continue;
             }
             if (JackOLanternMask.ID.equals(placement.id())) {
-                JackOLanternMask.draw(pose, submitter, light, part, placement.offsetX(), placement.offsetY(), placement.offsetZ());
+                JackOLanternMask.draw(pose, submitter, light, part,
+                        placement.offsetX(), placement.offsetY(), placement.offsetZ(), wardrobePreview);
                 continue;
             }
             int tint = self && canTint(placement.id()) ? ClientSettings.get().tint(placement.slot()) : TintColor.DEFAULT;

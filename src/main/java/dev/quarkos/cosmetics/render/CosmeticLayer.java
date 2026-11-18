@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.world.item.Items;
 
 //? if >=1.21.11 {
+import dev.quarkos.cosmetics.config.ui.PlayerPreview;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -32,12 +33,14 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
         boolean legs = !state.legsEquipment.isEmpty();
         boolean wingsFlap = entity instanceof net.minecraft.world.entity.player.Player player
                 && (player.isSprinting() || player.isFallFlying() || player.getAbilities().flying);
+        boolean wardrobePreview = state instanceof PlayerPreview.WardrobeState wardrobe && wardrobe.quarkos$isWardrobePreview();
         Chick.bind(entity instanceof net.minecraft.world.entity.player.Player player ? player : null, helmet, state.showHat);
         PlayerModel model = this.getParentModel();
         CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
             var type = switch (pass) {
                 case EYES -> RenderTypes.eyes(texture);
                 case GLOW -> MaskGlow.type(texture);
+                case MASK_MENU -> MaskGlow.menu();
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(texture);
                 //? if >=26.3 {
                 /*case CUTOUT -> RenderTypes.entityCutoutCull(texture);
@@ -50,7 +53,8 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
             collector.submitCustomGeometry(stack, type, (entry, consumer) -> draw.accept(consumer));
         };
         CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
-                CosmeticAttach.placements(entity == null ? null : entity.getUUID(), self, elytra, helmet, chest, legs), wingsFlap, self);
+                CosmeticAttach.placements(entity == null ? null : entity.getUUID(), self, elytra, helmet, chest, legs),
+                wingsFlap, self, wardrobePreview);
     }
 }
 //?} else {
@@ -96,7 +100,7 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
             draw.accept(buffer.getBuffer(type));
         };
         CosmeticAttach.draw(pose, submitter, light, ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
-                CosmeticAttach.placements(player.getUUID(), self, elytra, helmet, chest, legs), wingsFlap, self);
+                CosmeticAttach.placements(player.getUUID(), self, elytra, helmet, chest, legs), wingsFlap, self, false);
     }
 }
 //?}

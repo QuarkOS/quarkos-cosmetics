@@ -18,6 +18,14 @@ import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 *///?}
 
 public final class PlayerPreview {
+    //? if >=1.21.11 {
+    public interface WardrobeState {
+        void quarkos$markWardrobePreview();
+
+        boolean quarkos$isWardrobePreview();
+    }
+    //?}
+
     private static final float START_YAW = -22f;
     private static final float START_PITCH = 0.06f;
     private final boolean studio;
@@ -79,6 +87,9 @@ public final class PlayerPreview {
             graphics.disableScissor();
         }
         var state = InventoryPreviewAccess.quarkos$extract(player);
+        if (state instanceof WardrobeState wardrobe) {
+            wardrobe.quarkos$markWardrobePreview();
+        }
         if (state instanceof LivingEntityRenderState living) {
             living.bodyRot = 180f + yaw;
             living.yRot = legacy ? yaw : 0f;

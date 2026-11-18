@@ -1,6 +1,8 @@
 package dev.quarkos.cosmetics.mixin;
 
+import dev.quarkos.cosmetics.render.JackOLanternMask;
 import dev.quarkos.cosmetics.render.SkinShellRenderer;
+import dev.quarkos.cosmetics.render.ThumbnailMesh;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,7 +18,8 @@ public abstract class TextureReloadMixin {
     private void quarkos$invalidateGeometry(CallbackInfoReturnable<CompletableFuture<Void>> callback) {
         callback.getReturnValue().thenRunAsync(() -> {
             SkinShellRenderer.clearCache();
-            dev.quarkos.cosmetics.render.ThumbnailMesh.clearCache();
+            JackOLanternMask.clearCache();
+            ThumbnailMesh.clearCache();
         }, Minecraft.getInstance());
     }
 }
