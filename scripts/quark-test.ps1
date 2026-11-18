@@ -82,7 +82,7 @@ if ($InSession) { Start-Transcript -Path (Join-Path $OutDir "logs\run.log") -For
 $env:JAVA_HOME = $Jdk
 $env:GRADLE_USER_HOME = $GradleHome
 $env:Path = "$Jdk\bin;$env:Path"
-$common = @("--console=plain", "--no-configuration-cache")
+$common = @("--console=plain", "--configure-on-demand", "--no-configuration-cache")
 $results = [ordered]@{}
 $script:haveLock = $false
 
