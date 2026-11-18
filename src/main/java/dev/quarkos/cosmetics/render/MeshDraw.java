@@ -1,6 +1,7 @@
 package dev.quarkos.cosmetics.render;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import dev.quarkos.cosmetics.config.TintColor;
 import dev.quarkos.cosmetics.model.CosmeticModel;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import org.joml.Matrix3f;
@@ -13,7 +14,7 @@ public final class MeshDraw {
     }
 
     public static void model(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light,
-                             CosmeticModel model, int textureWidth, int textureHeight, float age) {
+                             CosmeticModel model, int textureWidth, int textureHeight, float age, int tint) {
         int width = Math.max(1, textureWidth);
         int height = Math.max(1, textureHeight);
         for (CosmeticModel.Element element : model.elements) {
@@ -37,27 +38,27 @@ public final class MeshDraw {
             float z1 = element.to()[2] - 8f;
             boolean all = element.faces().isEmpty();
             if (all || element.faces().containsKey("south")) {
-                face(consumer, combined, normals, turned, light, element, "south", width, height, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, 0, 0, 1);
+                face(consumer, combined, normals, turned, light, tint, element, "south", width, height, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, 0, 0, 1);
             }
             if (all || element.faces().containsKey("north")) {
-                face(consumer, combined, normals, turned, light, element, "north", width, height, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, 0, 0, -1);
+                face(consumer, combined, normals, turned, light, tint, element, "north", width, height, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, 0, 0, -1);
             }
             if (all || element.faces().containsKey("east")) {
-                face(consumer, combined, normals, turned, light, element, "east", width, height, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, 1, 0, 0);
+                face(consumer, combined, normals, turned, light, tint, element, "east", width, height, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, 1, 0, 0);
             }
             if (all || element.faces().containsKey("west")) {
-                face(consumer, combined, normals, turned, light, element, "west", width, height, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, -1, 0, 0);
+                face(consumer, combined, normals, turned, light, tint, element, "west", width, height, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, -1, 0, 0);
             }
             if (all || element.faces().containsKey("up")) {
-                face(consumer, combined, normals, turned, light, element, "up", width, height, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
+                face(consumer, combined, normals, turned, light, tint, element, "up", width, height, x0, y1, z1, x1, y1, z1, x1, y1, z0, x0, y1, z0, 0, 1, 0);
             }
             if (all || element.faces().containsKey("down")) {
-                face(consumer, combined, normals, turned, light, element, "down", width, height, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
+                face(consumer, combined, normals, turned, light, tint, element, "down", width, height, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, 0, -1, 0);
             }
         }
     }
 
-    private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f normals, Matrix3f turned, int light,
+    private static void face(VertexConsumer consumer, Matrix4f view, Matrix3f normals, Matrix3f turned, int light, int tint,
                              CosmeticModel.Element element, String face, int width, int height,
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3,
@@ -79,17 +80,17 @@ public final class MeshDraw {
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
-        vertex(consumer, view, x0, y0, z0, u0, v1, light, normal);
-        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal);
-        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal);
-        vertex(consumer, view, x3, y3, z3, u0, v0, light, normal);
+        vertex(consumer, view, x0, y0, z0, u0, v1, light, normal, tint);
+        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, tint);
+        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, tint);
+        vertex(consumer, view, x3, y3, z3, u0, v0, light, normal, tint);
         // 1.21.11 eyes() culls. The wing has to read from both sides, at the texture color.
         //? if >=1.21.11 {
         if (element.name() != null && element.name().contains("flap")) {
-            vertex(consumer, view, x0, y0, z0, u0, v1, light, normal);
-            vertex(consumer, view, x3, y3, z3, u0, v0, light, normal);
-            vertex(consumer, view, x2, y2, z2, u1, v0, light, normal);
-            vertex(consumer, view, x1, y1, z1, u1, v1, light, normal);
+            vertex(consumer, view, x0, y0, z0, u0, v1, light, normal, tint);
+            vertex(consumer, view, x3, y3, z3, u0, v0, light, normal, tint);
+            vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, tint);
+            vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, tint);
         }
         //?}
     }
@@ -120,16 +121,16 @@ public final class MeshDraw {
         if (normal.lengthSquared() > 0.0001f) {
             normal.normalize();
         }
-        vertex(consumer, view, x0, y0, z0, u0, v1, light, normal);
-        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal);
-        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal);
-        vertex(consumer, view, x3, y3, z3, u0, v0, light, normal);
+        vertex(consumer, view, x0, y0, z0, u0, v1, light, normal, TintColor.DEFAULT);
+        vertex(consumer, view, x1, y1, z1, u1, v1, light, normal, TintColor.DEFAULT);
+        vertex(consumer, view, x2, y2, z2, u1, v0, light, normal, TintColor.DEFAULT);
+        vertex(consumer, view, x3, y3, z3, u0, v0, light, normal, TintColor.DEFAULT);
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,
-                               float u, float v, int light, Vector3f normal) {
+                               float u, float v, int light, Vector3f normal, int tint) {
         consumer.addVertex(view, x, y, z)
-                .setColor(255, 255, 255, 255)
+                .setColor((tint >>> 16) & 255, (tint >>> 8) & 255, tint & 255, 255)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)

@@ -1,307 +1,818 @@
 package dev.quarkos.cosmetics.config;
 
+import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
+import dev.quarkos.cosmetics.config.ui.CardGrid;
+import dev.quarkos.cosmetics.config.ui.ColourPicker;
+import dev.quarkos.cosmetics.config.ui.FlatButton;
+import dev.quarkos.cosmetics.config.ui.FlatEditBox;
+import dev.quarkos.cosmetics.config.ui.GridMetrics;
+import dev.quarkos.cosmetics.config.ui.PlayerPreview;
+import dev.quarkos.cosmetics.config.ui.TextFit;
+import dev.quarkos.cosmetics.config.ui.Thumbnail;
+import dev.quarkos.cosmetics.config.ui.ToggleSwitch;
+import dev.quarkos.cosmetics.config.ui.UiTheme;
 import dev.quarkos.cosmetics.gallery.GalleryClient;
-import dev.quarkos.cosmetics.render.Chick;
 import dev.quarkos.cosmetics.gallery.GalleryWork;
-import dev.quarkos.cosmetics.mixin.InventoryPreviewAccess;
+import dev.quarkos.cosmetics.model.CosmeticModel;
 import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.Chick;
+import dev.quarkos.cosmetics.render.CosmeticDrawer;
 import dev.quarkos.cosmetics.render.ModelLibrary;
-import dev.quarkos.cosmetics.render.SkinImages;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.lwjgl.glfw.GLFW;
+//? if >=1.21.11 {
+import dev.quarkos.cosmetics.render.JackOLanternMask;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+//?}
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
 
-/** Structured wardrobe. Regions come from {@link WardrobeLayout} so a reskin can keep the same ids. */
 public final class WardrobeScreen extends Screen {
-    private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
-    private final Screen parent;
-    private Slot slot = Slot.HAT;
-    private boolean pickedSlot;
-    private boolean loggedThumbs;
-    private String selectedPacked = "";
-    private String selectedGallery = "";
-    private EditBox urlBox;
-    private EditBox queryBox;
-    private List<WardrobeLayout.Rect> regions = List.of();
-    private final List<Thumb> thumbs = new ArrayList<>();
-    private float spin = 110f;
+    public enum View {
+        WARDROBE("Wardrobe"), GALLERY("Gallery"), SETTINGS("Settings");
 
-    public WardrobeScreen(Screen parent) {
-        super(Component.translatable("screen.quarkos_cosmetics.title"));
-        this.parent = parent;
+        private final String label;
+
+        View(String label) {
+            this.label = label;
+        }
     }
 
-    public void rebuild() {
-        if (this.minecraft == null) {
-            return;
-        }
-        this.clearWidgets();
-        this.init();
+    private enum Drag { NONE, PREVIEW, COLOUR, SCROLLBAR }
+
+    private record Card(String id, String name, String author, Thumbnail thumbnail) {
+    }
+
+    private static final List<Slot> HEAD_SLOTS = Arrays.stream(Slot.values()).filter(Slot::wornOnHead).toList();
+    private static final int[] SKIN_DISTANCES = {8, 16, 32, 64};
+    private final Screen parent;
+    private final PlayerPreview preview;
+    private final boolean studioGallery;
+    private final Map<Slot, Integer> wardrobeScroll = new EnumMap<>(Slot.class);
+    private final Map<Slot, Integer> galleryScroll = new EnumMap<>(Slot.class);
+
+    private View view;
+    private Slot slot;
+    private boolean colourOpen;
+    private boolean revealEquipped;
+    private boolean gallerySettingsOpen;
+    private String query = "";
+    private String urlDraft;
+    private String gallerySelection = "";
+    private String galleryNotice = "";
+
+    private WardrobeLayout.Frame frame;
+    private WardrobeLayout.Collection collection;
+    private WardrobeLayout.Gallery gallery;
+    private WardrobeLayout.Settings settingsLayout;
+    private CardGrid grid;
+    private View gridView;
+    private Slot gridSlot;
+    private ColourPicker picker;
+    private FlatEditBox queryBox;
+    private FlatEditBox urlBox;
+    private Rect emptyWardrobe;
+    private boolean emptyGallery;
+    private boolean rebuildPending;
+    private Drag drag = Drag.NONE;
+
+    public WardrobeScreen(Screen parent) {
+        this(parent, View.WARDROBE, null, false, false, false);
+    }
+
+    private WardrobeScreen(Screen parent, View view, Slot slot, boolean colourOpen, boolean studio, boolean legacy) {
+        super(Component.translatable("screen.quarkos_cosmetics.title"));
+        this.parent = parent;
+        this.view = view;
+        this.slot = slot;
+        this.colourOpen = colourOpen;
+        studioGallery = studio && view == View.GALLERY;
+        preview = new PlayerPreview(studio, legacy);
+    }
+
+    /** The studio uses an offline catalog sample for the gallery capture. */
+    public static WardrobeScreen studioCapture(View view, Slot slot, boolean colourOpen) {
+        return new WardrobeScreen(null, view, slot, colourOpen, true, false);
+    }
+
+    public static WardrobeScreen legacyCapture() {
+        return new WardrobeScreen(null, View.WARDROBE, Slot.HAT, false, true, true);
     }
 
     @Override
     protected void init() {
-        this.regions = WardrobeLayout.regions(this.width, this.height);
+        rebuildPending = false;
+        finishDrag();
+        rememberScroll();
+        grid = null;
+        picker = null;
+        queryBox = null;
+        urlBox = null;
+        emptyWardrobe = null;
+        emptyGallery = false;
+
         ClientSettings settings = ClientSettings.get();
-        if (!pickedSlot) {
-            for (Slot value : headSlots()) {
-                if (!settings.equippedId(value).isBlank()) {
-                    slot = value;
+        if (slot == null) {
+            slot = HEAD_SLOTS.stream().filter(value -> !settings.equippedId(value).isBlank()).findFirst().orElse(Slot.HAT);
+        }
+        if (urlDraft == null) {
+            urlDraft = settings.galleryUrl;
+        }
+        frame = WardrobeLayout.frame(width, height);
+        initHeader();
+        Rect previewRect = frame.preview();
+        FlatButton reset = button(new Rect(previewRect.right() - 55, previewRect.bottom() - 24, 45, 17),
+                "Reset", preview::reset);
+        reset.active = minecraft != null && minecraft.player != null;
+        reset.setTooltip(Tooltip.create(Component.literal("Reset preview view")));
+
+        switch (view) {
+            case WARDROBE -> initWardrobe(settings);
+            case GALLERY -> initGallery(settings);
+            case SETTINGS -> initSettings(settings);
+        }
+    }
+
+    public void rebuild() {
+        rebuildPending = true;
+    }
+
+    private void refreshWidgets() {
+        boolean wasSearching = queryBox != null && getFocused() == queryBox;
+        boolean wasEditingUrl = urlBox != null && getFocused() == urlBox;
+        Component focusedButton = getFocused() instanceof FlatButton button ? button.getMessage() : null;
+        setFocused(null);
+        clearWidgets();
+        init();
+        if (wasSearching && queryBox != null) {
+            focusField(queryBox);
+        } else if (wasEditingUrl && urlBox != null) {
+            focusField(urlBox);
+        } else if (focusedButton != null) {
+            for (var child : children()) {
+                if (child instanceof FlatButton button && button.active && button.visible && focusedButton.equals(button.getMessage())) {
+                    setFocused(button);
                     break;
                 }
             }
-            pickedSlot = true;
         }
-        WardrobeLayout.Rect header = region(WardrobeLayout.HEADER);
-        WardrobeLayout.Rect tabs = region(WardrobeLayout.TABS);
-        WardrobeLayout.Rect list = region(WardrobeLayout.LIST);
-        WardrobeLayout.Rect detail = region(WardrobeLayout.DETAIL);
-        WardrobeLayout.Rect gallery = region(WardrobeLayout.GALLERY);
-        WardrobeLayout.Rect settingsRect = region(WardrobeLayout.SETTINGS);
+    }
 
-        addRenderableWidget(Button.builder(Component.translatable("text.quarkos_cosmetics.done"), button -> close())
-                .bounds(header.x() + header.w() - 70, header.y(), 70, 20).build());
+    private void focusField(EditBox field) {
+        setFocused(field);
+        field.setFocused(true);
+    }
 
-        int tabW = Math.max(36, (tabs.w() - 8) / headSlots().length);
-        int tabX = tabs.x();
-        for (Slot value : headSlots()) {
-            Slot chosen = value;
-            String label = value == slot ? "[" + shortName(value) + "]" : shortName(value);
-            addRenderableWidget(Button.builder(Component.literal(label), button -> {
-                slot = chosen;
-                selectedGallery = "";
-                rebuild();
-            }).bounds(tabX, tabs.y(), Math.min(tabW, tabs.w()), 20).build());
-            tabX += tabW + 2;
-            if (tabX > tabs.x() + tabs.w() - 20) {
-                break;
-            }
+    private void initHeader() {
+        Rect header = frame.header();
+        Rect nav = navigation();
+        View[] views = View.values();
+        for (int i = 0; i < views.length; i++) {
+            View tab = views[i];
+            choice(nav.column(i, views.length, 4), tab.label, () -> view == tab, () -> open(tab));
         }
+        addRenderableWidget(new FlatButton(new Rect(header.right() - 50, header.y() + 5, 48, 20),
+                Component.translatable("text.quarkos_cosmetics.done"), pressed -> onClose()));
+    }
 
-        thumbs.clear();
-        int cell = 44;
-        int cols = Math.max(1, list.w() / cell);
-        int index = 0;
+    private Rect navigation() {
+        Rect header = frame.header();
+        int navWidth = Math.min(206, header.w() - 152);
+        int centered = Math.max(header.x() + 142, header.x() + (header.w() - navWidth) / 2);
+        int x = Math.min(centered, header.right() - navWidth - 58);
+        return new Rect(x, header.y() + 5, navWidth, 20);
+    }
+
+    private void open(View next) {
+        if (view != next) {
+            view = next;
+            rebuild();
+        }
+    }
+
+    private void initWardrobe(ClientSettings settings) {
         String equipped = settings.equippedId(slot);
-        for (ModelLibrary.Resolved resolved : ModelLibrary.packed(slot)) {
-            int col = index % cols;
-            int row = index / cols;
-            int x = list.x() + col * cell;
-            int y = list.y() + row * cell;
-            if (y + cell > list.y() + list.h()) {
-                break;
-            }
-            String id = resolved.id();
-            Button button = Button.builder(Component.empty(), pressed -> {
-                selectedPacked = id;
-                if (Chick.ID.equals(id) && Chick.isPerch(slot)) {
-                    GalleryWork.syncChick(slot);
-                } else {
-                    settings.equip(slot, id);
+        boolean canTint = CosmeticDrawer.canTint(equipped);
+        collection = WardrobeLayout.collection(frame, canTint && colourOpen);
+        Rect toolbar = collection.toolbar();
+        String visibleLabel = toolbar.w() >= 237 ? "Category visible" : "Visible";
+        int toggleWidth = font.width(visibleLabel) + 42;
+        int categoryWidth = Math.min(166, toolbar.w() - toggleWidth - 4);
+        categories(new Rect(toolbar.x(), toolbar.y(), categoryWidth, toolbar.h()), true);
+        addRenderableWidget(ToggleSwitch.create(trailing(toolbar, toggleWidth), visibleLabel,
+                () -> settings.categoryOn.getOrDefault(slot, true), on -> {
+                    settings.categoryOn.put(slot, on);
                     save();
+                }));
+
+        List<Card> cards = new ArrayList<>();
+        cards.add(new Card("", "None", null, null));
+        for (ModelLibrary.Resolved model : ModelLibrary.packed(slot)) {
+            cards.add(new Card(model.id(), model.name(), null, Thumbnail.of(model)));
+        }
+        GridMetrics metrics = buildGrid(collection.grid(), cards, false, equipped);
+        if (cards.size() == 1) {
+            Rect none = metrics.card(0, 0);
+            int left = none.right() + 12;
+            emptyWardrobe = new Rect(left, none.y() + 8, collection.grid().right() - left, 17);
+            if (emptyWardrobe.w() >= 89 && none.h() >= 48) {
+                button(new Rect(left, emptyWardrobe.bottom() + 3, 89, 18), "Browse gallery", () -> open(View.GALLERY));
+            }
+        }
+
+        Rect details = collection.equipped();
+        int colourWidth = canTint ? 64 : 0;
+        Rect itemToggle = new Rect(details.right() - colourWidth - 102, details.y() + 5, 99, 22);
+        FlatButton show = addRenderableWidget(ToggleSwitch.create(itemToggle, "Item shown",
+                () -> !settings.disabled.contains(equipped), on -> {
+                    if (on) {
+                        settings.disabled.remove(equipped);
+                    } else {
+                        settings.disabled.add(equipped);
+                    }
+                    save();
+                }));
+        show.active = !equipped.isBlank();
+        if (canTint) {
+            FlatButton colour = new FlatButton(new Rect(details.right() - 61, details.y() + 6, 55, 20),
+                    Component.literal("Colour"), pressed -> {
+                        colourOpen = !colourOpen;
+                        revealEquipped = colourOpen;
+                        rebuild();
+                    }, (button, graphics, font, bounds, hovered) -> {
+                        UiTheme.frame(graphics, bounds, button.fill(hovered), colourOpen ? UiTheme.ACCENT : button.border());
+                        int tint = settings.tint(slot);
+                        UiTheme.tile(graphics, new Rect(bounds.x() + 5, bounds.y() + 6, 8, 8),
+                                tint == TintColor.DEFAULT ? UiTheme.MUTED : 0xFF000000 | tint);
+                        UiTheme.text(graphics, font, "Colour", new Rect(bounds.x() + 17, bounds.y(), bounds.w() - 21, bounds.h()), UiTheme.TEXT);
+                    });
+            addRenderableWidget(colour);
+        }
+        if (collection.colour().h() > 0) {
+            picker = new ColourPicker(collection.colour(), () -> settings.tint(slot), tint -> settings.setTint(slot, tint),
+                    this::save, this::addRenderableWidget);
+        }
+    }
+
+    private void categories(Rect bar, boolean showCounts) {
+        for (int i = 0; i < HEAD_SLOTS.size(); i++) {
+            Slot target = HEAD_SLOTS.get(i);
+            String label = slotName(target);
+            int count = showCounts ? ModelLibrary.packed(target).size() : 0;
+            FlatButton button = new FlatButton(bar.column(i, HEAD_SLOTS.size(), 4), Component.literal(label), pressed -> {
+                if (slot != target) {
+                    slot = target;
+                    gallerySelection = "";
+                    colourOpen = false;
+                    rebuild();
                 }
-                rebuild();
-            }).bounds(x, y, cell - 4, cell - 4).build();
-            button.setTooltip(Tooltip.create(Component.literal(resolved.name())));
+            }, (widget, graphics, font, bounds, hovered) -> {
+                boolean selected = slot == target;
+                UiTheme.frame(graphics, bounds, selected ? UiTheme.HOVER : widget.fill(hovered),
+                        selected ? UiTheme.ACCENT : widget.border());
+                int ink = selected ? UiTheme.TEXT : UiTheme.MUTED;
+                UiTheme.slotIcon(graphics, target, bounds.x() + 5, bounds.y() + (bounds.h() - 12) / 2, ink);
+                String countLabel = Integer.toString(count);
+                int numberWidth = font.width(countLabel);
+                int reserve = showCounts ? numberWidth + 7 : 5;
+                UiTheme.text(graphics, font, label, new Rect(bounds.x() + 21, bounds.y(), bounds.w() - 21 - reserve, bounds.h()), ink);
+                if (showCounts) {
+                    UiTheme.text(graphics, font, countLabel,
+                            new Rect(bounds.right() - numberWidth - 5, bounds.y(), numberWidth, bounds.h()), UiTheme.MUTED);
+                }
+            });
             addRenderableWidget(button);
-            thumbs.add(new Thumb(button, resolved.texture(), id.equals(equipped)));
-            index++;
         }
+    }
 
-        addRenderableWidget(Button.builder(Component.literal("Empty slot"), button -> {
-            GalleryWork.clear(slot);
-            selectedPacked = "";
-        }).bounds(detail.x(), detail.y(), Math.min(90, detail.w()), 20).build());
-        addRenderableWidget(Button.builder(Component.literal(settings.categoryOn.getOrDefault(slot, true) ? shortName(slot) + " on" : shortName(slot) + " off"), button -> {
-            settings.categoryOn.put(slot, !settings.categoryOn.getOrDefault(slot, true));
-            save();
+    private void initGallery(ClientSettings settings) {
+        gallery = WardrobeLayout.gallery(frame, gallerySettingsOpen);
+        Rect account = gallery.account();
+        button(trailing(account, 112), gallerySettingsOpen ? "Gallery settings  −" : "Gallery settings  +", () -> {
+            gallerySettingsOpen = !gallerySettingsOpen;
             rebuild();
-        }).bounds(detail.x() + 94, detail.y(), Math.min(90, detail.w()), 20).build());
-
-        urlBox = new EditBox(this.font, gallery.x(), gallery.y(), Math.max(40, gallery.w() - 62), 18, Component.literal("Gallery URL"));
-        urlBox.setMaxLength(200);
-        urlBox.setValue(settings.galleryUrl);
-        urlBox.setResponder(value -> {
-            String next = GalleryClient.normalizeBase(value);
-            if (!next.equals(GalleryClient.normalizeBase(settings.galleryUrl))) {
-                GalleryWork.dropSession();
-            }
-            settings.galleryUrl = next.isBlank() ? ClientSettings.DEFAULT_GALLERY : next;
-            save();
         });
-        addRenderableWidget(urlBox);
-        addRenderableWidget(Button.builder(Component.literal("Refresh"), button -> GalleryWork.browse(slot, queryBox == null ? "" : queryBox.getValue()))
-                .bounds(gallery.x() + gallery.w() - 58, gallery.y(), 58, 18).build());
+        FlatButton signIn = addRenderableWidget(new FlatButton(
+                new Rect(account.right() - 174, account.y(), 56, account.h()), Component.literal("Sign in"), pressed -> {
+                    galleryNotice = "";
+                    pressed.active = false;
+                    GalleryWork.signIn();
+                }));
+        signIn.active = !studioGallery && !GalleryWork.signedIn() && GalleryWork.signInStatus() != GalleryWork.SignInStatus.SIGNING_IN;
+        signIn.visible = studioGallery || !GalleryWork.signedIn();
 
-        queryBox = new EditBox(this.font, gallery.x(), gallery.y() + 22, Math.max(40, gallery.w() / 2), 18, Component.literal("Search"));
-        queryBox.setMaxLength(48);
-        queryBox.setHint(Component.literal("Search"));
-        addRenderableWidget(queryBox);
-
-        int actionX = gallery.x() + gallery.w() / 2 + 4;
-        int actionW = Math.max(40, gallery.w() / 2 - 4);
-        addRenderableWidget(Button.builder(Component.literal("Sign in"), button -> GalleryWork.signIn())
-                .bounds(actionX, gallery.y() + 22, actionW, 18).build());
-
-        int row = gallery.y() + 44;
-        for (GalleryClient.Listed listed : GalleryWork.browse()) {
-            if (row > gallery.y() + gallery.h() - 78) {
-                break;
-            }
-            Slot listedSlot = Slot.parse(listed.slot()).orElse(slot);
-            if (listedSlot != slot) {
-                continue;
-            }
-            String id = listed.id();
-            String label = listed.name() + " · " + listed.author();
-            addRenderableWidget(Button.builder(Component.literal(trim(label, 32)), button -> {
-                selectedGallery = id;
-                GalleryWork.equip(slot, id);
-            }).bounds(gallery.x(), row, gallery.w(), 18).build());
-            row += 20;
+        if (gallerySettingsOpen) {
+            Rect connection = gallery.connection();
+            urlBox = addRenderableWidget(new FlatEditBox(font,
+                    new Rect(connection.x() + 66, connection.y(), connection.w() - 124, connection.h()), Component.literal("Gallery URL")));
+            urlBox.setMaxLength(200);
+            urlBox.setHint(Component.literal("Gallery URL"));
+            urlBox.setValue(urlDraft);
+            urlBox.setResponder(value -> urlDraft = value);
+            button(trailing(connection, 52), "Apply", this::applyGalleryUrl);
         }
 
-        int foot = gallery.y() + gallery.h() - 20;
-        addRenderableWidget(Button.builder(Component.literal("Publish packed"), button -> {
-            String id = !selectedPacked.isBlank() ? selectedPacked : settings.equippedId(slot);
-            GalleryWork.publishPacked(id);
-        }).bounds(gallery.x(), foot, Math.min(110, gallery.w() / 2), 18).build());
-        addRenderableWidget(Button.builder(Component.literal("Report"), button -> GalleryWork.report(selectedGallery))
-                .bounds(gallery.x() + Math.min(114, gallery.w() / 2 + 4), foot, Math.min(70, gallery.w() / 2), 18).build());
+        Rect filters = gallery.filters();
+        int categoryWidth = Math.min(166, filters.w() * 2 / 5);
+        categories(leading(filters, categoryWidth), false);
+        queryBox = addRenderableWidget(new FlatEditBox(font,
+                new Rect(filters.x() + categoryWidth + 8, filters.y(), filters.w() - categoryWidth - 67, filters.h()),
+                Component.literal("Search gallery")));
+        queryBox.setMaxLength(48);
+        queryBox.setHint(Component.literal(slot == Slot.HAT ? "Search hats" : "Search ears"));
+        queryBox.setValue(query);
+        queryBox.setResponder(value -> query = value);
+        button(trailing(filters, 53), "Search", this::searchGallery);
 
-        int sy = settingsRect.y();
-        addRenderableWidget(Button.builder(Component.literal(settings.hideOthers ? "Others hidden" : "Others shown"), button -> {
-            settings.hideOthers = !settings.hideOthers;
-            save();
-            rebuild();
-        }).bounds(settingsRect.x(), sy, 110, 18).build());
-        addRenderableWidget(Button.builder(Component.literal(settings.skinLayers ? "3D skin on" : "3D skin off"), button -> {
-            settings.skinLayers = !settings.skinLayers;
-            save();
-            rebuild();
-        }).bounds(settingsRect.x() + 114, sy, 100, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("Skin " + settings.skinDistance + "m"), button -> {
-            settings.skinDistance = switch (settings.skinDistance) {
-                case 8 -> 16;
-                case 16 -> 32;
-                case 32 -> 64;
-                default -> 8;
-            };
-            save();
-            rebuild();
-        }).bounds(settingsRect.x() + 218, sy, 90, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("Perch head"), button -> {
-            GalleryWork.syncChick(Slot.HAT);
-            rebuild();
-        }).bounds(settingsRect.x() + 114, sy + 22, 150, 18).build());
-        addRenderableWidget(Button.builder(Component.literal(itemHidden() ? "Item hidden" : "Item shown"), button -> {
-            String id = settings.equippedId(slot);
-            if (id.isBlank()) {
-                return;
+        List<GalleryClient.Listed> entries = galleryEntries().stream().filter(item -> matchesSlot(item, slot)).toList();
+        List<Card> cards = entries.stream()
+                .map(item -> new Card(item.id(), item.name(), item.author(), Thumbnail.of(ModelLibrary.resolve(item.id()))))
+                .toList();
+        emptyGallery = cards.isEmpty();
+        buildGrid(gallery.grid(), cards, true, settings.equippedId(slot));
+
+        Rect actions = gallery.actions();
+        String publishId = publishable(settings.equippedId(slot));
+        FlatButton publish = button(leading(actions, 61), "Publish", () -> {
+            galleryNotice = "";
+            GalleryWork.publishPacked(publishId);
+        });
+        publish.active = !studioGallery && GalleryWork.signedIn() && !publishId.isBlank();
+        if (!publish.active) {
+            publish.setTooltip(Tooltip.create(Component.literal(GalleryWork.signedIn()
+                    ? "Equip a publishable packed cosmetic" : "Sign in to publish")));
+        }
+        String reportId = gallerySelection.isBlank() ? settings.equippedId(slot) : gallerySelection;
+        FlatButton report = button(new Rect(actions.x() + 67, actions.y(), 54, actions.h()), "Report", () -> {
+            galleryNotice = "";
+            GalleryWork.report(reportId);
+        });
+        report.active = !studioGallery && GalleryWork.signedIn() && entries.stream().anyMatch(item -> item.id().equals(reportId));
+        if (!report.active) {
+            report.setTooltip(Tooltip.create(Component.literal(GalleryWork.signedIn()
+                    ? "Select a gallery cosmetic" : "Sign in to report")));
+        }
+    }
+
+    private static String publishable(String id) {
+        ModelLibrary.Resolved model = ModelLibrary.packedById(id);
+        if (model == null || model.model().elements.isEmpty() || model.png() == null
+                || model.png().length > 65536 || model.width() > CosmeticModel.MAX_EDGE || model.height() > CosmeticModel.MAX_EDGE) {
+            return "";
+        }
+        return id;
+    }
+
+    private List<GalleryClient.Listed> galleryEntries() {
+        if (!studioGallery) {
+            return GalleryWork.browse();
+        }
+        return ModelLibrary.packed().stream().filter(item -> item.slot().wornOnHead())
+                .map(item -> new GalleryClient.Listed(item.id(), item.name(), item.description(), item.slot().wire, "Quarkos Studio"))
+                .toList();
+    }
+
+    private static boolean matchesSlot(GalleryClient.Listed listed, Slot slot) {
+        return Slot.parse(listed.slot()).orElse(slot) == slot;
+    }
+
+    private void applyGalleryUrl() {
+        ClientSettings settings = ClientSettings.get();
+        String normalized = GalleryClient.normalizeBase(urlDraft);
+        String next = normalized.isBlank() ? ClientSettings.DEFAULT_GALLERY : normalized;
+        if (!next.equals(GalleryClient.normalizeBase(settings.galleryUrl))) {
+            GalleryWork.dropSession();
+        }
+        settings.galleryUrl = next;
+        urlDraft = next;
+        if (urlBox != null) {
+            urlBox.setValue(next);
+        }
+        galleryNotice = "Gallery URL saved.";
+        save();
+        rebuild();
+    }
+
+    private void searchGallery() {
+        if (studioGallery) {
+            return;
+        }
+        galleryNotice = "";
+        gallerySelection = "";
+        galleryScroll.remove(slot);
+        grid = null;
+        GalleryWork.browse(slot, query);
+        rebuild();
+    }
+
+    private GridMetrics buildGrid(Rect bounds, List<Card> entries, boolean isGallery, String equipped) {
+        boolean compact = width < 640;
+        int columns = isGallery ? 4 : 3;
+        int preferredHeight = compact ? 58 : isGallery ? 126 : 146;
+        GridMetrics metrics = GridMetrics.fit(bounds, entries.size(), compact ? 74 : 94, preferredHeight, columns);
+        List<FlatButton> buttons = new ArrayList<>();
+        int equippedIndex = -1;
+        for (int i = 0; i < entries.size(); i++) {
+            Card card = entries.get(i);
+            boolean worn = card.id().equals(equipped) || !isGallery && Chick.ID.equals(card.id())
+                    && equipped.equals(ClientSettings.get().chickGallery.get(slot));
+            if (worn) {
+                equippedIndex = i;
             }
-            if (!settings.disabled.remove(id)) {
-                settings.disabled.add(id);
+            FlatButton button = new FlatButton(metrics.card(i, 0), Component.literal(worn ? card.name() + ", selected" : card.name()),
+                    pressed -> chooseCard(card, isGallery),
+                    (widget, graphics, font, rect, hovered) -> drawCard(widget, graphics, rect, hovered, card, isGallery, worn));
+            String tooltip = TextFit.ellipsis(card.name(), Math.min(156, width - 20), font::width);
+            button.setTooltip(Tooltip.create(Component.literal(tooltip)));
+            buttons.add(addRenderableWidget(button));
+        }
+        gridSlot = slot;
+        gridView = view;
+        Map<Slot, Integer> positions = scrollPositions(view);
+        int row = positions.getOrDefault(slot, 0);
+        if (!isGallery && (revealEquipped || !positions.containsKey(slot))) {
+            row = metrics.reveal(equippedIndex, row);
+            revealEquipped = false;
+        }
+        grid = new CardGrid(metrics, buttons, row);
+        return metrics;
+    }
+
+    private void chooseCard(Card card, boolean isGallery) {
+        if (isGallery) {
+            if (!studioGallery) {
+                gallerySelection = card.id();
+                galleryNotice = "";
+                GalleryWork.equip(slot, card.id());
+                rebuild();
             }
+        } else if (card.id().isBlank()) {
+            GalleryWork.clear(slot);
+            rebuild();
+        } else if (Chick.ID.equals(card.id()) && Chick.isPerch(slot)) {
+            GalleryWork.syncChick(slot);
+            rebuild();
+        } else {
+            ClientSettings.get().equip(slot, card.id());
             save();
             rebuild();
-        }).bounds(settingsRect.x(), sy + 22, 110, 18).build());
+        }
+    }
+
+    private void initSettings(ClientSettings settings) {
+        settingsLayout = WardrobeLayout.settings(frame);
+        addRenderableWidget(ToggleSwitch.create(toggleLine(settingsLayout.hideOthers()), "Hide others",
+                () -> settings.hideOthers, on -> {
+                    settings.hideOthers = on;
+                    save();
+                }));
+        addRenderableWidget(ToggleSwitch.create(toggleLine(settingsLayout.skinLayer()), "3D skin layer",
+                () -> settings.skinLayers, on -> {
+                    settings.skinLayers = on;
+                    save();
+                }));
+        Rect distance = distanceOptions();
+        for (int i = 0; i < SKIN_DISTANCES.length; i++) {
+            int metres = SKIN_DISTANCES[i];
+            choice(distance.column(i, SKIN_DISTANCES.length, 2), metres + " m",
+                    () -> settings.skinDistance == metres, () -> {
+                        settings.skinDistance = metres;
+                        save();
+                    });
+        }
+    }
+
+    private Rect distanceOptions() {
+        Rect row = settingsLayout.skinDistance();
+        int optionWidth = Math.min(198, row.w() / 2 + 10);
+        return new Rect(row.right() - optionWidth - 7, row.y() + 5, optionWidth, 24);
+    }
+
+    private static Rect toggleLine(Rect row) {
+        return new Rect(row.x() + 3, row.y() + 2, row.w() - 6, 21);
+    }
+
+    private void choice(Rect rect, String label, BooleanSupplier selected, Runnable pick) {
+        addRenderableWidget(new FlatButton(rect, Component.literal(label), button -> pick.run(),
+                (button, graphics, font, bounds, hovered) -> {
+                    boolean on = selected.getAsBoolean();
+                    UiTheme.frame(graphics, bounds, on ? UiTheme.HOVER : button.fill(hovered), button.border());
+                    if (on) {
+                        UiTheme.fill(graphics, new Rect(bounds.x() + 2, bounds.bottom() - 2, bounds.w() - 4, 1), UiTheme.ACCENT);
+                    }
+                    UiTheme.centered(graphics, font, label, bounds.inset(3), on ? UiTheme.TEXT : UiTheme.MUTED);
+                }));
+    }
+
+    private FlatButton button(Rect bounds, String label, Runnable action) {
+        return addRenderableWidget(new FlatButton(bounds, Component.literal(label), pressed -> action.run()));
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // All managed surfaces are painted in render().
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, WardrobeLayout.Palette.INK);
-        for (WardrobeLayout.Rect rect : regions) {
-            graphics.fill(rect.x() - 2, rect.y() - 2, rect.x() + rect.w() + 2, rect.y() + rect.h() + 2, WardrobeLayout.Palette.PANEL);
-            graphics.fill(rect.x() - 2, rect.y() - 2, rect.x() + rect.w() + 2, rect.y() - 1, WardrobeLayout.Palette.LINE);
+        if (rebuildPending) {
+            refreshWidgets();
+        }
+        UiTheme.fill(graphics, new Rect(0, 0, width, height), UiTheme.BACKGROUND);
+        Rect head = frame.header();
+        UiTheme.slotIcon(graphics, Slot.HAT, head.x() + 2, head.y() + 9, UiTheme.ACCENT);
+        UiTheme.text(graphics, font, title.getString(),
+                new Rect(head.x() + 22, head.y(), navigation().x() - head.x() - 29, head.h()), UiTheme.TEXT);
+        UiTheme.fill(graphics, new Rect(head.x(), head.bottom() - 1, head.w(), 1), UiTheme.BORDER);
+        UiTheme.frame(graphics, frame.content(), UiTheme.PANEL, UiTheme.BORDER);
+        drawPreview(graphics);
+
+        switch (view) {
+            case WARDROBE -> drawWardrobe(graphics);
+            case GALLERY -> drawGallery(graphics);
+            case SETTINGS -> drawSettings(graphics);
+        }
+        if (grid != null) {
+            grid.drawScrollbar(graphics);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
-        graphics.drawString(this.font, this.title, region(WardrobeLayout.HEADER).x(), region(WardrobeLayout.HEADER).y() + 6, WardrobeLayout.Palette.AMBER, false);
-        WardrobeLayout.Rect preview = region(WardrobeLayout.PREVIEW);
-        graphics.drawString(this.font, "Preview", preview.x() + 4, preview.y() + 4, WardrobeLayout.Palette.MUTED, false);
-        graphics.drawString(this.font, "Packed", region(WardrobeLayout.LIST).x(), region(WardrobeLayout.LIST).y() - 10, WardrobeLayout.Palette.PAPER, false);
-        graphics.drawString(this.font, "Gallery", region(WardrobeLayout.GALLERY).x(), region(WardrobeLayout.GALLERY).y() - 10, WardrobeLayout.Palette.PAPER, false);
-        WardrobeLayout.Rect gallery = region(WardrobeLayout.GALLERY);
-        String status = trim(GalleryWork.status(), Math.max(16, gallery.w() / 6));
-        graphics.drawString(this.font, status, gallery.x(), gallery.y() + gallery.h() - 40, WardrobeLayout.Palette.MUTED, false);
-        int painted = 0;
-        for (Thumb thumb : thumbs) {
-            if (thumb.equipped) {
-                int x = thumb.button.getX();
-                int y = thumb.button.getY();
-                graphics.fill(x, y, x + thumb.button.getWidth(), y + 2, WardrobeLayout.Palette.AMBER);
+    }
+
+    private void drawPreview(GuiGraphics graphics) {
+        Rect panel = frame.preview();
+        Rect stage = frame.stage();
+        UiTheme.frame(graphics, panel, UiTheme.PANEL, UiTheme.BORDER);
+        UiTheme.text(graphics, font, "Player preview", new Rect(stage.x(), panel.y() + 4, stage.w(), 20), UiTheme.TEXT);
+        UiTheme.frame(graphics, stage, UiTheme.STAGE, UiTheme.BORDER);
+        if (minecraft != null && minecraft.player != null) {
+            preview.draw(graphics, stage.inset(1), minecraft.player);
+            UiTheme.text(graphics, font, "Drag to turn", new Rect(stage.x(), panel.bottom() - 24, panel.w() - 67, 17), UiTheme.MUTED);
+            //? if >=1.21.11 {
+            ClientSettings settings = ClientSettings.get();
+            if (JackOLanternMask.ID.equals(settings.equippedId(Slot.HAT)) && settings.shown(Slot.HAT, JackOLanternMask.ID)) {
+                UiTheme.centered(graphics, font, "Mask shown in-world",
+                        new Rect(stage.x() + 4, stage.bottom() - 16, stage.w() - 8, 14), UiTheme.MUTED);
             }
-            if (thumb.paint(graphics)) {
-                painted++;
-            }
-        }
-        if (!loggedThumbs && painted > 0) {
-            loggedThumbs = true;
-            LOGGER.info("wardrobe painted {} item thumbnails", painted);
-        }
-        if (this.minecraft != null && this.minecraft.player != null) {
-            int top = preview.y() + 18;
-            int bottom = preview.y() + preview.h() - 8;
-            int box = Math.max(24, bottom - top);
-            // Leave a clear margin above the head and below the feet at every turn.
-            int scale = Math.max(18, Math.round(box * 0.24f));
-            spinPreview(graphics, preview, scale, this.minecraft.player);
+            //?}
         } else {
-            graphics.drawString(this.font, "Join a world to preview.", preview.x() + 6, preview.y() + 28, WardrobeLayout.Palette.PAPER, false);
+            UiTheme.centered(graphics, font, "Join a world", new Rect(stage.x(), stage.y() + stage.h() / 2 - 12, stage.w(), 12), UiTheme.TEXT);
+            UiTheme.centered(graphics, font, "to preview your skin", new Rect(stage.x(), stage.y() + stage.h() / 2 + 1, stage.w(), 12), UiTheme.MUTED);
         }
     }
 
-    /** Rear three-quarter. A full spin turns the wings edge-on and they read as strips down the front. */
-    private float rearYaw() {
-        spin += 0.02f;
-        return 158f + (float) Math.sin(spin) * 14f;
+    private void drawWardrobe(GuiGraphics graphics) {
+        Rect details = collection.equipped();
+        String equipped = ClientSettings.get().equippedId(slot);
+        ModelLibrary.Resolved model = ModelLibrary.resolve(equipped);
+        String name = model != null ? model.name() : equipped.isBlank() ? "None" : "Unavailable cosmetic";
+        int labelWidth = details.w() - (CosmeticDrawer.canTint(equipped) ? 176 : 112);
+        UiTheme.frame(graphics, details, UiTheme.STAGE, UiTheme.BORDER);
+        UiTheme.text(graphics, font, "Equipped", new Rect(details.x() + 7, details.y() + 3, labelWidth, 12), UiTheme.MUTED);
+        UiTheme.text(graphics, font, name, new Rect(details.x() + 7, details.y() + 16, labelWidth, 12), UiTheme.TEXT);
+        if (picker != null) {
+            UiTheme.frame(graphics, collection.colour(), UiTheme.STAGE, UiTheme.BORDER);
+        }
+        if (emptyWardrobe != null) {
+            UiTheme.text(graphics, font, "No packed " + (slot == Slot.HAT ? "hats" : "ears") + " in this build.", emptyWardrobe, UiTheme.MUTED);
+        }
     }
 
-    private void spinPreview(GuiGraphics graphics, WardrobeLayout.Rect preview, int scale, net.minecraft.world.entity.LivingEntity player) {
-        int x0 = preview.x() + 6;
-        int y0 = preview.y() + 18;
-        int x1 = preview.x() + preview.w() - 6;
-        int y1 = preview.y() + preview.h() - 8;
-        graphics.fill(x0, y0, x1, y1, 0xFF100E0C);
-        //? if >=1.21.11 {
-        for (int guard = 0; guard < 8 && previewScissorOpen(graphics); guard++) {
-            graphics.disableScissor();
+    private void drawGallery(GuiGraphics graphics) {
+        GalleryWork.SignInStatus signIn = studioGallery ? GalleryWork.SignInStatus.SIGNED_OUT : GalleryWork.signInStatus();
+        String accountText = switch (signIn) {
+            case SIGNED_OUT -> "Signed out";
+            case SIGNING_IN -> "Signing in…";
+            case SIGNED_IN -> "Signed in as " + ClientSettings.get().playerName;
+            case ERROR -> "Sign-in error";
+        };
+        int reserve = signIn == GalleryWork.SignInStatus.SIGNED_IN ? 120 : 182;
+        Rect chip = leading(gallery.account(), gallery.account().w() - reserve);
+        UiTheme.frame(graphics, chip, UiTheme.STAGE, UiTheme.BORDER);
+        int dot = signIn == GalleryWork.SignInStatus.SIGNED_IN || signIn == GalleryWork.SignInStatus.SIGNING_IN
+                ? UiTheme.ACCENT : UiTheme.MUTED;
+        if (chip.w() >= 20) {
+            UiTheme.tile(graphics, new Rect(chip.x() + 7, chip.y() + 8, 6, 6), dot);
         }
-        var state = InventoryPreviewAccess.quarkos$extract(player);
-        if (state instanceof net.minecraft.client.renderer.entity.state.LivingEntityRenderState living) {
-            float yaw = rearYaw();
-            living.bodyRot = 180f + yaw;
-            living.yRot = yaw;
-            living.xRot = 0f;
-            float entityScale = living.scale == 0f ? 1f : living.scale;
-            living.boundingBoxWidth /= entityScale;
-            living.boundingBoxHeight /= entityScale;
-            living.scale = 1f;
-            living.shadowRadius = 0f;
+        UiTheme.text(graphics, font, accountText, new Rect(chip.x() + 19, chip.y(), chip.w() - 25, chip.h()), UiTheme.TEXT);
+        if (gallerySettingsOpen) {
+            UiTheme.text(graphics, font, "Gallery URL", leading(gallery.connection(), 62), UiTheme.MUTED);
         }
-        Quaternionf camera = new Quaternionf().rotateX(0.06f);
-        Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).mul(camera);
-        Vector3f translation = new Vector3f(0f, state.boundingBoxHeight / 2f + 0.0625f, 0f);
-        graphics.submitEntityRenderState(state, scale, translation, pose, camera, x0, y0, x1, y1);
-        //?} else {
-        Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).rotateY((float) Math.toRadians(rearYaw()));
-        Quaternionf camera = new Quaternionf().rotateX(0.06f);
-        Vector3f translation = new Vector3f(0f, player.getBbHeight() / 2f + 0.0625f, 0f);
-        float x = (x0 + x1) / 2f;
-        float y = y1 - 4f;
-        InventoryScreen.renderEntityInInventory(graphics, x, y, scale, translation, pose, camera, player);
-        //?}
+
+        Rect gridRect = gallery.grid();
+        if (emptyGallery) {
+            GalleryWork.BrowseStatus browseStatus = GalleryWork.browseStatus(slot);
+            String empty = switch (browseStatus) {
+                case IDLE -> "Search to browse gallery cosmetics.";
+                case LOADING -> "Loading gallery…";
+                case READY -> "No matching cosmetics.";
+                case ERROR -> "Could not load the gallery.";
+            };
+            UiTheme.frame(graphics, gridRect, UiTheme.STAGE, UiTheme.BORDER);
+            UiTheme.centered(graphics, font, empty, gridRect.inset(8), UiTheme.MUTED);
+        }
+        Rect actions = gallery.actions();
+        String status = studioGallery ? "Studio catalog sample" : galleryNotice.isBlank() ? GalleryWork.status() : galleryNotice;
+        if (!status.equals("Gallery idle.") && !status.equals(accountText) && !status.equals(accountText + ".")) {
+            UiTheme.text(graphics, font, status, new Rect(actions.x() + 131, actions.y(), actions.w() - 131, actions.h()), UiTheme.MUTED);
+        }
+    }
+
+    private void drawSettings(GuiGraphics graphics) {
+        Rect panel = frame.content();
+        UiTheme.text(graphics, font, "Display settings", new Rect(panel.x() + 10, panel.y() + 6, panel.w() - 20, 17), UiTheme.TEXT);
+        drawSettingRow(graphics, settingsLayout.hideOthers(), "Hide cosmetics and 3D layers on other players.");
+        drawSettingRow(graphics, settingsLayout.skinLayer(), "Give the outer layer of player skins depth.");
+        Rect distance = settingsLayout.skinDistance();
+        UiTheme.frame(graphics, distance, UiTheme.STAGE, UiTheme.BORDER);
+        int metres = ClientSettings.get().skinDistance;
+        String label = Arrays.stream(SKIN_DISTANCES).anyMatch(preset -> preset == metres) ? "Skin distance" : "Skin distance · " + metres + " m";
+        UiTheme.text(graphics, font, label,
+                new Rect(distance.x() + 8, distance.y(), distanceOptions().x() - distance.x() - 12, distance.h()), UiTheme.TEXT);
+    }
+
+    private void drawSettingRow(GuiGraphics graphics, Rect row, String description) {
+        UiTheme.frame(graphics, row, UiTheme.STAGE, UiTheme.BORDER);
+        UiTheme.text(graphics, font, description,
+                new Rect(row.x() + 8, row.y() + 21, row.w() - 16, 13), UiTheme.MUTED);
+    }
+
+    private void drawCard(FlatButton button, GuiGraphics graphics, Rect rect, boolean hovered, Card card, boolean galleryCard, boolean worn) {
+        boolean picked = galleryCard && card.id().equals(gallerySelection);
+        int outline = worn || picked ? UiTheme.ACCENT : button.border();
+        UiTheme.frame(graphics, rect, hovered ? UiTheme.HOVER : UiTheme.CONTROL, outline);
+        int labelHeight = galleryCard ? 26 : 16;
+        Rect art = new Rect(rect.x() + 2, rect.y() + 2, rect.w() - 4, rect.h() - labelHeight - 2);
+        UiTheme.fill(graphics, art, UiTheme.STAGE);
+        if (card.thumbnail() != null) {
+            card.thumbnail().draw(graphics, art.inset(3));
+        } else if (card.id().isBlank()) {
+            UiTheme.emptyIcon(graphics, art.x() + (art.w() - 22) / 2, art.y() + (art.h() - 22) / 2);
+        } else {
+            UiTheme.slotIcon(graphics, slot, art.x() + (art.w() - 12) / 2, art.y() + (art.h() - 12) / 2, UiTheme.MUTED);
+        }
+        if (worn) {
+            UiTheme.check(graphics, rect.right() - 16, rect.y() + 4);
+        }
+        UiTheme.text(graphics, font, card.name(),
+                new Rect(rect.x() + 6, rect.bottom() - labelHeight, rect.w() - 12, 15), UiTheme.TEXT);
+        if (galleryCard) {
+            UiTheme.text(graphics, font, card.author(),
+                    new Rect(rect.x() + 6, rect.bottom() - 14, rect.w() - 12, 12), UiTheme.MUTED);
+        }
+    }
+
+    private boolean beginDrag(double x, double y) {
+        if (picker != null && picker.contains(x, y)) {
+            setFocused(picker.slider());
+            picker.drag(x);
+            drag = Drag.COLOUR;
+        } else if (grid != null && grid.grab(x, y)) {
+            clearHiddenFocus();
+            drag = Drag.SCROLLBAR;
+        } else if (frame.stage().contains(x, y) && minecraft != null && minecraft.player != null) {
+            setFocused(null);
+            preview.beginDrag();
+            drag = Drag.PREVIEW;
+        }
+        return drag != Drag.NONE;
+    }
+
+    private boolean moveDrag(double x, double y, double dx, double dy) {
+        switch (drag) {
+            case NONE -> { return false; }
+            case PREVIEW -> preview.drag(dx, dy);
+            case COLOUR -> picker.drag(x);
+            case SCROLLBAR -> {
+                grid.drag(y);
+                clearHiddenFocus();
+            }
+        }
+        return true;
+    }
+
+    private boolean finishDrag() {
+        Drag previous = drag;
+        drag = Drag.NONE;
+        if (previous == Drag.PREVIEW) {
+            preview.endDrag();
+        } else if (previous == Drag.COLOUR) {
+            save();
+        }
+        return previous != Drag.NONE;
+    }
+
+    private boolean shortcut(int key) {
+        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+            if (queryBox != null && getFocused() == queryBox) {
+                searchGallery();
+                return true;
+            }
+            if (urlBox != null && getFocused() == urlBox) {
+                applyGalleryUrl();
+                return true;
+            }
+        }
+        if (picker != null && getFocused() == picker.slider() && (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT)) {
+            picker.adjust(key == GLFW.GLFW_KEY_LEFT ? -1 : 1);
+            return true;
+        }
+        if (grid != null && !(getFocused() instanceof EditBox)
+                && (key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN)
+                && grid.page(key == GLFW.GLFW_KEY_PAGE_UP ? -1 : 1)) {
+            clearHiddenFocus();
+            return true;
+        }
+        return false;
+    }
+
+    //? if >=1.21.11 {
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
+        return event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && beginDrag(event.x(), event.y()) || super.mouseClicked(event, doubled);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        return event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && moveDrag(event.x(), event.y(), dragX, dragY)
+                || super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        return event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && finishDrag() || super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        return shortcut(event.key()) || super.keyPressed(event);
+    }
+    //?} else {
+    /*@Override
+    public boolean mouseClicked(double x, double y, int button) {
+        return button == GLFW.GLFW_MOUSE_BUTTON_LEFT && beginDrag(x, y) || super.mouseClicked(x, y, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double x, double y, int button, double dragX, double dragY) {
+        return button == GLFW.GLFW_MOUSE_BUTTON_LEFT && moveDrag(x, y, dragX, dragY) || super.mouseDragged(x, y, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(double x, double y, int button) {
+        return button == GLFW.GLFW_MOUSE_BUTTON_LEFT && finishDrag() || super.mouseReleased(x, y, button);
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) {
+        return shortcut(key) || super.keyPressed(key, scanCode, modifiers);
+    }
+    *///?}
+
+    @Override
+    public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
+        if (grid != null && grid.wheel(x, y, vertical)) {
+            clearHiddenFocus();
+            return true;
+        }
+        return super.mouseScrolled(x, y, horizontal, vertical);
+    }
+
+    private void clearHiddenFocus() {
+        if (getFocused() instanceof FlatButton button && !button.visible) {
+            setFocused(null);
+        }
+    }
+
+    private void rememberScroll() {
+        if (grid != null) {
+            scrollPositions(gridView).put(gridSlot, grid.row());
+        }
+    }
+
+    private Map<Slot, Integer> scrollPositions(View page) {
+        return page == View.GALLERY ? galleryScroll : wardrobeScroll;
+    }
+
+    private static String slotName(Slot slot) {
+        return Component.translatable("slot.quarkos_cosmetics." + slot.wire).getString();
+    }
+
+    private static Rect leading(Rect row, int width) {
+        return new Rect(row.x(), row.y(), width, row.h());
+    }
+
+    private static Rect trailing(Rect row, int width) {
+        return new Rect(row.right() - width, row.y(), width, row.h());
     }
 
     @Override
@@ -311,116 +822,15 @@ public final class WardrobeScreen extends Screen {
 
     @Override
     public void onClose() {
-        close();
-    }
-
-    private void close() {
         save();
-        if (this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+        if (minecraft != null) {
+            minecraft.setScreen(parent);
         }
     }
 
     private void save() {
-        if (this.minecraft != null) {
-            ClientSettings.get().save(this.minecraft.gameDirectory.toPath());
+        if (minecraft != null) {
+            ClientSettings.get().save(minecraft.gameDirectory.toPath());
         }
-    }
-
-    private boolean itemHidden() {
-        return ClientSettings.get().disabled.contains(ClientSettings.get().equippedId(slot));
-    }
-
-    private WardrobeLayout.Rect region(String id) {
-        return WardrobeLayout.find(regions, id);
-    }
-
-    private static String shortName(Slot slot) {
-        return switch (slot) {
-            case HAT -> "Hat";
-            case EARS -> "Ears";
-            case SHOULDER_LEFT -> "L.Sh";
-            case SHOULDER_RIGHT -> "R.Sh";
-            case BACK -> "Back";
-            case TAIL -> "Tail";
-        };
-    }
-
-    private static final class Thumb {
-        private final Button button;
-        private final Identifier texture;
-        private final boolean equipped;
-        private int[] argb;
-        private int width;
-        private int height;
-
-        private Thumb(Button button, Identifier texture, boolean equipped) {
-            this.button = button;
-            this.texture = texture;
-            this.equipped = equipped;
-        }
-
-        private boolean paint(GuiGraphics graphics) {
-            ensure();
-            int dest = Math.min(32, button.getWidth() - 6);
-            if (dest < 8) {
-                return false;
-            }
-            int ox = button.getX() + (button.getWidth() - dest) / 2;
-            int oy = button.getY() + (button.getHeight() - dest) / 2 + 1;
-            graphics.fill(ox - 1, oy - 1, ox + dest + 1, oy + dest + 1, 0xFF14110E);
-            if (argb == null) {
-                return false;
-            }
-            for (int sy = 0; sy < height; sy++) {
-                int y0 = oy + sy * dest / height;
-                int y1 = oy + (sy + 1) * dest / height;
-                for (int sx = 0; sx < width; sx++) {
-                    int color = argb[sy * width + sx];
-                    if (((color >>> 24) & 255) < 16) {
-                        continue;
-                    }
-                    int x0 = ox + sx * dest / width;
-                    int x1 = ox + (sx + 1) * dest / width;
-                    graphics.fill(x0, y0, x1, Math.max(y0 + 1, y1), color | 0xFF000000);
-                }
-            }
-            return true;
-        }
-
-        private void ensure() {
-            if (argb != null) {
-                return;
-            }
-            SkinImages.Pixels pixels = SkinImages.read(texture);
-            if (pixels == null || pixels.width() <= 0 || pixels.height() <= 0 || pixels.argb().length < pixels.width() * pixels.height()) {
-                return;
-            }
-            argb = pixels.argb();
-            width = pixels.width();
-            height = pixels.height();
-        }
-    }
-
-    //? if >=1.21.11 {
-    /** Forge keeps the stack private and exposes a getter. Fabric leaves the field public. */
-    private static boolean previewScissorOpen(GuiGraphics graphics) {
-        //? if forge {
-        return graphics.getScissorStack().peek() != null;
-        //?} else {
-        return graphics.scissorStack.peek() != null;
-        //?}
-    }
-    //?}
-
-    private static Slot[] headSlots() {
-        return new Slot[] {Slot.HAT, Slot.EARS};
-    }
-
-    private static String trim(String value, int max) {
-        if (value == null) {
-            return "";
-        }
-        return value.length() <= max ? value : value.substring(0, max - 1) + "…";
     }
 }

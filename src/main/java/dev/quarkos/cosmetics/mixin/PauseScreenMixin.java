@@ -1,7 +1,8 @@
 package dev.quarkos.cosmetics.mixin;
 
+import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
 import dev.quarkos.cosmetics.config.WardrobeScreen;
-import net.minecraft.client.gui.components.Button;
+import dev.quarkos.cosmetics.config.ui.FlatButton;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -18,7 +19,8 @@ public abstract class PauseScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void quarkos$button(CallbackInfo ci) {
-        this.addRenderableWidget(Button.builder(Component.translatable("text.quarkos_cosmetics.pause"), button ->
-                this.minecraft.setScreen(new WardrobeScreen(this))).bounds(this.width / 2 + 104, 8, 90, 20).build());
+        this.addRenderableWidget(new FlatButton(new Rect(this.width - 102, 8, 90, 20),
+                Component.translatable("text.quarkos_cosmetics.pause"), button ->
+                this.minecraft.setScreen(new WardrobeScreen(this))));
     }
 }

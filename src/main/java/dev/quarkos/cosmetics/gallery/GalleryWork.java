@@ -28,7 +28,16 @@ public final class GalleryWork {
     private static volatile String bearer;
     private static volatile String status = "Gallery idle.";
     private static volatile List<GalleryClient.Listed> browse = List.of();
+    private static volatile SignInStatus signInStatus = SignInStatus.SIGNED_OUT;
+    private static volatile BrowseView browseView = new BrowseView(null, BrowseStatus.IDLE);
     private static int reportIndex;
+
+    public enum SignInStatus { SIGNED_OUT, SIGNING_IN, SIGNED_IN, ERROR }
+
+    public enum BrowseStatus { IDLE, LOADING, READY, ERROR }
+
+    private record BrowseView(Slot slot, BrowseStatus status) {
+    }
 
     private GalleryWork() {
     }
@@ -45,8 +54,18 @@ public final class GalleryWork {
         return bearer != null && !bearer.isBlank();
     }
 
+    public static SignInStatus signInStatus() {
+        return signInStatus;
+    }
+
+    public static BrowseStatus browseStatus(Slot slot) {
+        BrowseView view = browseView;
+        return view.slot() == slot ? view.status() : BrowseStatus.IDLE;
+    }
+
     public static void dropSession() {
         bearer = null;
+        signInStatus = SignInStatus.SIGNED_OUT;
     }
 
     public static void signIn() {
@@ -56,6 +75,7 @@ public final class GalleryWork {
         UUID profile = user.getProfileId();
         String accessToken = user.getAccessToken();
         status = "Signing in…";
+        signInStatus = SignInStatus.SIGNING_IN;
         EXEC.execute(() -> {
             try {
                 GalleryClient.Session session = client().signIn(name, accessToken, profile);
@@ -66,28 +86,38 @@ public final class GalleryWork {
                     settings.playerName = session.name();
                     settings.save(minecraft.gameDirectory.toPath());
                     status = "Signed in as " + session.name() + ".";
+                    signInStatus = SignInStatus.SIGNED_IN;
                     refreshScreen();
                 });
             } catch (Exception ex) {
-                fail(ex);
+                fail(ex, () -> signInStatus = SignInStatus.ERROR);
             }
         });
     }
 
     public static void browse(Slot slot, String query) {
+        BrowseView request = new BrowseView(slot, BrowseStatus.LOADING);
+        browseView = request;
         status = "Loading the gallery…";
         EXEC.execute(() -> {
             try {
                 GalleryClient.Page page = client().list(query, slot, null, 20);
                 onClient(() -> {
                     browse = List.copyOf(page.items());
+                    finishBrowse(request, BrowseStatus.READY);
                     status = browse.isEmpty() ? "Nothing published for this slot yet." : browse.size() + " gallery cosmetics.";
                     refreshScreen();
                 });
             } catch (Exception ex) {
-                fail(ex);
+                fail(ex, () -> finishBrowse(request, BrowseStatus.ERROR));
             }
         });
+    }
+
+    private static void finishBrowse(BrowseView request, BrowseStatus status) {
+        if (browseView == request) {
+            browseView = new BrowseView(request.slot(), status);
+        }
     }
 
     public static void equip(Slot slot, String cosmeticId) {
@@ -309,12 +339,17 @@ public final class GalleryWork {
     }
 
     private static void fail(Exception ex) {
+        fail(ex, () -> {});
+    }
+
+    private static void fail(Exception ex, Runnable updateView) {
         String message = ex instanceof GalleryException gallery ? gallery.getMessage() : "The gallery request failed.";
         if (message == null || message.toLowerCase(java.util.Locale.ROOT).contains("accesstoken")) {
             message = "The gallery request failed.";
         }
         String text = message;
         onClient(() -> {
+            updateView.run();
             status = text;
             refreshScreen();
         });

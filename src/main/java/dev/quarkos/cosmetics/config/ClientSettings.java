@@ -30,6 +30,7 @@ public final class ClientSettings {
     public String playerName = "";
     public final Map<Slot, String> equipped = new EnumMap<>(Slot.class);
     public final Map<Slot, Boolean> categoryOn = new EnumMap<>(Slot.class);
+    private final Map<Slot, Integer> tints = new EnumMap<>(Slot.class);
     public final Set<String> disabled = new LinkedHashSet<>();
     /** v1 perch. The chick stays on the hat. */
     public String chickPerch = Slot.HAT.wire;
@@ -82,6 +83,7 @@ public final class ClientSettings {
             // Body cosmetics stay in the codebase. v1 does not equip them.
             settings.equipped.put(slot, slot.wornOnHead() ? equippedId : "");
             settings.categoryOn.put(slot, Boolean.parseBoolean(properties.getProperty("category." + slot.wire, "true")));
+            settings.setTint(slot, TintColor.decode(properties.getProperty("tint." + slot.wire)));
         }
         settings.chickPerch = Slot.HAT.wire;
         for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
@@ -117,6 +119,10 @@ public final class ClientSettings {
         for (Slot slot : Slot.values()) {
             properties.setProperty("equipped." + slot.wire, equipped.getOrDefault(slot, ""));
             properties.setProperty("category." + slot.wire, Boolean.toString(categoryOn.getOrDefault(slot, true)));
+            int tint = tint(slot);
+            if (tint != TintColor.DEFAULT) {
+                properties.setProperty("tint." + slot.wire, TintColor.encode(tint));
+            }
         }
         properties.setProperty("disabled", String.join(",", disabled));
         properties.setProperty("chickPerch", chickPerch == null || chickPerch.isBlank() ? Slot.HAT.wire : chickPerch);
@@ -189,6 +195,22 @@ public final class ClientSettings {
 
     public String equippedId(Slot slot) {
         return equipped.getOrDefault(slot, "");
+    }
+
+    public int tint(Slot slot) {
+        return tints.getOrDefault(slot, TintColor.DEFAULT);
+    }
+
+    public void setTint(Slot slot, int rgb) {
+        if (!slot.wornOnHead()) {
+            return;
+        }
+        int tint = rgb & TintColor.DEFAULT;
+        if (tint == TintColor.DEFAULT) {
+            tints.remove(slot);
+        } else {
+            tints.put(slot, tint);
+        }
     }
 
     public void equip(Slot slot, String id) {

@@ -3,6 +3,7 @@ package dev.quarkos.cosmetics.harness;
 import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.quarkos.cosmetics.config.ClientSettings;
+import dev.quarkos.cosmetics.config.TintColor;
 import dev.quarkos.cosmetics.config.WardrobeScreen;
 import dev.quarkos.cosmetics.gallery.EquipmentMirror;
 import dev.quarkos.cosmetics.gallery.GalleryClient;
@@ -29,9 +30,11 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Headless portrait pass. Third person, HUD hidden, one cosmetic at a time, front then back.
@@ -193,6 +196,15 @@ public final class ClientHarness {
             new Shot("ears-hook", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false)
     );
 
+    private static final List<UiShot> UI_SHOTS = List.of(
+            new UiShot("ui-wardrobe-hat", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:scarecrow_straw_hat", 2, false),
+            new UiShot("ui-wardrobe-ears", WardrobeScreen.View.WARDROBE, Slot.EARS, "quarkos:scarecrow_straw_hat", 2, false),
+            new UiShot("ui-wardrobe-colour", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:candle_skull_crown", 2, true),
+            new UiShot("ui-gallery", WardrobeScreen.View.GALLERY, Slot.HAT, Chick.ID, 2, false),
+            new UiShot("ui-settings", WardrobeScreen.View.SETTINGS, Slot.HAT, "quarkos:ghost_buddy", 2, false),
+            new UiShot("ui-wardrobe-scale4", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:scarecrow_straw_hat", 4, false)
+    );
+
     private static List<Shot> active;
     private static State state = State.WAIT_TITLE;
     private static int ticks;
@@ -204,6 +216,12 @@ public final class ClientHarness {
     private static int shotIndex;
     private static int settledAt = -1;
     private static int screenAt = -1;
+    private static Set<String> shotFilter;
+    private static List<UiShot> activeUi;
+    private static int uiShotIndex;
+    private static ClientSettings preUiSettings;
+    private static volatile Path awaitingUiWrite;
+    private static volatile Path writtenUiShot;
     private static boolean pairStarted;
     private static int pairShot;
     private static int filmIndex = -1;
@@ -247,6 +265,7 @@ public final class ClientHarness {
                 case SHOTS -> shots(client);
                 case PAIR -> pair(client);
                 case WARDROBE -> wardrobe(client);
+                case UI_WARDROBE -> uiWardrobe(client);
                 case STOP -> stop(client);
             }
         } catch (RuntimeException e) {
@@ -305,7 +324,11 @@ public final class ClientHarness {
             state = State.STOP;
             return;
         }
-        state = Boolean.getBoolean("quarkos_cosmetics.wardrobeOnly") ? State.WARDROBE : State.SHOTS;
+        if (Boolean.getBoolean("quarkos_cosmetics.wardrobeOnly")) {
+            state = wardrobeState();
+        } else {
+            state = State.SHOTS;
+        }
         ticks = 0;
         shotIndex = 0;
         shotQueued = false;
@@ -325,18 +348,8 @@ public final class ClientHarness {
             return;
         }
         if (shotIndex >= activeShots().size()) {
-            String only = System.getProperty("quarkos_cosmetics.only", "");
-            if (!only.isBlank()) {
-                if (only.contains("two-client")) {
-                    state = State.PAIR;
-                } else if (only.contains("wardrobe")) {
-                    state = State.WARDROBE;
-                } else {
-                    state = State.STOP;
-                }
-            } else {
-                state = State.PAIR;
-            }
+            state = shotFilter().isEmpty() || shotFilter().stream().anyMatch(name -> name.contains("two-client"))
+                    ? State.PAIR : wardrobeState();
             ticks = 0;
             shotQueued = false;
             settledAt = -1;
@@ -432,16 +445,43 @@ public final class ClientHarness {
 
     private static List<Shot> activeShots() {
         if (active == null) {
-            String only = System.getProperty("quarkos_cosmetics.only", "");
-            if (only.isBlank()) {
+            Set<String> names = shotFilter();
+            if (names.isEmpty()) {
                 active = SHOTS;
             } else {
-                Set<String> names = Set.of(only.split(","));
                 active = SHOTS.stream().filter(shot -> names.contains(shot.name())).toList();
                 LOGGER.info("harness shot filter {}", active.stream().map(Shot::name).toList());
             }
         }
         return active;
+    }
+
+    private static Set<String> shotFilter() {
+        if (shotFilter == null) {
+            shotFilter = Arrays.stream(System.getProperty("quarkos_cosmetics.only", "").split(","))
+                    .map(String::trim).filter(name -> !name.isEmpty()).collect(Collectors.toUnmodifiableSet());
+        }
+        return shotFilter;
+    }
+
+    private static List<UiShot> activeUiShots() {
+        if (activeUi == null) {
+            Set<String> names = shotFilter();
+            if (names.isEmpty() && Boolean.getBoolean("quarkos_cosmetics.wardrobeOnly")) {
+                activeUi = List.of();
+            } else {
+                activeUi = UI_SHOTS.stream().filter(shot -> names.isEmpty() || names.contains(shot.name())).toList();
+            }
+        }
+        return activeUi;
+    }
+
+    private static State wardrobeState() {
+        return shotFilter().isEmpty() || shotFilter().contains("wardrobe") ? State.WARDROBE : uiWardrobeState();
+    }
+
+    private static State uiWardrobeState() {
+        return activeUiShots().isEmpty() ? State.STOP : State.UI_WARDROBE;
     }
 
     private static void prepare(Minecraft client, Shot shot) {
@@ -999,7 +1039,7 @@ public final class ClientHarness {
         if (!pairReady) {
             if (pairFailed || ticks > 20 * 40) {
                 LOGGER.error("chick two-client gallery setup failed");
-                state = State.STOP;
+                enterWardrobe(activeUiShots().isEmpty() ? State.STOP : wardrobeState());
             }
             return;
         }
@@ -1018,8 +1058,7 @@ public final class ClientHarness {
                 return;
             }
             Chick.hold(null, null);
-            state = State.STOP;
-            ticks = 0;
+            enterWardrobe(wardrobeState());
         });
     }
 
@@ -1224,7 +1263,7 @@ public final class ClientHarness {
         if (!pairReady) {
             if (pairFailed || ticks > 20 * 40) {
                 LOGGER.error("two-client gallery setup failed");
-                state = State.STOP;
+                enterWardrobe(activeUiShots().isEmpty() ? State.STOP : wardrobeState());
             }
             return;
         }
@@ -1232,42 +1271,24 @@ public final class ClientHarness {
         if (ticks < 50) {
             return;
         }
-        shootWhenReady(client, "two-client", () -> {
-            String only = System.getProperty("quarkos_cosmetics.only", "");
-            if (!only.isBlank() && !only.contains("wardrobe")) {
-                state = State.STOP;
-                return;
-            }
-            ClientSettings.get().equip(Slot.BACK, "quarkos:kite_wings");
-            client.setScreen(new WardrobeScreen(null));
-            state = State.WARDROBE;
-            ticks = 0;
-            shotQueued = false;
-        });
+        shootWhenReady(client, "two-client", () -> enterWardrobe(wardrobeState()));
+    }
+
+    private static void enterWardrobe(State next) {
+        state = next;
+        ticks = 0;
+        shotQueued = false;
+        settledAt = -1;
+        screenAt = -1;
     }
 
     private static void wardrobe(Minecraft client) {
-        if (client.player == null || client.level == null) {
-            if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
-                pressFirst(client.screen);
-            }
-            if (ticks > 20 * 180) {
-                LOGGER.error("wardrobe world did not load, screen={}", client.screen);
-                state = State.STOP;
-            }
+        if (!wardrobeWorldReady(client)) {
             return;
         }
         client.options.hideGui = true;
         afterGui = true;
-        bodyPose = BodyPose.STAND;
-        portraitOrbit = 0f;
-        if (client.player != null) {
-            client.player.setPose(net.minecraft.world.entity.Pose.STANDING);
-            client.player.setSwimming(false);
-            client.player.setShiftKeyDown(false);
-            client.player.stopFallFlying();
-            client.player.setNoGravity(false);
-        }
+        standInWardrobe(client);
         if (client.options.guiScale().get() != 1) {
             client.setScreen(null);
             client.options.guiScale().set(1);
@@ -1275,47 +1296,16 @@ public final class ClientHarness {
             screenAt = -1;
             return;
         }
-        if (settledAt < 0) {
-            if (ticks == 1 || ticks % 10 == 0) {
-                client.setScreen(null);
-                if (!studio) {
-                    studio = true;
-                    client.player.connection.sendCommand("time set 6000");
-                    client.player.connection.sendCommand("weather clear");
-                    client.player.connection.sendCommand("gamemode creative");
-                    client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
-                    client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
-                }
-                client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
-                ClientSettings settings = ClientSettings.get();
-                for (Slot slot : Slot.values()) {
-                    settings.categoryOn.put(slot, true);
-                    settings.equip(slot, "");
-                }
-                settings.skinLayers = true;
-                settings.equip(Slot.BACK, "quarkos:kite_wings");
-                settings.save(client.gameDirectory.toPath());
-            }
-            if (client.player.getY() >= 100.0) {
-                settledAt = ticks;
-                LOGGER.info("wardrobe studio ready at y={}", client.player.getY());
-            } else if (ticks > 20 * 30) {
-                LOGGER.error("wardrobe player never reached the studio, y={}", client.player.getY());
-                state = State.STOP;
-            }
+        if (!wardrobeStudioReady(client, () -> {
+            resetLegacyWardrobe();
+            ClientSettings.get().save(client.gameDirectory.toPath());
+        })) {
             return;
         }
         if (!(client.screen instanceof WardrobeScreen)) {
-            ClientSettings settings = ClientSettings.get();
-            settings.skinLayers = true;
-            for (Slot slot : Slot.values()) {
-                settings.equip(slot, "");
-            }
-            settings.equip(Slot.BACK, "quarkos:kite_wings");
-            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.item.ItemStack.EMPTY);
-            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.item.ItemStack.EMPTY);
-            client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.item.ItemStack.EMPTY);
-            client.setScreen(new WardrobeScreen(null));
+            resetLegacyWardrobe();
+            clearWardrobeArmour(client);
+            client.setScreen(WardrobeScreen.legacyCapture());
             screenAt = ticks;
             return;
         }
@@ -1328,9 +1318,163 @@ public final class ClientHarness {
             return;
         }
         shootWhenReady(client, "wardrobe", () -> {
-            state = State.STOP;
+            state = uiWardrobeState();
             ticks = 0;
+            shotQueued = false;
+            screenAt = -1;
         });
+    }
+
+    private static void uiWardrobe(Minecraft client) {
+        if (!wardrobeWorldReady(client)) {
+            return;
+        }
+        client.options.hideGui = false;
+        afterGui = true;
+        standInWardrobe(client);
+        if (preUiSettings == null) {
+            preUiSettings = ClientSettings.get();
+            ClientSettings studioSettings = new ClientSettings();
+            studioSettings.galleryUrl = preUiSettings.galleryUrl;
+            ClientSettings.install(studioSettings);
+            client.setScreen(null);
+            client.setCameraEntity(client.player);
+            client.options.setCameraType(CameraType.FIRST_PERSON);
+            client.player.getAbilities().flying = false;
+            client.player.setSprinting(false);
+            if (client.player.isSleeping()) {
+                client.player.stopSleeping();
+            }
+            KiteWings.hold(null, null);
+            Chick.hold(null, null);
+        }
+        if (!wardrobeStudioReady(client, () -> {})) {
+            return;
+        }
+
+        UiShot shot = activeUiShots().get(uiShotIndex);
+        if (screenAt < 0) {
+            openUiShot(client, shot);
+            screenAt = ticks;
+            return;
+        }
+        if (ticks - screenAt < 8) {
+            return;
+        }
+        Path path = shots().resolve(shot.name() + ".png");
+        if (!shotQueued) {
+            if (client.getWindow().getGuiScale() != shot.scale()) {
+                LOGGER.error("UI shot {} requested GUI scale {}, got {}", shot.name(), shot.scale(), client.getWindow().getGuiScale());
+                state = State.STOP;
+                return;
+            }
+            try {
+                Files.createDirectories(path.getParent());
+            } catch (Exception ex) {
+                LOGGER.error("could not create UI shot directory", ex);
+                state = State.STOP;
+                return;
+            }
+            awaitingUiWrite = path;
+            shotQueued = true;
+            requestShot(client, path);
+        } else if (path.equals(writtenUiShot)) {
+            LOGGER.info("UI_SHOT_DONE {}", shot.name());
+            awaitingUiWrite = null;
+            writtenUiShot = null;
+            shotQueued = false;
+            screenAt = -1;
+            ticks = 0;
+            if (++uiShotIndex == activeUiShots().size()) {
+                state = State.STOP;
+            }
+        } else if (ticks - screenAt > 20 * 20) {
+            LOGGER.error("UI shot {} was not written", path);
+            state = State.STOP;
+        }
+    }
+
+    private static void openUiShot(Minecraft client, UiShot shot) {
+        ClientSettings settings = ClientSettings.get();
+        settings.equip(Slot.HAT, shot.hat());
+        settings.setTint(Slot.HAT, shot.colour() ? 0x7BBFFF : TintColor.DEFAULT);
+        clearWardrobeArmour(client);
+
+        client.setScreen(null);
+        client.options.guiScale().set(shot.scale());
+        // Minecraft caps scale 4 below a 1280 × 960 framebuffer.
+        if (shot.scale() == 4 && (client.getWindow().getWidth() < 1280 || client.getWindow().getHeight() < 960)) {
+            client.getWindow().setWindowed(1920, 1080);
+        }
+        client.resizeDisplay();
+        client.setScreen(WardrobeScreen.studioCapture(shot.view(), shot.slot(), shot.colour()));
+    }
+
+    private static boolean wardrobeWorldReady(Minecraft client) {
+        if (client.player != null && client.level != null) {
+            return true;
+        }
+        if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
+            pressFirst(client.screen);
+        }
+        if (ticks > 20 * 180) {
+            LOGGER.error("wardrobe world did not load, screen={}", client.screen);
+            state = State.STOP;
+        }
+        return false;
+    }
+
+    private static void standInWardrobe(Minecraft client) {
+        bodyPose = BodyPose.STAND;
+        portraitOrbit = 0f;
+        client.player.setPose(net.minecraft.world.entity.Pose.STANDING);
+        client.player.setSwimming(false);
+        client.player.setShiftKeyDown(false);
+        client.player.stopFallFlying();
+        client.player.setNoGravity(false);
+    }
+
+    private static boolean wardrobeStudioReady(Minecraft client, Runnable prepareCosmetics) {
+        if (settledAt >= 0) {
+            return true;
+        }
+        if (ticks == 1 || ticks % 10 == 0) {
+            client.setScreen(null);
+            if (!studio) {
+                studio = true;
+                client.player.connection.sendCommand("time set 6000");
+                client.player.connection.sendCommand("weather clear");
+                client.player.connection.sendCommand("gamemode creative");
+                client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
+                client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
+            }
+            client.player.connection.sendCommand("tp @s 0.5 101 0.5 180 0");
+            prepareCosmetics.run();
+        }
+        if (client.player.getY() >= 100.0) {
+            settledAt = ticks;
+            LOGGER.info("wardrobe studio ready at y={}", client.player.getY());
+        } else if (ticks > 20 * 30) {
+            LOGGER.error("wardrobe player never reached the studio, y={}", client.player.getY());
+            state = State.STOP;
+        }
+        return false;
+    }
+
+    private static void resetLegacyWardrobe() {
+        ClientSettings settings = ClientSettings.get();
+        for (Slot slot : Slot.values()) {
+            settings.categoryOn.put(slot, true);
+            settings.equip(slot, "");
+        }
+        settings.skinLayers = true;
+        settings.equip(Slot.BACK, "quarkos:kite_wings");
+    }
+
+    private static void clearWardrobeArmour(Minecraft client) {
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, net.minecraft.world.item.ItemStack.EMPTY);
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.item.ItemStack.EMPTY);
+        client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.item.ItemStack.EMPTY);
     }
 
     private static void publishAda(Minecraft client) {
@@ -1593,6 +1737,9 @@ public final class ClientHarness {
     private static void writeImage(Path path, NativeImage image) {
         try {
             image.writeToFile(path);
+            if (path.equals(awaitingUiWrite)) {
+                writtenUiShot = path;
+            }
             LOGGER.info("wrote {}", path);
         } catch (Exception e) {
             LOGGER.error("failed to write {}", path, e);
@@ -1603,7 +1750,12 @@ public final class ClientHarness {
 
     private static void stop(Minecraft client) {
         if (ticks > 10) {
+            if (preUiSettings != null) {
+                ClientSettings.install(preUiSettings);
+                preUiSettings = null;
+            }
             LOGGER.info("cosmetics harness finished");
+            LOGGER.info("HARNESS_DONE");
             client.stop();
         }
     }
@@ -1663,9 +1815,13 @@ public final class ClientHarness {
         SHOTS,
         PAIR,
         WARDROBE,
+        UI_WARDROBE,
         STOP
     }
 
     private record Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film) {
+    }
+
+    private record UiShot(String name, WardrobeScreen.View view, Slot slot, String hat, int scale, boolean colour) {
     }
 }

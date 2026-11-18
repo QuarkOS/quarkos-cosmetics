@@ -2,6 +2,7 @@ package dev.quarkos.cosmetics.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import dev.quarkos.cosmetics.config.TintColor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.LightTexture;
@@ -39,7 +40,7 @@ public final class BlockbenchCosmetic {
     }
 
     public static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age,
-                            ModelPart head, ModelPart body, String id) {
+                            ModelPart head, ModelPart body, String id, int tint) {
         Model model = load(id);
         if (model == null) {
             return;
@@ -52,10 +53,10 @@ public final class BlockbenchCosmetic {
         Matrix4f view = new Matrix4f(pose.last().pose());
         float time = model.length <= 0f ? 0f : (age / 20f) % model.length;
         CosmeticDrawer.Pass pass = model.translucent ? CosmeticDrawer.Pass.TRANSLUCENT : CosmeticDrawer.Pass.CUTOUT_NO_CULL;
-        submitter.submit(pose, model.texture, pass, consumer -> paint(consumer, view, light, 255, model, time, 0f));
+        submitter.submit(pose, model.texture, pass, consumer -> paint(consumer, view, light, tint, model, time, 0f));
         if (model.glow != null) {
             submitter.submit(pose, model.glow, CosmeticDrawer.Pass.GLOW, consumer ->
-                    paint(consumer, view, LightTexture.FULL_BRIGHT, 255, model, time, 0.04f));
+                    paint(consumer, view, LightTexture.FULL_BRIGHT, TintColor.DEFAULT, model, time, 0.04f));
         }
         pose.popPose();
     }
@@ -109,15 +110,15 @@ public final class BlockbenchCosmetic {
     private static final float GHOST_SCALE = 0.75f;
     private static final float[] GHOST_SHIFT = {2.5f, -6f, -3f};
 
-    private static void paint(VertexConsumer consumer, Matrix4f view, int light, int alpha, Model model, float time, float inflate) {
+    private static void paint(VertexConsumer consumer, Matrix4f view, int light, int rgb, Model model, float time, float inflate) {
         Matrix4f posed = new Matrix4f();
         if (model.shift != null) {
             posed.translate(model.shift[0], model.shift[1], model.shift[2]);
         }
-        walk(consumer, view, light, alpha, model, model.root, posed, time, inflate);
+        walk(consumer, view, light, rgb, model, model.root, posed, time, inflate);
     }
 
-    private static void walk(VertexConsumer consumer, Matrix4f view, int light, int alpha, Model model,
+    private static void walk(VertexConsumer consumer, Matrix4f view, int light, int rgb, Model model,
                              Bone bone, Matrix4f parent, float time, float inflate) {
         float[] rotation = bone.rotation(time);
         float[] position = bone.position(time);
@@ -141,10 +142,10 @@ public final class BlockbenchCosmetic {
             if (Math.abs(normals.determinant()) > 1.0e-8f) {
                 normals.invert().transpose();
             }
-            cube.emit(consumer, combined, normals, light, alpha, model.width, model.height, inflate);
+            cube.emit(consumer, combined, normals, light, rgb, model.width, model.height, inflate);
         }
         for (Bone child : bone.children) {
-            walk(consumer, view, light, alpha, model, child, local, time, inflate);
+            walk(consumer, view, light, rgb, model, child, local, time, inflate);
         }
     }
 
@@ -330,7 +331,7 @@ public final class BlockbenchCosmetic {
             this.faces = faces;
         }
 
-        void emit(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, int alpha,
+        void emit(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, int rgb,
                   float width, float height, float inflate) {
             float ax0 = x0 - inflate;
             float ay0 = y0 - inflate;
@@ -338,12 +339,12 @@ public final class BlockbenchCosmetic {
             float ax1 = x1 + inflate;
             float ay1 = y1 + inflate;
             float az1 = z1 + inflate;
-            quad(consumer, view, normals, light, alpha, faces.get("east"), width, height, ax1, ay1, az0, ax1, ay1, az1, ax1, ay0, az1, ax1, ay0, az0, 1, 0, 0);
-            quad(consumer, view, normals, light, alpha, faces.get("west"), width, height, ax0, ay1, az1, ax0, ay1, az0, ax0, ay0, az0, ax0, ay0, az1, -1, 0, 0);
-            quad(consumer, view, normals, light, alpha, faces.get("north"), width, height, ax0, ay1, az0, ax1, ay1, az0, ax1, ay0, az0, ax0, ay0, az0, 0, 0, -1);
-            quad(consumer, view, normals, light, alpha, faces.get("south"), width, height, ax1, ay1, az1, ax0, ay1, az1, ax0, ay0, az1, ax1, ay0, az1, 0, 0, 1);
-            quad(consumer, view, normals, light, alpha, faces.get("up"), width, height, ax0, ay1, az1, ax1, ay1, az1, ax1, ay1, az0, ax0, ay1, az0, 0, 1, 0);
-            quad(consumer, view, normals, light, alpha, faces.get("down"), width, height, ax0, ay0, az0, ax1, ay0, az0, ax1, ay0, az1, ax0, ay0, az1, 0, -1, 0);
+            quad(consumer, view, normals, light, rgb, faces.get("east"), width, height, ax1, ay1, az0, ax1, ay1, az1, ax1, ay0, az1, ax1, ay0, az0, 1, 0, 0);
+            quad(consumer, view, normals, light, rgb, faces.get("west"), width, height, ax0, ay1, az1, ax0, ay1, az0, ax0, ay0, az0, ax0, ay0, az1, -1, 0, 0);
+            quad(consumer, view, normals, light, rgb, faces.get("north"), width, height, ax0, ay1, az0, ax1, ay1, az0, ax1, ay0, az0, ax0, ay0, az0, 0, 0, -1);
+            quad(consumer, view, normals, light, rgb, faces.get("south"), width, height, ax1, ay1, az1, ax0, ay1, az1, ax0, ay0, az1, ax1, ay0, az1, 0, 0, 1);
+            quad(consumer, view, normals, light, rgb, faces.get("up"), width, height, ax0, ay1, az1, ax1, ay1, az1, ax1, ay1, az0, ax0, ay1, az0, 0, 1, 0);
+            quad(consumer, view, normals, light, rgb, faces.get("down"), width, height, ax0, ay0, az0, ax1, ay0, az0, ax1, ay0, az1, ax0, ay0, az1, 0, -1, 0);
         }
 
         static Cube read(com.fasterxml.jackson.databind.JsonNode element) {
@@ -382,7 +383,7 @@ public final class BlockbenchCosmetic {
         }
     }
 
-    private static void quad(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, int alpha, float[] uv,
+    private static void quad(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, int rgb, float[] uv,
                              float width, float height,
                              float x0, float y0, float z0, float x1, float y1, float z1,
                              float x2, float y2, float z2, float x3, float y3, float z3,
@@ -399,16 +400,16 @@ public final class BlockbenchCosmetic {
         float v0 = uv[1] / height;
         float u1 = uv[2] / width;
         float v1 = uv[3] / height;
-        vertex(consumer, view, x0, y0, z0, u0, v0, light, alpha, normal);
-        vertex(consumer, view, x1, y1, z1, u1, v0, light, alpha, normal);
-        vertex(consumer, view, x2, y2, z2, u1, v1, light, alpha, normal);
-        vertex(consumer, view, x3, y3, z3, u0, v1, light, alpha, normal);
+        vertex(consumer, view, x0, y0, z0, u0, v0, light, rgb, normal);
+        vertex(consumer, view, x1, y1, z1, u1, v0, light, rgb, normal);
+        vertex(consumer, view, x2, y2, z2, u1, v1, light, rgb, normal);
+        vertex(consumer, view, x3, y3, z3, u0, v1, light, rgb, normal);
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f view, float x, float y, float z,
-                               float u, float v, int light, int alpha, Vector3f normal) {
+                               float u, float v, int light, int rgb, Vector3f normal) {
         consumer.addVertex(view, x, y, z)
-                .setColor(255, 255, 255, alpha)
+                .setColor((rgb >>> 16) & 255, (rgb >>> 8) & 255, rgb & 255, 255)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)

@@ -35,6 +35,11 @@ public final class ModelLibrary {
         return List.copyOf(PACKED.values());
     }
 
+    public static Resolved packedById(String id) {
+        ensure();
+        return PACKED.get(id);
+    }
+
     public static Resolved resolve(String id) {
         if (id == null || id.isBlank()) {
             return null;

@@ -5,10 +5,12 @@ import dev.quarkos.cosmetics.model.Worn;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -42,13 +44,53 @@ class ClientSettingsTest {
         assertEquals(32, settings.skinDistance);
         assertEquals("hat", settings.chickPerch);
         assertEquals("quarkos:lantern_cap", settings.equippedId(Slot.HAT));
+        assertEquals(TintColor.DEFAULT, settings.tint(Slot.HAT));
+        assertEquals(TintColor.DEFAULT, settings.tint(Slot.EARS));
         assertFalse(settings.categoryOn.get(Slot.TAIL));
         assertTrue(settings.disabled.contains("quarkos:paper_boat"));
         String saved = Files.readString(ClientSettings.configFile(gameDir));
         assertFalse(saved.contains("accessToken"));
         assertFalse(saved.contains("should-not-survive"));
         assertFalse(saved.contains("password"));
+        assertFalse(saved.contains("tint."));
         assertTrue(saved.contains("chickPerch=hat"));
+    }
+
+    @Test
+    void loadsEachTintIndependentlyAndDropsDefaultKeys() throws Exception {
+        Path file = ClientSettings.configFile(gameDir);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, """
+                tint.hat=#7bbfff
+                tint.ears=bad
+                tint.back=#000000
+                skinDistance=24
+                category.ears=false
+                equipped.ears=quarkos:fox_tips
+                """);
+        ClientSettings original = ClientSettings.load(gameDir);
+        assertEquals(0x7BBFFF, original.tint(Slot.HAT));
+        assertEquals(TintColor.DEFAULT, original.tint(Slot.EARS));
+        assertEquals(TintColor.DEFAULT, original.tint(Slot.BACK));
+        original.setTint(Slot.EARS, 0x00AB23);
+        original.save(gameDir);
+
+        ClientSettings restored = ClientSettings.load(gameDir);
+        assertEquals(0x7BBFFF, restored.tint(Slot.HAT));
+        assertEquals(0x00AB23, restored.tint(Slot.EARS));
+        assertEquals(24, restored.skinDistance);
+        assertEquals("quarkos:fox_tips", restored.equippedId(Slot.EARS));
+        assertFalse(restored.categoryOn.get(Slot.EARS));
+        restored.setTint(Slot.HAT, TintColor.DEFAULT);
+        restored.save(gameDir);
+
+        assertEquals(TintColor.DEFAULT, ClientSettings.load(gameDir).tint(Slot.HAT));
+        String saved = Files.readString(file);
+        assertFalse(saved.contains("tint.hat"));
+        assertFalse(saved.contains("tint.back"));
+        Properties properties = new Properties();
+        properties.load(new StringReader(saved));
+        assertEquals("#00AB23", properties.getProperty("tint.ears"));
     }
 
     @Test

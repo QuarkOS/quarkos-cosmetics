@@ -2,6 +2,8 @@ package dev.quarkos.cosmetics.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import dev.quarkos.cosmetics.config.ClientSettings;
+import dev.quarkos.cosmetics.config.TintColor;
 import dev.quarkos.cosmetics.model.Worn;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.resources.Identifier;
@@ -53,9 +55,15 @@ public final class CosmeticDrawer {
         return false;
     }
 
+    public static boolean canTint(String id) {
+        ModelLibrary.Resolved packed = ModelLibrary.packedById(id);
+        return packed != null && packed.slot().wornOnHead() && !Chick.ID.equals(id) && !JackOLanternMask.ID.equals(id)
+                && (BlockbenchCosmetic.draws(id) || !packed.model().elements.isEmpty());
+    }
+
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
-                                 List<Worn.Placement> placed, boolean wingsFlap) {
+                                 List<Worn.Placement> placed, boolean wingsFlap, boolean self) {
         for (Worn.Placement placement : placed) {
             ModelPart part = switch (placement.anchor()) {
                 case HEAD -> head;
@@ -76,8 +84,9 @@ public final class CosmeticDrawer {
                 JackOLanternMask.draw(pose, submitter, light, part, placement.offsetX(), placement.offsetY(), placement.offsetZ());
                 continue;
             }
+            int tint = self && canTint(placement.id()) ? ClientSettings.get().tint(placement.slot()) : TintColor.DEFAULT;
             if (BlockbenchCosmetic.draws(placement.id())) {
-                BlockbenchCosmetic.draw(pose, submitter, light, age, head, body, placement.id());
+                BlockbenchCosmetic.draw(pose, submitter, light, age, head, body, placement.id(), tint);
                 continue;
             }
             ModelLibrary.Resolved resolved = ModelLibrary.resolve(placement.id());
@@ -91,7 +100,7 @@ public final class CosmeticDrawer {
             Matrix4f view = new Matrix4f(pose.last().pose());
             Matrix3f normals = new Matrix3f(pose.last().normal());
             submitter.submit(pose, resolved.texture(), Pass.CUTOUT_NO_CULL, consumer ->
-                    MeshDraw.model(consumer, view, normals, light, resolved.model(), resolved.width(), resolved.height(), age));
+                    MeshDraw.model(consumer, view, normals, light, resolved.model(), resolved.width(), resolved.height(), age, tint));
             pose.popPose();
         }
     }
