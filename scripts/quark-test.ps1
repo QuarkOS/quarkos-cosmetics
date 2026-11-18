@@ -169,7 +169,7 @@ try {
     if (-not $SkipTests) { Step "junit" @(":${TestVersion}:test") }
     if (-not $SkipCompile) { Step "compile" ($CompileVersions | ForEach-Object { ":${_}:compileJava" }) }
     if (-not $SkipJar) {
-        Step "jar" @(":${Version}:build", "-x", "test")
+        Step "jar" @(":${Version}:remapJar")
         $jar = Get-ChildItem "$Repo\versions\$Version\build\libs\*.jar" -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notmatch '(sources|dev)' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($jar) {
