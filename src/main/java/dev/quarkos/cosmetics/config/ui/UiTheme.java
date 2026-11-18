@@ -67,8 +67,11 @@ public final class UiTheme {
     public static void check(GuiGraphics graphics, int x, int y) {
         tile(graphics, new Rect(x, y, 12, 12), ACCENT);
         graphics.fill(x + 2, y + 5, x + 4, y + 7, ACCENT_INK);
+        graphics.fill(x + 3, y + 6, x + 5, y + 8, ACCENT_INK);
         graphics.fill(x + 4, y + 7, x + 6, y + 9, ACCENT_INK);
+        graphics.fill(x + 5, y + 6, x + 7, y + 8, ACCENT_INK);
         graphics.fill(x + 6, y + 5, x + 8, y + 7, ACCENT_INK);
+        graphics.fill(x + 7, y + 4, x + 9, y + 6, ACCENT_INK);
         graphics.fill(x + 8, y + 3, x + 10, y + 5, ACCENT_INK);
     }
 

@@ -58,6 +58,7 @@ public final class WardrobeScreen extends Screen {
     private final Screen parent;
     private final PlayerPreview preview;
     private final boolean studioGallery;
+    private final boolean suppressHover;
     private final Map<Slot, Integer> wardrobeScroll = new EnumMap<>(Slot.class);
     private final Map<Slot, Integer> galleryScroll = new EnumMap<>(Slot.class);
 
@@ -97,10 +98,11 @@ public final class WardrobeScreen extends Screen {
         this.slot = slot;
         this.colourOpen = colourOpen;
         studioGallery = studio && view == View.GALLERY;
+        suppressHover = studio && !legacy;
         preview = new PlayerPreview(studio, legacy);
     }
 
-    /** The studio uses an offline catalog sample for the gallery capture. */
+    /** UI captures render with an off-screen pointer and use an offline catalog sample in Gallery. */
     public static WardrobeScreen studioCapture(View view, Slot slot, boolean colourOpen) {
         return new WardrobeScreen(null, view, slot, colourOpen, true, false);
     }
@@ -202,7 +204,8 @@ public final class WardrobeScreen extends Screen {
 
     private void initWardrobe(ClientSettings settings) {
         String equipped = settings.equippedId(slot);
-        boolean canTint = CosmeticDrawer.canTint(equipped);
+        boolean hasEquipped = !equipped.isBlank();
+        boolean canTint = hasEquipped && CosmeticDrawer.canTint(equipped);
         collection = WardrobeLayout.collection(frame, canTint && colourOpen);
         Rect toolbar = collection.toolbar();
         String visibleLabel = toolbar.w() >= 237 ? "Category visible" : "Visible";
@@ -230,10 +233,13 @@ public final class WardrobeScreen extends Screen {
             }
         }
 
+        if (!hasEquipped) {
+            return;
+        }
         Rect details = collection.equipped();
         int colourWidth = canTint ? 64 : 0;
         Rect itemToggle = new Rect(details.right() - colourWidth - 102, details.y() + 5, 99, 22);
-        FlatButton show = addRenderableWidget(ToggleSwitch.create(itemToggle, "Item shown",
+        addRenderableWidget(ToggleSwitch.create(itemToggle, "Item shown",
                 () -> !settings.disabled.contains(equipped), on -> {
                     if (on) {
                         settings.disabled.remove(equipped);
@@ -242,7 +248,6 @@ public final class WardrobeScreen extends Screen {
                     }
                     save();
                 }));
-        show.active = !equipped.isBlank();
         if (canTint) {
             FlatButton colour = new FlatButton(new Rect(details.right() - 61, details.y() + 6, 55, 20),
                     Component.literal("Colour"), pressed -> {
@@ -418,8 +423,14 @@ public final class WardrobeScreen extends Screen {
     private GridMetrics buildGrid(Rect bounds, List<Card> entries, boolean isGallery, String equipped) {
         boolean compact = width < 640;
         int columns = isGallery ? 4 : 3;
+        int minCardWidth = compact ? 74 : 94;
         int preferredHeight = compact ? 58 : isGallery ? 126 : 146;
-        GridMetrics metrics = GridMetrics.fit(bounds, entries.size(), compact ? 74 : 94, preferredHeight, columns);
+        GridMetrics metrics = GridMetrics.fit(bounds, entries.size(), minCardWidth, preferredHeight, columns);
+        // Fit two rows in the compact wardrobe when the viewport is short by at most one gap.
+        if (!isGallery && compact && metrics.rows() > 1 && metrics.pageRows() == 1 && bounds.h() >= 2 * preferredHeight) {
+            int cardHeight = (bounds.h() - GridMetrics.GAP) / 2;
+            metrics = GridMetrics.fit(bounds, entries.size(), minCardWidth, cardHeight, columns);
+        }
         List<FlatButton> buttons = new ArrayList<>();
         int equippedIndex = -1;
         for (int i = 0; i < entries.size(); i++) {
@@ -545,7 +556,7 @@ public final class WardrobeScreen extends Screen {
         if (grid != null) {
             grid.drawScrollbar(graphics);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, suppressHover ? -1 : mouseX, suppressHover ? -1 : mouseY, partialTick);
     }
 
     private void drawPreview(GuiGraphics graphics) {
@@ -579,6 +590,10 @@ public final class WardrobeScreen extends Screen {
         UiTheme.frame(graphics, details, UiTheme.STAGE, UiTheme.BORDER);
         UiTheme.text(graphics, font, "Equipped", new Rect(details.x() + 7, details.y() + 3, labelWidth, 12), UiTheme.MUTED);
         UiTheme.text(graphics, font, name, new Rect(details.x() + 7, details.y() + 16, labelWidth, 12), UiTheme.TEXT);
+        if (equipped.isBlank()) {
+            String hint = "Pick a card to equip";
+            UiTheme.text(graphics, font, hint, trailing(details.inset(7), font.width(hint)), UiTheme.MUTED);
+        }
         if (picker != null) {
             UiTheme.frame(graphics, collection.colour(), UiTheme.STAGE, UiTheme.BORDER);
         }
