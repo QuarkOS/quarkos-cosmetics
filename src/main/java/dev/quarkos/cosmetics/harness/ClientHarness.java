@@ -23,6 +23,7 @@ import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -193,7 +194,11 @@ public final class ClientHarness {
             new Shot("armor-front", Slot.HAT, "quarkos:lantern_cap", true, false, 0f, false),
             new Shot("armor-back", Slot.BACK, "quarkos:folded_cloak", false, false, 0f, false),
             new Shot("skin-layer-front", Slot.HAT, "", true, false, 0f, false),
-            new Shot("ears-hook", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false)
+            new Shot("ears-hook", Slot.EARS, "quarkos:fox_tips", true, false, 0f, false),
+            new Shot("skin-world-front", Slot.HAT, "", true, false, 0f, false),
+            new Shot("skin-world-back", Slot.HAT, "", false, false, 0f, false),
+            new Shot("skin-world-side", Slot.HAT, "", true, false, 90f, false),
+            new Shot("skin-world-off-front", Slot.HAT, "", true, false, 0f, false)
     );
 
     private static final List<UiShot> UI_SHOTS = List.of(
@@ -202,7 +207,12 @@ public final class ClientHarness {
             new UiShot("ui-wardrobe-colour", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:candle_skull_crown", 2, true),
             new UiShot("ui-gallery", WardrobeScreen.View.GALLERY, Slot.HAT, Chick.ID, 2, false),
             new UiShot("ui-settings", WardrobeScreen.View.SETTINGS, Slot.HAT, "quarkos:ghost_buddy", 2, false),
-            new UiShot("ui-wardrobe-scale4", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:scarecrow_straw_hat", 4, false)
+            new UiShot("ui-wardrobe-scale4", WardrobeScreen.View.WARDROBE, Slot.HAT, "quarkos:scarecrow_straw_hat", 4, false),
+            skinPreview("skin-preview-0", 0f, true),
+            skinPreview("skin-preview-90", 90f, true),
+            skinPreview("skin-preview-180", 180f, true),
+            skinPreview("skin-preview-270", 270f, true),
+            skinPreview("skin-preview-off-0", 0f, false)
     );
 
     private static List<Shot> active;
@@ -219,9 +229,11 @@ public final class ClientHarness {
     private static Set<String> shotFilter;
     private static List<UiShot> activeUi;
     private static int uiShotIndex;
-    private static ClientSettings preUiSettings;
-    private static volatile Path awaitingUiWrite;
-    private static volatile Path writtenUiShot;
+    private static boolean layerTestSkin;
+    private static ClientSettings preStudioSettings;
+    private static int shotRequestedAt;
+    private static volatile Path awaitingShotWrite;
+    private static volatile Path writtenShot;
     private static boolean pairStarted;
     private static int pairShot;
     private static int filmIndex = -1;
@@ -236,6 +248,10 @@ public final class ClientHarness {
     private static RemotePlayer guest;
 
     private ClientHarness() {
+    }
+
+    public static boolean usesLayerTestSkin() {
+        return layerTestSkin;
     }
 
     public static void tick(Minecraft client) {
@@ -255,6 +271,13 @@ public final class ClientHarness {
             client.options.gamma().set(1.0);
             client.options.bobView().set(false);
             client.options.hideGui = true;
+            for (PlayerModelPart part : PlayerModelPart.values()) {
+                //? if >=1.21.11 {
+                client.options.setModelPart(part, true);
+                //?} else {
+                /*client.options.toggleModelPart(part, true);
+                *///?}
+            }
             LOGGER.info("cosmetics harness armed");
         }
         ticks++;
@@ -357,6 +380,10 @@ public final class ClientHarness {
             return;
         }
         Shot shot = activeShots().get(shotIndex);
+        layerTestSkin = shot.name.startsWith("skin-world-");
+        if (layerTestSkin && preStudioSettings == null) {
+            installStudioSettings();
+        }
         frame(client, shot);
         // Commands sent on the join tick are dropped. Keep trying until the teleport sticks, then let the camera leave the ground.
         if (settledAt < 0) {
@@ -421,13 +448,19 @@ public final class ClientHarness {
             }
             LOGGER.info("gif shot {} locked to candle frame {}", shot.name, candle);
         }
-        shootWhenReady(client, shot.name, () -> {
+        Runnable next = () -> {
+            restoreStudioSettings();
             shotIndex++;
             ticks = 0;
             shotQueued = false;
             settledAt = -1;
             state = State.SHOTS;
-        });
+        };
+        if (layerTestSkin) {
+            shootAndLog(client, shot.name, next);
+        } else {
+            shootWhenReady(client, shot.name, next);
+        }
     }
 
     /** Candle frame named on a gif shot, as in {@code gif-day-front-f15}. */
@@ -482,6 +515,21 @@ public final class ClientHarness {
 
     private static State uiWardrobeState() {
         return activeUiShots().isEmpty() ? State.STOP : State.UI_WARDROBE;
+    }
+
+    private static void installStudioSettings() {
+        preStudioSettings = ClientSettings.get();
+        ClientSettings studioSettings = new ClientSettings();
+        studioSettings.galleryUrl = preStudioSettings.galleryUrl;
+        ClientSettings.install(studioSettings);
+    }
+
+    private static void restoreStudioSettings() {
+        layerTestSkin = false;
+        if (preStudioSettings != null) {
+            ClientSettings.install(preStudioSettings);
+            preStudioSettings = null;
+        }
     }
 
     private static void prepare(Minecraft client, Shot shot) {
@@ -547,7 +595,7 @@ public final class ClientHarness {
             client.player.connection.sendCommand("kill @e[type=!player]");
         }
         ClientSettings settings = ClientSettings.get();
-        settings.skinLayers = false;
+        settings.skinLayers = layerTestSkin && !shot.name.contains("-off-");
         settings.hideOthers = false;
         settings.disabled.clear();
         for (Slot slot : Slot.values()) {
@@ -559,7 +607,9 @@ public final class ClientHarness {
         } else {
             settings.equip(shot.slot, shot.id);
         }
-        settings.save(client.gameDirectory.toPath());
+        if (!layerTestSkin) {
+            settings.save(client.gameDirectory.toPath());
+        }
     }
 
     private static boolean headShowcase(String name) {
@@ -604,12 +654,13 @@ public final class ClientHarness {
         client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.item.ItemStack.EMPTY);
         client.options.hideGui = true;
         client.options.bobView().set(false);
-        ClientSettings.get().skinLayers = false;
+        if (!layerTestSkin) {
+            ClientSettings.get().skinLayers = false;
+            dev.quarkos.cosmetics.render.JackOLanternMask.setSpill(!shot.name.contains("-off-"));
+        }
         boolean night = shot.name.contains("night");
         boolean zoom = shot.name.contains("zoom");
         boolean close = shot.name.contains("close");
-        dev.quarkos.cosmetics.render.JackOLanternMask.setSpill(!shot.name.contains("-off-"));
-        boolean side = shot.name.contains("-side");
         boolean three = shot.name.contains("three-quarter");
         client.options.gamma().set(night ? 0.0 : 1.0);
         var server = client.getSingleplayerServer();
@@ -652,14 +703,14 @@ public final class ClientHarness {
         }
         portraitDistance = 2.55f;
         portraitDrop = 0.42f;
-        portraitOrbit = three ? 40f : side ? 90f : 0f;
+        portraitOrbit = shot.orbit;
         client.options.fov().set(54);
-        client.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
+        client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
     }
 
     private static void frame(Minecraft client, Shot shot) {
         portraitLock = false;
-        if (headShowcase(shot.name)) {
+        if (layerTestSkin || headShowcase(shot.name)) {
             frameHead(client, shot);
             return;
         }
@@ -1332,11 +1383,8 @@ public final class ClientHarness {
         client.options.hideGui = false;
         afterGui = true;
         standInWardrobe(client);
-        if (preUiSettings == null) {
-            preUiSettings = ClientSettings.get();
-            ClientSettings studioSettings = new ClientSettings();
-            studioSettings.galleryUrl = preUiSettings.galleryUrl;
-            ClientSettings.install(studioSettings);
+        if (preStudioSettings == null) {
+            installStudioSettings();
             client.setScreen(null);
             client.setCameraEntity(client.player);
             client.options.setCameraType(CameraType.FIRST_PERSON);
@@ -1361,41 +1409,30 @@ public final class ClientHarness {
         if (ticks - screenAt < 8) {
             return;
         }
-        Path path = shots().resolve(shot.name() + ".png");
-        if (!shotQueued) {
-            if (client.getWindow().getGuiScale() != shot.scale()) {
-                LOGGER.error("UI shot {} requested GUI scale {}, got {}", shot.name(), shot.scale(), client.getWindow().getGuiScale());
-                state = State.STOP;
-                return;
-            }
-            try {
-                Files.createDirectories(path.getParent());
-            } catch (Exception ex) {
-                LOGGER.error("could not create UI shot directory", ex);
-                state = State.STOP;
-                return;
-            }
-            awaitingUiWrite = path;
-            shotQueued = true;
-            requestShot(client, path);
-        } else if (path.equals(writtenUiShot)) {
-            LOGGER.info("UI_SHOT_DONE {}", shot.name());
-            awaitingUiWrite = null;
-            writtenUiShot = null;
-            shotQueued = false;
+        if (!shotQueued && client.getWindow().getGuiScale() != shot.scale()) {
+            LOGGER.error("UI shot {} requested GUI scale {}, got {}", shot.name(), shot.scale(), client.getWindow().getGuiScale());
+            state = State.STOP;
+            return;
+        }
+        shootAndLog(client, shot.name(), () -> {
+            layerTestSkin = false;
             screenAt = -1;
             ticks = 0;
             if (++uiShotIndex == activeUiShots().size()) {
                 state = State.STOP;
             }
-        } else if (ticks - screenAt > 20 * 20) {
-            LOGGER.error("UI shot {} was not written", path);
-            state = State.STOP;
-        }
+        });
     }
 
     private static void openUiShot(Minecraft client, UiShot shot) {
         ClientSettings settings = ClientSettings.get();
+        layerTestSkin = shot.previewYaw() != null;
+        if (layerTestSkin) {
+            for (Slot slot : Slot.values()) {
+                settings.equip(slot, "");
+            }
+        }
+        settings.skinLayers = shot.skinLayers();
         settings.equip(Slot.HAT, shot.hat());
         settings.setTint(Slot.HAT, shot.colour() ? 0x7BBFFF : TintColor.DEFAULT);
         clearWardrobeArmour(client);
@@ -1407,7 +1444,7 @@ public final class ClientHarness {
             client.getWindow().setWindowed(1920, 1080);
         }
         client.resizeDisplay();
-        client.setScreen(WardrobeScreen.studioCapture(shot.view(), shot.slot(), shot.colour()));
+        client.setScreen(WardrobeScreen.studioCapture(shot.view(), shot.slot(), shot.colour(), shot.previewYaw()));
     }
 
     private static boolean wardrobeWorldReady(Minecraft client) {
@@ -1600,6 +1637,32 @@ public final class ClientHarness {
         }
     }
 
+    private static void shootAndLog(Minecraft client, String name, Runnable next) {
+        Path path = shots().resolve(name + ".png");
+        if (!shotQueued) {
+            try {
+                Files.createDirectories(path.getParent());
+            } catch (Exception ex) {
+                LOGGER.error("could not create screenshot directory", ex);
+                state = State.STOP;
+                return;
+            }
+            awaitingShotWrite = path;
+            shotRequestedAt = ticks;
+            shotQueued = true;
+            requestShot(client, path);
+        } else if (path.equals(writtenShot)) {
+            LOGGER.info("UI_SHOT_DONE {}", name);
+            awaitingShotWrite = null;
+            writtenShot = null;
+            shotQueued = false;
+            next.run();
+        } else if (ticks - shotRequestedAt > 20 * 20) {
+            LOGGER.error("screenshot {} was not written", path);
+            state = State.STOP;
+        }
+    }
+
     /** Mask proof captures after the candle pass, so the copy includes the emissive layer. */
     public static void shotAtFrameEnd() {
         frameEndShots = true;
@@ -1737,10 +1800,10 @@ public final class ClientHarness {
     private static void writeImage(Path path, NativeImage image) {
         try {
             image.writeToFile(path);
-            if (path.equals(awaitingUiWrite)) {
-                writtenUiShot = path;
-            }
             LOGGER.info("wrote {}", path);
+            if (path.equals(awaitingShotWrite)) {
+                writtenShot = path;
+            }
         } catch (Exception e) {
             LOGGER.error("failed to write {}", path, e);
         } finally {
@@ -1750,10 +1813,7 @@ public final class ClientHarness {
 
     private static void stop(Minecraft client) {
         if (ticks > 10) {
-            if (preUiSettings != null) {
-                ClientSettings.install(preUiSettings);
-                preUiSettings = null;
-            }
+            restoreStudioSettings();
             LOGGER.info("cosmetics harness finished");
             LOGGER.info("HARNESS_DONE");
             client.stop();
@@ -1822,6 +1882,14 @@ public final class ClientHarness {
     private record Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film) {
     }
 
-    private record UiShot(String name, WardrobeScreen.View view, Slot slot, String hat, int scale, boolean colour) {
+    private static UiShot skinPreview(String name, float yaw, boolean skinLayers) {
+        return new UiShot(name, WardrobeScreen.View.SETTINGS, Slot.HAT, "", 2, false, yaw, skinLayers);
+    }
+
+    private record UiShot(String name, WardrobeScreen.View view, Slot slot, String hat, int scale, boolean colour,
+                          Float previewYaw, boolean skinLayers) {
+        private UiShot(String name, WardrobeScreen.View view, Slot slot, String hat, int scale, boolean colour) {
+            this(name, view, slot, hat, scale, colour, null, true);
+        }
     }
 }

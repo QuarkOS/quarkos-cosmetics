@@ -36,6 +36,11 @@ public final class PlayerPreview {
         resumeAt = System.nanoTime() + 1_500_000_000L;
     }
 
+    /** Studio captures skip idle rotation, so this angle stays fixed for the shot. */
+    public void setYaw(float yaw) {
+        this.yaw = yaw;
+    }
+
     public void beginDrag() {
         dragging = true;
     }

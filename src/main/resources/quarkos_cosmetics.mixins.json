@@ -11,6 +11,7 @@
     "CameraZoomMixin",
     "InventoryPreviewAccess",
     "HarnessPoseMixin",
+    "HarnessSkinMixin",
     "GuiCaptureMixin",
     "PoseStateMixin"
   ],

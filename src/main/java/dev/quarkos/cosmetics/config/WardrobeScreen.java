@@ -103,8 +103,12 @@ public final class WardrobeScreen extends Screen {
     }
 
     /** UI captures render with an off-screen pointer and use an offline catalog sample in Gallery. */
-    public static WardrobeScreen studioCapture(View view, Slot slot, boolean colourOpen) {
-        return new WardrobeScreen(null, view, slot, colourOpen, true, false);
+    public static WardrobeScreen studioCapture(View view, Slot slot, boolean colourOpen, Float previewYaw) {
+        WardrobeScreen screen = new WardrobeScreen(null, view, slot, colourOpen, true, false);
+        if (previewYaw != null) {
+            screen.preview.setYaw(previewYaw);
+        }
+        return screen;
     }
 
     public static WardrobeScreen legacyCapture() {
