@@ -5,12 +5,16 @@
   Portable JDK + Gradle home on D: (no global installs, no admin). Steps (each skippable):
     1. JUnit tests      :<TestVersion>:test
     2. Compile checks   :<v>:compileJava for every -CompileVersions entry (Fabric + Forge)
-    3. Mod jar          :<Version>:build -> -OutDir and %USERPROFILE%\Downloads
+    3. Mod jar          :<Version>:jar on 26.x, :<Version>:remapJar on 1.21.x
+                        Release jar copied to -OutDir and %USERPROFILE%\Downloads
     4. UI harness       :<Version>:runClient -Pharness=true (screenshots into -OutDir\screens)
+  On 26.x, -Version also selects the default JUnit target and adds it to the default compile checks.
   The client opens on the desktop (one-shot interactive scheduled task), muted, click-through,
   never focused. Only one Minecraft client runs on Quark at a time: D:\dev\mc-test.lock.
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\quark-test.ps1 -Only ui-wardrobe-hat,ui-gallery
+.EXAMPLE
+  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\quark-test.ps1 -Version 26.3
 #>
 param(
     [string]$Version = "1.21.11",
@@ -88,6 +92,15 @@ $common = @("--console=plain", "--configure-on-demand", "--no-configuration-cach
 $results = [ordered]@{}
 $script:haveLock = $false
 
+$unobfuscated = [version]$Version -ge [version]"26.1"
+if ($unobfuscated) {
+    if (-not $PSBoundParameters.ContainsKey("TestVersion")) { $TestVersion = $Version }
+    if (-not $PSBoundParameters.ContainsKey("CompileVersions")) { $CompileVersions = @($Version) + $CompileVersions }
+}
+$jarTask = if ($unobfuscated) { "jar" } else { "remapJar" }
+$jarDir = Join-Path $Repo "versions\$Version\build\libs"
+$runDir = if ($Version -eq "1.21.11") { "$Repo\run" } else { "$Repo\run\$Version" }
+
 function Stop-RepoJava {
     $needles = @(($Repo.ToLower() + "\"), ($GradleHome.ToLower() + "\"))
     Get-CimInstance Win32_Process -Filter "Name='java.exe' OR Name='javaw.exe'" | Where-Object {
@@ -118,15 +131,13 @@ function Step([string]$name, [string[]]$tasks, [int]$minutes = 30) {
 }
 
 function Set-Muted {
-    foreach ($dir in @("$Repo\versions\$Version\run", "$Repo\run")) {
-        New-Item -ItemType Directory -Force -Path $dir | Out-Null
-        $opts = Join-Path $dir "options.txt"
-        $lines = @()
-        if (Test-Path $opts) { $lines = @(Get-Content $opts | Where-Object { $_ -notmatch '^(soundCategory_master|pauseOnLostFocus):' }) }
-        $lines += "soundCategory_master:0.0"
-        $lines += "pauseOnLostFocus:false"
-        Set-Content -Path $opts -Value $lines
-    }
+    New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+    $opts = Join-Path $runDir "options.txt"
+    $lines = @()
+    if (Test-Path $opts) { $lines = @(Get-Content $opts | Where-Object { $_ -notmatch '^(soundCategory_master|pauseOnLostFocus):' }) }
+    $lines += "soundCategory_master:0.0"
+    $lines += "pauseOnLostFocus:false"
+    Set-Content -Path $opts -Value $lines
 }
 
 function Take-McLock {
@@ -173,13 +184,17 @@ try {
     # check when two Forge versions compile in the same invocation.
     if (-not $SkipCompile) { foreach ($v in $CompileVersions) { Step ("compile-" + ($v -replace ':', '-')) @(":${v}:compileJava") } }
     if (-not $SkipJar) {
-        Step "jar" @(":${Version}:remapJar")
-        $jar = Get-ChildItem "$Repo\versions\$Version\build\libs\*.jar" -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -notmatch '(sources|dev)' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($jar) {
-            Copy-Item $jar.FullName (Join-Path $OutDir "quarkos-cosmetics-fabric-ui.jar") -Force
-            if (-not $NoDownloadsCopy) { Copy-Item $jar.FullName "$env:USERPROFILE\Downloads\quarkos-cosmetics-fabric-ui-$Version.jar" -Force }
-            $results["jarFile"] = $jar.Name
+        Step "jar" @(":${Version}:$jarTask")
+        if ($results["jar"] -eq "PASS") {
+            $jar = Get-ChildItem -LiteralPath $jarDir -Filter "quarkos_cosmetics-fabric-*+$Version.jar" -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($jar) {
+                Copy-Item $jar.FullName (Join-Path $OutDir "quarkos-cosmetics-fabric-ui.jar") -Force
+                if (-not $NoDownloadsCopy) { Copy-Item $jar.FullName "$env:USERPROFILE\Downloads\quarkos-cosmetics-fabric-ui-$Version.jar" -Force }
+                $results["jarFile"] = $jar.Name
+            } else {
+                $results["jar"] = "FAIL (release jar missing in $jarDir)"
+            }
         }
     }
     if (-not $SkipHarness) {

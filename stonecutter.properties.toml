@@ -4,14 +4,24 @@ mod.version = "1.0.0"
 mod.group = "dev.quarkos"
 
 deps.fabric_loader = "0.19.5"
+deps.geckolib_group = "software.bernie.geckolib"
 loomx.loom_version = "1.18-SNAPSHOT"
 
 ["1.21.1"]
 mod.mc_compat = "1.21.1"
 deps.fabric_api = "0.116.17+1.21.1"
 deps.modmenu = "11.0.5"
+deps.geckolib = "4.9.3"
 
 ["1.21.11"]
 mod.mc_compat = "1.21.11"
 deps.fabric_api = "0.141.6+1.21.11"
 deps.modmenu = "17.0.0"
+deps.geckolib = "5.4.5"
+
+["26.3"]
+mod.mc_compat = "26.3"
+deps.fabric_api = "0.164.0+26.3"
+deps.modmenu = "21.0.0"
+deps.geckolib_group = "com.geckolib"
+deps.geckolib = "5.5.7"

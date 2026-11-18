@@ -5,6 +5,11 @@ plugins {
 version = "${property("mod.version")}+${sc.current.version}"
 base.archivesName = "quarkos_cosmetics-fabric"
 
+val unobfuscated = sc.current.parsed >= "26.1"
+val javaVersion = if (unobfuscated) 25 else 21
+val geckolibGroup = sc.properties.get<String>("deps.geckolib_group")
+val geckolibVersion = sc.properties.get<String>("deps.geckolib")
+
 repositories {
     mavenCentral()
     exclusiveContent {
@@ -17,19 +22,19 @@ repositories {
     }
     exclusiveContent {
         forRepository { maven("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/") { name = "GeckoLib" } }
-        filter { includeGroup("software.bernie.geckolib") }
+        filter { includeGroup(geckolibGroup) }
     }
 }
 
 dependencies {
     minecraft("com.mojang:minecraft:${sc.current.version}")
+    // Loom Back Compat skips mappings and uses plain dependency configurations on 26.x.
     loomx.applyMojangMappings()
     modImplementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
     modImplementation("net.fabricmc.fabric-api:fabric-api:${sc.properties.get<String>("deps.fabric_api")}")
     modCompileOnly("maven.modrinth:modmenu:${sc.properties.get<String>("deps.modmenu")}")
     compileOnly("com.unascribed:ears-api:1.4.5")
-    val geckoVersion = if (sc.current.version == "1.21.1") "4.9.3" else "5.4.5"
-    modImplementation("software.bernie.geckolib:geckolib-fabric-${sc.current.version}:$geckoVersion")
+    modImplementation("$geckolibGroup:geckolib-fabric-${sc.current.version}:$geckolibVersion")
 
     val jackson = "2.18.3"
     modImplementation("com.fasterxml.jackson.core:jackson-databind:$jackson")
@@ -46,6 +51,7 @@ dependencies {
 }
 
 loom {
+    fabricModJsonPath = rootProject.file("src/main/resources/fabric.mod.json")
     runConfigs.all {
         preferGradleTask = true
         generateRunConfig = true
@@ -60,7 +66,7 @@ loom {
 java {
     withSourcesJar()
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(javaVersion)
     }
 }
 
@@ -78,15 +84,16 @@ tasks.named("compileTestJava") { dependsOn("stonecutterGenerate") }
 val writePack = tasks.register("writePackMeta") {
     val out = layout.buildDirectory.file("generated/pack/pack.mcmeta")
     outputs.file(out)
-    val meta = if (sc.current.parsed >= "1.21.9") {
-        """{"pack":{"description":"Quarkos Cosmetics","min_format":[75,0],"max_format":[75,0]}}""" + "\n"
-    } else {
-        """{"pack":{"description":"Quarkos Cosmetics","pack_format":34}}""" + "\n"
+    val meta = when {
+        sc.current.version == "26.3" -> """{"pack":{"description":"Quarkos Cosmetics","min_format":[97,1],"max_format":[97,1]}}"""
+        sc.current.parsed >= "1.21.9" -> """{"pack":{"description":"Quarkos Cosmetics","min_format":[75,0],"max_format":[75,0]}}"""
+        else -> """{"pack":{"description":"Quarkos Cosmetics","pack_format":34}}"""
     }
+    inputs.property("packMetadata", meta)
     doLast {
         val file = out.get().asFile
         file.parentFile.mkdirs()
-        file.writeText(meta)
+        file.writeText(meta + "\n")
     }
 }
 
@@ -99,13 +106,18 @@ tasks {
             "name" to sc.properties.get<String>("mod.name"),
             "version" to "${sc.properties.get<String>("mod.version")}+$minecraftVersion",
             "minecraft" to sc.properties.get<String>("mod.mc_compat"),
-            "geckolib" to if (sc.current.version == "1.21.1") "4.9.3" else "5.4.5",
+            "java" to ">=$javaVersion",
+            "geckolib" to geckolibVersion,
         )
         inputs.properties(props)
         exclude("META-INF/mods.toml")
-        exclude("pack.mcmeta")
         filesMatching("fabric.mod.json") {
             expand(props)
+        }
+        if (unobfuscated) {
+            filesMatching("quarkos_cosmetics.mixins.json") {
+                filter { line: String -> line.replace("\"JAVA_21\"", "\"JAVA_$javaVersion\"") }
+            }
         }
         from(layout.buildDirectory.dir("generated/pack"))
     }
