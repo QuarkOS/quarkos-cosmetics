@@ -2,7 +2,11 @@ package dev.quarkos.cosmetics.config.ui;
 
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
 import net.minecraft.client.gui.Font;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 
@@ -33,9 +37,17 @@ public final class FlatEditBox extends EditBox {
     *///?}
 
     @Override
+    //? if >=26.3 {
+    /*public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    *///?} else {
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    //?}
         int fill = isMouseOver(mouseX, mouseY) ? UiTheme.CONTROL : UiTheme.STAGE;
         UiTheme.frame(graphics, frame, fill, isFocused() ? UiTheme.ACCENT : UiTheme.BORDER);
+        //? if >=26.3 {
+        /*super.extractWidgetRenderState(graphics, mouseX, mouseY, partialTick);
+        *///?} else {
         super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        //?}
     }
 }

@@ -4,6 +4,13 @@ import dev.quarkos.cosmetics.model.CosmeticModel;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+//? if >=26.3 {
+/*import com.geckolib.cache.GeckoLibResources;
+import com.geckolib.cache.animation.Keyframe;
+*///?}
+//? if >=1.21.11 && <26.3 {
+import software.bernie.geckolib.cache.animation.Keyframe;
+//?}
 
 import java.util.Locale;
 
@@ -13,6 +20,9 @@ import java.util.Locale;
  */
 public final class GeckoMotion {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
+    //? if >=26.3 {
+    /*private static final Identifier MOTIONS = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "motions");
+    *///?}
     private static long nextMissLog;
     private static boolean announced;
 
@@ -105,6 +115,10 @@ public final class GeckoMotion {
 
     //? if >=1.21.11 {
     private static Double read(String clip, String bone, float age, boolean zAxis) {
+        //? if >=26.3 {
+        /*var baked = GeckoLibResources.getBakedAnimations().cache().get(MOTIONS);
+        var animation = baked == null ? null : baked.getAnimation(clip);
+        *///?} else {
         var cache = software.bernie.geckolib.cache.GeckoLibResources.getBakedAnimations();
         software.bernie.geckolib.cache.animation.Animation animation = null;
         Identifier file = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "motions");
@@ -120,6 +134,7 @@ public final class GeckoMotion {
                 }
             }
         }
+        //?}
         if (animation == null) {
             return null;
         }
@@ -135,8 +150,8 @@ public final class GeckoMotion {
         return null;
     }
 
-    private static double sampleSeconds(software.bernie.geckolib.cache.animation.Keyframe[] frames, double time) {
-        software.bernie.geckolib.cache.animation.Keyframe span = null;
+    private static double sampleSeconds(Keyframe[] frames, double time) {
+        Keyframe span = null;
         for (var frame : frames) {
             if (frame.length() <= 0.000001) {
                 continue;

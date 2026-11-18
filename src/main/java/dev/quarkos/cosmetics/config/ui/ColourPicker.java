@@ -2,7 +2,11 @@ package dev.quarkos.cosmetics.config.ui;
 
 import dev.quarkos.cosmetics.config.TintColor;
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
@@ -72,7 +76,11 @@ public final class ColourPicker {
         return button;
     }
 
+    //? if >=26.3 {
+    /*private void drawHue(GuiGraphicsExtractor graphics, int rgb) {
+    *///?} else {
     private void drawHue(GuiGraphics graphics, int rgb) {
+    //?}
         int segments = 60;
         for (int i = 0; i < segments; i++) {
             int start = track.w() * i / segments;

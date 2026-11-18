@@ -7,12 +7,23 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
 import dev.quarkos.cosmetics.render.ThumbnailMesh;
 import net.minecraft.client.Minecraft;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
+//? if >=26.3 {
+/*import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
+import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
+*///?} else {
 import net.minecraft.client.gui.render.state.GuiRenderState;
 import net.minecraft.client.gui.render.state.pip.PictureInPictureRenderState;
 import net.minecraft.client.renderer.MultiBufferSource;
+//?}
 
 //? if forge {
 /*import java.util.HashMap;
@@ -25,8 +36,12 @@ public class ThumbnailRenderer extends PictureInPictureRenderer<ThumbnailRendere
     private static boolean available;
     private ThumbnailMesh rendered;
 
+    //? if >=26.3 {
+    /*public ThumbnailRenderer() {
+    *///?} else {
     public ThumbnailRenderer(MultiBufferSource.BufferSource buffers) {
         super(buffers);
+    //?}
         available = true;
     }
 
@@ -34,7 +49,11 @@ public class ThumbnailRenderer extends PictureInPictureRenderer<ThumbnailRendere
         return available;
     }
 
+    //? if >=26.3 {
+    /*static void submit(GuiGraphicsExtractor graphics, ThumbnailMesh mesh, Rect area) {
+    *///?} else {
     static void submit(GuiGraphics graphics, ThumbnailMesh mesh, Rect area) {
+    //?}
         //? if forge {
         /*GuiRenderState gui = graphics.getRenderState();
         ScreenRectangle scissor = graphics.getScissorStack().peek();
@@ -44,8 +63,13 @@ public class ThumbnailRenderer extends PictureInPictureRenderer<ThumbnailRendere
         //?}
         ScreenRectangle bounds = PictureInPictureRenderState.getBounds(area.x(), area.y(), area.right(), area.bottom(), scissor);
         if (bounds != null) {
+            //? if >=26.3 {
+            /*gui.addPicturesInPictureState(new State(mesh, area.x(), area.y(), area.right(), area.bottom(),
+                    mesh.scaleToFit(area.w(), area.h()), scissor, bounds));
+            *///?} else {
             gui.submitPicturesInPictureState(new State(mesh, area.x(), area.y(), area.right(), area.bottom(),
                     mesh.scaleToFit(area.w(), area.h()), scissor, bounds));
+            //?}
         }
     }
 
@@ -68,6 +92,24 @@ public class ThumbnailRenderer extends PictureInPictureRenderer<ThumbnailRendere
         return rendered == state.mesh();
     }
 
+    //? if >=26.3 {
+    /*@Override
+    public void prepare(State state, GuiRenderState gui, FeatureRenderDispatcher features, int guiScale) {
+        var previousLights = RenderSystem.getShaderLights();
+        try {
+            super.prepare(state, gui, features, guiScale);
+            rendered = state.mesh();
+        } finally {
+            RenderSystem.setShaderLights(previousLights);
+        }
+    }
+
+    @Override
+    protected void renderToTexture(State state, PoseStack pose, SubmitNodeCollector collector) {
+        Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
+        state.mesh().render(pose, collector);
+    }
+    *///?} else {
     @Override
     protected void renderToTexture(State state, PoseStack pose) {
         var previousLights = RenderSystem.getShaderLights();
@@ -80,6 +122,7 @@ public class ThumbnailRenderer extends PictureInPictureRenderer<ThumbnailRendere
             RenderSystem.setShaderLights(previousLights);
         }
     }
+    //?}
 
     @Override
     protected String getTextureLabel() {

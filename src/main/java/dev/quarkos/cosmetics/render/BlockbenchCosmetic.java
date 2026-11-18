@@ -5,7 +5,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.quarkos.cosmetics.config.TintColor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Matrix3f;
@@ -20,6 +19,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+//? if >=26.3 {
+/*import static net.minecraft.util.LightCoordsUtil.FULL_BRIGHT;
+*///?} else {
+import static net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
+//?}
 
 /**
  * Draws a GeckoLib Blockbench file that was copied in unchanged. Cubes keep the
@@ -47,7 +52,11 @@ public final class BlockbenchCosmetic {
         }
         pose.pushPose();
         (model.onBody ? body : head).translateAndRotate(pose);
+        //? if >=26.3 {
+        /*pose.rotate(new Quaternionf().rotationZ((float) Math.PI));
+        *///?} else {
         pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
+        //?}
         pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
         pose.translate(0f, -24f, 0f);
         Matrix4f view = new Matrix4f(pose.last().pose());
@@ -56,7 +65,7 @@ public final class BlockbenchCosmetic {
         submitter.submit(pose, model.texture, pass, consumer -> paint(consumer, view, light, tint, model, time, 0f));
         if (model.glow != null) {
             submitter.submit(pose, model.glow, CosmeticDrawer.Pass.GLOW, consumer ->
-                    paint(consumer, view, LightTexture.FULL_BRIGHT, TintColor.DEFAULT, model, time, 0.04f));
+                    paint(consumer, view, FULL_BRIGHT, TintColor.DEFAULT, model, time, 0.04f));
         }
         pose.popPose();
     }

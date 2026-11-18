@@ -21,6 +21,10 @@ public abstract class PauseScreenMixin extends Screen {
     private void quarkos$button(CallbackInfo ci) {
         this.addRenderableWidget(new FlatButton(new Rect(this.width - 102, 8, 90, 20),
                 Component.translatable("text.quarkos_cosmetics.pause"), button ->
+                //? if >=26.3 {
+                /*this.minecraft.gui.setScreen(new WardrobeScreen(this))));
+                *///?} else {
                 this.minecraft.setScreen(new WardrobeScreen(this))));
+                //?}
     }
 }

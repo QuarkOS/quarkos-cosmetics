@@ -3,8 +3,11 @@ package dev.quarkos.cosmetics.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.quarkos.cosmetics.config.TintColor;
-import net.minecraft.client.renderer.LightTexture;
+//? if >=26.3 {
+/*import net.minecraft.client.renderer.SubmitNodeCollector;
+*///?} else {
 import net.minecraft.client.renderer.MultiBufferSource;
+//?}
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Quaternionf;
@@ -22,6 +25,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+//? if >=26.3 {
+/*import static net.minecraft.util.LightCoordsUtil.FULL_BRIGHT;
+*///?} else {
+import static net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
+//?}
 
 /** The cosmetic's own mesh in a fixed three-quarter pose. */
 public final class ThumbnailMesh {
@@ -54,7 +63,11 @@ public final class ThumbnailMesh {
 
     private static Optional<ThumbnailMesh> build(ModelLibrary.Resolved model) {
         PoseStack pose = new PoseStack();
+        //? if >=26.3 {
+        /*pose.rotate(new Quaternionf().rotateX(0.26f).rotateY(0.57f));
+        *///?} else {
         pose.mulPose(new Quaternionf().rotateX(0.26f).rotateY(0.57f));
+        //?}
         List<Batch> batches = new ArrayList<>();
         CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
             Capture capture = new Capture();
@@ -63,7 +76,7 @@ public final class ThumbnailMesh {
                 batches.add(new Batch(texture, pass, List.copyOf(capture.vertices)));
             }
         };
-        int light = LightTexture.FULL_BRIGHT;
+        int light = FULL_BRIGHT;
         //? if >=1.21.11 {
         if (Chick.draws(model.id())) {
             Chick.portrait(pose, submitter, light);
@@ -86,6 +99,22 @@ public final class ThumbnailMesh {
         return Math.min(x, y) * 0.88f;
     }
 
+    //? if >=26.3 {
+    /*public void render(PoseStack pose, SubmitNodeCollector collector) {
+        pose.translate(-(min.x + max.x) / 2f, -(min.y + max.y) / 2f, -(min.z + max.z) / 2f);
+        for (Batch batch : batches) {
+            var type = switch (batch.pass()) {
+                case CUTOUT -> RenderTypes.entityCutoutCull(batch.texture());
+                case CUTOUT_NO_CULL -> RenderTypes.entityCutout(batch.texture());
+                case GLOW -> MaskGlow.type(batch.texture());
+                case TRANSLUCENT -> RenderTypes.entityTranslucent(batch.texture());
+                case EYES -> RenderTypes.eyes(batch.texture());
+            };
+            collector.submitCustomGeometry(pose, type, (entry, consumer) ->
+                    drawBatch(entry, consumer, batch, new Vector3f(), new Vector3f()));
+        }
+    }
+    *///?} else {
     public void render(PoseStack pose, MultiBufferSource buffer) {
         pose.translate(-(min.x + max.x) / 2f, -(min.y + max.y) / 2f, -(min.z + max.z) / 2f);
         PoseStack.Pose entry = pose.last();
@@ -102,13 +131,18 @@ public final class ThumbnailMesh {
             //?} else {
             /*var type = RenderType.entityCutoutNoCull(batch.texture());
             *///?}
-            VertexConsumer consumer = buffer.getBuffer(type);
-            for (Vertex vertex : batch.vertices()) {
-                entry.pose().transformPosition(vertex.x(), vertex.y(), vertex.z(), position);
-                entry.transformNormal(vertex.nx(), vertex.ny(), vertex.nz(), normal);
-                consumer.addVertex(position.x, position.y, position.z, vertex.color(), vertex.u(), vertex.v(),
-                        OverlayTexture.NO_OVERLAY, LightTexture.FULL_BRIGHT, normal.x, normal.y, normal.z);
-            }
+            drawBatch(entry, buffer.getBuffer(type), batch, position, normal);
+        }
+    }
+    //?}
+
+    private static void drawBatch(PoseStack.Pose entry, VertexConsumer consumer, Batch batch,
+                                  Vector3f position, Vector3f normal) {
+        for (Vertex vertex : batch.vertices()) {
+            entry.pose().transformPosition(vertex.x(), vertex.y(), vertex.z(), position);
+            entry.transformNormal(vertex.nx(), vertex.ny(), vertex.nz(), normal);
+            consumer.addVertex(position.x, position.y, position.z, vertex.color(), vertex.u(), vertex.v(),
+                    OverlayTexture.NO_OVERLAY, FULL_BRIGHT, normal.x, normal.y, normal.z);
         }
     }
 
@@ -163,6 +197,13 @@ public final class ThumbnailMesh {
         public VertexConsumer setUv2(int u, int v) {
             return this;
         }
+
+        //? if >=26.3 {
+        /*@Override
+        public VertexConsumer setUv3(float u, float v) {
+            return this;
+        }
+        *///?}
 
         @Override
         public VertexConsumer setNormal(float nx, float ny, float nz) {

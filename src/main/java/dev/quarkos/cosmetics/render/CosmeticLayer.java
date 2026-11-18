@@ -39,8 +39,13 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
                 case EYES -> RenderTypes.eyes(texture);
                 case GLOW -> MaskGlow.type(texture);
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(texture);
+                //? if >=26.3 {
+                /*case CUTOUT -> RenderTypes.entityCutoutCull(texture);
+                case CUTOUT_NO_CULL -> RenderTypes.entityCutout(texture);
+                *///?} else {
                 case CUTOUT -> RenderTypes.entityCutout(texture);
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutoutNoCull(texture);
+                //?}
             };
             collector.submitCustomGeometry(stack, type, (entry, consumer) -> draw.accept(consumer));
         };

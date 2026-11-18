@@ -3,7 +3,11 @@ package dev.quarkos.cosmetics.config.ui;
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
@@ -11,7 +15,11 @@ import net.minecraft.network.chat.Component;
 public final class FlatButton extends Button {
     @FunctionalInterface
     public interface Painter {
+        //? if >=26.3 {
+        /*void paint(FlatButton button, GuiGraphicsExtractor graphics, Font font, Rect bounds, boolean hovered);
+        *///?} else {
         void paint(FlatButton button, GuiGraphics graphics, Font font, Rect bounds, boolean hovered);
+        //?}
     }
 
     private final Painter painter;
@@ -25,7 +33,11 @@ public final class FlatButton extends Button {
         this.painter = painter;
     }
 
+    //? if >=26.3 {
+    /*private static void paintDefault(FlatButton button, GuiGraphicsExtractor graphics, Font font, Rect bounds, boolean hovered) {
+    *///?} else {
     private static void paintDefault(FlatButton button, GuiGraphics graphics, Font font, Rect bounds, boolean hovered) {
+    //?}
         UiTheme.frame(graphics, bounds, button.fill(hovered), button.border());
         UiTheme.centered(graphics, font, button.getMessage().getString(), bounds.inset(4),
                 button.active ? UiTheme.TEXT : UiTheme.DISABLED);
@@ -39,19 +51,30 @@ public final class FlatButton extends Button {
         return !active ? UiTheme.PANEL : hovered ? UiTheme.HOVER : UiTheme.CONTROL;
     }
 
-    //? if >=1.21.11 {
+    //? if >=26.3 {
+    /*@Override
+    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        paint(graphics, mouseX, mouseY);
+    }
+    *///?}
+    //? if >=1.21.11 && <26.3 {
     @Override
     protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         paint(graphics, mouseX, mouseY);
     }
-    //?} else {
+    //?}
+    //? if <1.21.11 {
     /*@Override
     protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         paint(graphics, mouseX, mouseY);
     }
     *///?}
 
+    //? if >=26.3 {
+    /*private void paint(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    *///?} else {
     private void paint(GuiGraphics graphics, int mouseX, int mouseY) {
+    //?}
         Rect bounds = new Rect(getX(), getY(), getWidth(), getHeight());
         painter.paint(this, graphics, Minecraft.getInstance().font, bounds, active && bounds.contains(mouseX, mouseY));
     }

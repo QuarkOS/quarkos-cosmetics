@@ -37,17 +37,25 @@ public abstract class CameraZoomMixin {
         return zoom;
     }
 
-    //? if >=1.21.11 {
+    //? if >=26.3 {
+    /*@Inject(method = "alignWithEntity(F)V", at = @At("TAIL"))
+    private void quarkos$centerBody(float partialTick, CallbackInfo ci) {
+        Camera camera = (Camera) (Object) this;
+        quarkos$frame(camera.entity(), camera.isDetached(), partialTick);
+    }
+    *///?}
+    //? if >=1.21.11 && <26.3 {
     @Inject(method = "setup", at = @At("TAIL"))
     private void quarkos$centerBody(net.minecraft.world.level.Level level, Entity entity, boolean detached, boolean reverse, float partialTick, CallbackInfo ci) {
         quarkos$frame(entity, detached, partialTick);
     }
-    //?} else {
-    @Inject(method = "setup", at = @At("TAIL"))
+    //?}
+    //? if <1.21.11 {
+    /*@Inject(method = "setup", at = @At("TAIL"))
     private void quarkos$centerBody(net.minecraft.world.level.BlockGetter level, Entity entity, boolean detached, boolean reverse, float partialTick, CallbackInfo ci) {
         quarkos$frame(entity, detached, partialTick);
     }
-    //?}
+    *///?}
 
     private void quarkos$frame(Entity entity, boolean detached, float partialTick) {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {

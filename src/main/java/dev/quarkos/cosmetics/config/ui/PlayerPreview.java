@@ -1,7 +1,11 @@
 package dev.quarkos.cosmetics.config.ui;
 
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.world.entity.LivingEntity;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -55,7 +59,11 @@ public final class PlayerPreview {
         resumeAt = System.nanoTime() + 1_500_000_000L;
     }
 
+    //? if >=26.3 {
+    /*public void draw(GuiGraphicsExtractor graphics, Rect stage, LivingEntity player) {
+    *///?} else {
     public void draw(GuiGraphics graphics, Rect stage, LivingEntity player) {
+    //?}
         long now = System.nanoTime();
         if (!studio && !dragging && now >= resumeAt && lastFrame != 0) {
             float seconds = Math.min(0.1f, (now - lastFrame) / 1_000_000_000f);
@@ -83,7 +91,11 @@ public final class PlayerPreview {
         }
         Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).mul(camera);
         Vector3f translation = new Vector3f(0f, state.boundingBoxHeight / 2f + 0.0625f, 0f);
+        //? if >=26.3 {
+        /*graphics.entity(state, scale, translation, pose, camera, stage.x(), stage.y(), stage.right(), stage.bottom());
+        *///?} else {
         graphics.submitEntityRenderState(state, scale, translation, pose, camera, stage.x(), stage.y(), stage.right(), stage.bottom());
+        //?}
         //?} else {
         /*Quaternionf pose = new Quaternionf().rotateZ((float) Math.PI).mul(camera).rotateY((float) Math.toRadians(legacy ? yaw : -yaw));
         Vector3f translation = new Vector3f(0f, player.getBbHeight() / 2f + 0.0625f, 0f);
@@ -117,7 +129,11 @@ public final class PlayerPreview {
     }
 
     //? if >=1.21.11 {
+    //? if >=26.3 {
+    /*private static boolean previewScissorOpen(GuiGraphicsExtractor graphics) {
+    *///?} else {
     private static boolean previewScissorOpen(GuiGraphics graphics) {
+    //?}
         //? if forge {
         /*return graphics.getScissorStack().peek() != null;
         *///?} else {

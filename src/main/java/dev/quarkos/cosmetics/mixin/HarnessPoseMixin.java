@@ -8,7 +8,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 //? if >=1.21.11 {
+//? if >=26.3 {
+/*import net.minecraft.client.renderer.extract.LevelExtractor;
+*///?} else {
 import net.minecraft.client.renderer.LevelRenderer;
+//?}
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -16,7 +20,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Harness-only. Snaps the local player immediately before the render state is built,
  * so a falling or sleeping shot is not the pose from earlier in the tick.
  */
+//? if >=26.3 {
+/*@Mixin(LevelExtractor.class)
+*///?} else {
 @Mixin(LevelRenderer.class)
+//?}
 public class HarnessPoseMixin {
     @Inject(method = "extractEntity", at = @At("HEAD"))
     private void quarkos$pose(Entity entity, float partialTick, CallbackInfoReturnable<EntityRenderState> ci) {

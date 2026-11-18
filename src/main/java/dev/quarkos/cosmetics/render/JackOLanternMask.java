@@ -5,7 +5,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelPart;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
@@ -20,6 +19,16 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
+//? if >=26.3 {
+/*import net.minecraft.util.LightCoordsUtil;
+
+import static net.minecraft.util.LightCoordsUtil.FULL_BRIGHT;
+*///?} else {
+import net.minecraft.client.renderer.LightTexture;
+
+import static net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
+//?}
 
 /**
  * GeckoLib armor mask. The head bone follows the player head. Bedrock +Y is up;
@@ -75,7 +84,11 @@ public final class JackOLanternMask {
         head.translateAndRotate(pose);
         // Call order is outer-first. The vertex sees the pixel translate, then the
         // uniform scale, then the roll. A negative Y scale would flip the winding.
+        //? if >=26.3 {
+        /*pose.rotate(new Quaternionf().rotationZ((float) Math.PI));
+        *///?} else {
         pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
+        //?}
         pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
         pose.translate(-offsetX, -24f + offsetY, offsetZ);
         Matrix4f view = new Matrix4f(pose.last().pose());
@@ -89,7 +102,7 @@ public final class JackOLanternMask {
         if (Math.abs(normals.determinant()) > 0.0000001f) {
             normals.invert().transpose();
         }
-        //? if >=1.21.11 {
+        //? if >=1.21.11 && <26.3 {
         if (deferred) {
             // The entity batch drops the mask on some frames. Redraw it after the world, pose held from this submit.
             hold(view, normals, frame, loaded, light);
@@ -97,12 +110,12 @@ public final class JackOLanternMask {
             submitLayers(submitter, pose, view, normals, light, loaded, frame);
         }
         //?} else {
-        submitLayers(submitter, pose, view, normals, light, loaded, frame);
-        //?}
+        /*submitLayers(submitter, pose, view, normals, light, loaded, frame);
+        *///?}
         pose.popPose();
     }
 
-    //? if >=1.21.11 {
+    //? if >=1.21.11 && <26.3 {
     private static boolean deferred;
     private static Matrix4f heldView;
     private static Matrix3f heldNormals;
@@ -153,7 +166,7 @@ public final class JackOLanternMask {
             paint(consumer, heldView, heldNormals, heldLight, heldModel, heldFrame, 2);
             // Same alpha as the recess. A lower alpha was dropped, so the flame never reached the shader.
             // The shader tells the candle cores from the red by the texel's own green.
-            paint(consumer, heldView, heldNormals, LightTexture.FULL_BRIGHT, heldModel, heldFrame, 1);
+            paint(consumer, heldView, heldNormals, FULL_BRIGHT, heldModel, heldFrame, 1);
             maskAlpha = 255;
             source.endBatch();
             org.lwjgl.opengl.GL11.glFinish();
@@ -237,7 +250,7 @@ public final class JackOLanternMask {
         Identifier glow = glowSampler();
         submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 0));
         submitter.submit(pose, glow, CosmeticDrawer.Pass.CUTOUT, consumer -> paint(consumer, view, normals, light, loaded, frame, 2));
-        submitter.submit(pose, glow, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, frame, 1));
+        submitter.submit(pose, glow, CosmeticDrawer.Pass.GLOW, consumer -> paint(consumer, view, normals, FULL_BRIGHT, loaded, frame, 1));
     }
 
     //? if >=1.21.11 {
@@ -247,7 +260,11 @@ public final class JackOLanternMask {
             return;
         }
         pose.pushPose();
+        //? if >=26.3 {
+        /*pose.rotate(new Quaternionf().rotationZ((float) Math.PI));
+        *///?} else {
         pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
+        //?}
         pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
@@ -257,10 +274,17 @@ public final class JackOLanternMask {
         submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT,
                 consumer -> paint(consumer, view, normals, light, loaded, 0, 0, shellHeight, 255));
         if (loaded.anyGlow) {
+            //? if >=26.3 {
+            /*submitter.submit(pose, GLOW, CosmeticDrawer.Pass.CUTOUT,
+                    consumer -> paint(consumer, view, normals, light, loaded, 0, 2, glowHeight, 255));
+            submitter.submit(pose, GLOW, CosmeticDrawer.Pass.GLOW,
+                    consumer -> paint(consumer, view, normals, FULL_BRIGHT, loaded, 0, 1, glowHeight, 255));
+            *///?} else {
             submitter.submit(pose, GLOW, CosmeticDrawer.Pass.CUTOUT, consumer -> {
                 paint(consumer, view, normals, light, loaded, 0, 2, glowHeight, 255);
-                paint(consumer, view, normals, LightTexture.FULL_BRIGHT, loaded, 0, 1, glowHeight, 255);
+                paint(consumer, view, normals, FULL_BRIGHT, loaded, 0, 1, glowHeight, 255);
             });
+            //?}
         }
         pose.popPose();
     }
@@ -412,7 +436,7 @@ public final class JackOLanternMask {
                 float[] p10 = bilerp(uHi, vLo, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p11 = bilerp(uHi, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
                 float[] p01 = bilerp(uLo, vHi, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3);
-                int texelLight = kind == 1 ? LightTexture.FULL_BRIGHT : light;
+                int texelLight = kind == 1 ? FULL_BRIGHT : light;
                 if (kind != 1 && spill) {
                     float cx = (p00[0] + p10[0] + p11[0] + p01[0]) * 0.25f;
                     float cy = (p00[1] + p10[1] + p11[1] + p01[1]) * 0.25f;
@@ -469,10 +493,17 @@ public final class JackOLanternMask {
         if (block <= 0) {
             return world;
         }
+        //? if >=26.3 {
+        /*if (block <= LightCoordsUtil.block(world)) {
+            return world;
+        }
+        return LightCoordsUtil.pack(block, LightCoordsUtil.sky(world));
+        *///?} else {
         if (block <= LightTexture.block(world)) {
             return world;
         }
         return LightTexture.pack(block, LightTexture.sky(world));
+        //?}
     }
 
     /**

@@ -1,7 +1,11 @@
 package dev.quarkos.cosmetics.config.ui;
 
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 
 import java.util.List;
 
@@ -54,7 +58,11 @@ public final class CardGrid {
         place(metrics.rowAt(mouseY - grabOffset));
     }
 
+    //? if >=26.3 {
+    /*public void drawScrollbar(GuiGraphicsExtractor graphics) {
+    *///?} else {
     public void drawScrollbar(GuiGraphics graphics) {
+    //?}
         if (metrics.maxScroll() > 0) {
             UiTheme.fill(graphics, metrics.scrollbar(), UiTheme.STAGE);
             UiTheme.tile(graphics, metrics.thumb(row), UiTheme.MUTED);

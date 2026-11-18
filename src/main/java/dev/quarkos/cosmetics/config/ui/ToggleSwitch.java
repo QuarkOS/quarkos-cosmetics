@@ -1,7 +1,11 @@
 package dev.quarkos.cosmetics.config.ui;
 
 import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.network.chat.Component;
 
 import java.util.function.BooleanSupplier;
@@ -34,7 +38,11 @@ public final class ToggleSwitch {
         return Component.literal(label + (on ? ", on" : ", off"));
     }
 
+    //? if >=26.3 {
+    /*private static void pill(GuiGraphicsExtractor graphics, int x, int y, int width, int colour) {
+    *///?} else {
     private static void pill(GuiGraphics graphics, int x, int y, int width, int colour) {
+    //?}
         graphics.fill(x + 4, y, x + width - 4, y + 12, colour);
         graphics.fill(x + 2, y + 1, x + width - 2, y + 11, colour);
         graphics.fill(x, y + 3, x + width, y + 9, colour);

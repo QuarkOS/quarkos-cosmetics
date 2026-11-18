@@ -18,16 +18,25 @@ import dev.quarkos.cosmetics.model.Slot;
 import dev.quarkos.cosmetics.render.Chick;
 import dev.quarkos.cosmetics.render.CosmeticDrawer;
 import dev.quarkos.cosmetics.render.ModelLibrary;
+//? if >=26.3 {
+/*import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+//? if <26.3 {
 import org.lwjgl.glfw.GLFW;
+//?}
 //? if >=1.21.11 {
-import dev.quarkos.cosmetics.render.JackOLanternMask;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+//?}
+//? if >=1.21.11 && <26.3 {
+import dev.quarkos.cosmetics.render.JackOLanternMask;
 //?}
 
 import java.util.ArrayList;
@@ -38,6 +47,24 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 public final class WardrobeScreen extends Screen {
+    //? if >=26.3 {
+    /*private static final int ENTER = InputConstants.KEY_RETURN;
+    private static final int KEYPAD_ENTER = InputConstants.KEY_NUMPADENTER;
+    private static final int LEFT = InputConstants.KEY_LEFT;
+    private static final int RIGHT = InputConstants.KEY_RIGHT;
+    private static final int PAGE_UP = InputConstants.KEY_PAGEUP;
+    private static final int PAGE_DOWN = InputConstants.KEY_PAGEDOWN;
+    private static final int MOUSE_LEFT = InputConstants.MOUSE_BUTTON_LEFT;
+    *///?} else {
+    private static final int ENTER = GLFW.GLFW_KEY_ENTER;
+    private static final int KEYPAD_ENTER = GLFW.GLFW_KEY_KP_ENTER;
+    private static final int LEFT = GLFW.GLFW_KEY_LEFT;
+    private static final int RIGHT = GLFW.GLFW_KEY_RIGHT;
+    private static final int PAGE_UP = GLFW.GLFW_KEY_PAGE_UP;
+    private static final int PAGE_DOWN = GLFW.GLFW_KEY_PAGE_DOWN;
+    private static final int MOUSE_LEFT = GLFW.GLFW_MOUSE_BUTTON_LEFT;
+    //?}
+
     public enum View {
         WARDROBE("Wardrobe"), GALLERY("Gallery"), SETTINGS("Settings");
 
@@ -534,12 +561,19 @@ public final class WardrobeScreen extends Screen {
     }
 
     @Override
+    //? if >=26.3 {
+    /*public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    *///?} else {
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // All managed surfaces are painted in render().
+    //?}
     }
 
     @Override
+    //? if >=26.3 {
+    /*public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    *///?} else {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    //?}
         if (rebuildPending) {
             refreshWidgets();
         }
@@ -560,10 +594,18 @@ public final class WardrobeScreen extends Screen {
         if (grid != null) {
             grid.drawScrollbar(graphics);
         }
+        //? if >=26.3 {
+        /*super.extractRenderState(graphics, suppressHover ? -1 : mouseX, suppressHover ? -1 : mouseY, partialTick);
+        *///?} else {
         super.render(graphics, suppressHover ? -1 : mouseX, suppressHover ? -1 : mouseY, partialTick);
+        //?}
     }
 
+    //? if >=26.3 {
+    /*private void drawPreview(GuiGraphicsExtractor graphics) {
+    *///?} else {
     private void drawPreview(GuiGraphics graphics) {
+    //?}
         Rect panel = frame.preview();
         Rect stage = frame.stage();
         UiTheme.frame(graphics, panel, UiTheme.PANEL, UiTheme.BORDER);
@@ -572,7 +614,7 @@ public final class WardrobeScreen extends Screen {
         if (minecraft != null && minecraft.player != null) {
             preview.draw(graphics, stage.inset(1), minecraft.player);
             UiTheme.text(graphics, font, "Drag to turn", new Rect(stage.x(), panel.bottom() - 24, panel.w() - 67, 17), UiTheme.MUTED);
-            //? if >=1.21.11 {
+            //? if >=1.21.11 && <26.3 {
             ClientSettings settings = ClientSettings.get();
             if (JackOLanternMask.ID.equals(settings.equippedId(Slot.HAT)) && settings.shown(Slot.HAT, JackOLanternMask.ID)) {
                 UiTheme.centered(graphics, font, "Mask shown in-world",
@@ -585,7 +627,11 @@ public final class WardrobeScreen extends Screen {
         }
     }
 
+    //? if >=26.3 {
+    /*private void drawWardrobe(GuiGraphicsExtractor graphics) {
+    *///?} else {
     private void drawWardrobe(GuiGraphics graphics) {
+    //?}
         Rect details = collection.equipped();
         String equipped = ClientSettings.get().equippedId(slot);
         ModelLibrary.Resolved model = ModelLibrary.resolve(equipped);
@@ -606,7 +652,11 @@ public final class WardrobeScreen extends Screen {
         }
     }
 
+    //? if >=26.3 {
+    /*private void drawGallery(GuiGraphicsExtractor graphics) {
+    *///?} else {
     private void drawGallery(GuiGraphics graphics) {
+    //?}
         GalleryWork.SignInStatus signIn = studioGallery ? GalleryWork.SignInStatus.SIGNED_OUT : GalleryWork.signInStatus();
         String accountText = switch (signIn) {
             case SIGNED_OUT -> "Signed out";
@@ -646,7 +696,11 @@ public final class WardrobeScreen extends Screen {
         }
     }
 
+    //? if >=26.3 {
+    /*private void drawSettings(GuiGraphicsExtractor graphics) {
+    *///?} else {
     private void drawSettings(GuiGraphics graphics) {
+    //?}
         Rect panel = frame.content();
         UiTheme.text(graphics, font, "Display settings", new Rect(panel.x() + 10, panel.y() + 6, panel.w() - 20, 17), UiTheme.TEXT);
         drawSettingRow(graphics, settingsLayout.hideOthers(), "Hide cosmetics and 3D layers on other players.");
@@ -659,13 +713,21 @@ public final class WardrobeScreen extends Screen {
                 new Rect(distance.x() + 8, distance.y(), distanceOptions().x() - distance.x() - 12, distance.h()), UiTheme.TEXT);
     }
 
+    //? if >=26.3 {
+    /*private void drawSettingRow(GuiGraphicsExtractor graphics, Rect row, String description) {
+    *///?} else {
     private void drawSettingRow(GuiGraphics graphics, Rect row, String description) {
+    //?}
         UiTheme.frame(graphics, row, UiTheme.STAGE, UiTheme.BORDER);
         UiTheme.text(graphics, font, description,
                 new Rect(row.x() + 8, row.y() + 21, row.w() - 16, 13), UiTheme.MUTED);
     }
 
+    //? if >=26.3 {
+    /*private void drawCard(FlatButton button, GuiGraphicsExtractor graphics, Rect rect, boolean hovered, Card card, boolean galleryCard, boolean worn) {
+    *///?} else {
     private void drawCard(FlatButton button, GuiGraphics graphics, Rect rect, boolean hovered, Card card, boolean galleryCard, boolean worn) {
+    //?}
         boolean picked = galleryCard && card.id().equals(gallerySelection);
         int outline = worn || picked ? UiTheme.ACCENT : button.border();
         UiTheme.frame(graphics, rect, hovered ? UiTheme.HOVER : UiTheme.CONTROL, outline);
@@ -734,7 +796,7 @@ public final class WardrobeScreen extends Screen {
     }
 
     private boolean shortcut(int key) {
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == ENTER || key == KEYPAD_ENTER) {
             if (queryBox != null && getFocused() == queryBox) {
                 searchGallery();
                 return true;
@@ -744,13 +806,13 @@ public final class WardrobeScreen extends Screen {
                 return true;
             }
         }
-        if (picker != null && getFocused() == picker.slider() && (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT)) {
-            picker.adjust(key == GLFW.GLFW_KEY_LEFT ? -1 : 1);
+        if (picker != null && getFocused() == picker.slider() && (key == LEFT || key == RIGHT)) {
+            picker.adjust(key == LEFT ? -1 : 1);
             return true;
         }
         if (grid != null && !(getFocused() instanceof EditBox)
-                && (key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN)
-                && grid.page(key == GLFW.GLFW_KEY_PAGE_UP ? -1 : 1)) {
+                && (key == PAGE_UP || key == PAGE_DOWN)
+                && grid.page(key == PAGE_UP ? -1 : 1)) {
             clearHiddenFocus();
             return true;
         }
@@ -760,18 +822,18 @@ public final class WardrobeScreen extends Screen {
     //? if >=1.21.11 {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubled) {
-        return event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && beginDrag(event.x(), event.y()) || super.mouseClicked(event, doubled);
+        return event.button() == MOUSE_LEFT && beginDrag(event.x(), event.y()) || super.mouseClicked(event, doubled);
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        return event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && moveDrag(event.x(), event.y(), dragX, dragY)
+        return event.button() == MOUSE_LEFT && moveDrag(event.x(), event.y(), dragX, dragY)
                 || super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        return event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && finishDrag() || super.mouseReleased(event);
+        return event.button() == MOUSE_LEFT && finishDrag() || super.mouseReleased(event);
     }
 
     @Override
@@ -781,17 +843,17 @@ public final class WardrobeScreen extends Screen {
     //?} else {
     /*@Override
     public boolean mouseClicked(double x, double y, int button) {
-        return button == GLFW.GLFW_MOUSE_BUTTON_LEFT && beginDrag(x, y) || super.mouseClicked(x, y, button);
+        return button == MOUSE_LEFT && beginDrag(x, y) || super.mouseClicked(x, y, button);
     }
 
     @Override
     public boolean mouseDragged(double x, double y, int button, double dragX, double dragY) {
-        return button == GLFW.GLFW_MOUSE_BUTTON_LEFT && moveDrag(x, y, dragX, dragY) || super.mouseDragged(x, y, button, dragX, dragY);
+        return button == MOUSE_LEFT && moveDrag(x, y, dragX, dragY) || super.mouseDragged(x, y, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double x, double y, int button) {
-        return button == GLFW.GLFW_MOUSE_BUTTON_LEFT && finishDrag() || super.mouseReleased(x, y, button);
+        return button == MOUSE_LEFT && finishDrag() || super.mouseReleased(x, y, button);
     }
 
     @Override
@@ -846,7 +908,11 @@ public final class WardrobeScreen extends Screen {
     public void onClose() {
         save();
         if (minecraft != null) {
+            //? if >=26.3 {
+            /*minecraft.gui.setScreen(parent);
+            *///?} else {
             minecraft.setScreen(parent);
+            //?}
         }
     }
 

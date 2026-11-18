@@ -4,7 +4,11 @@ import dev.quarkos.cosmetics.config.WardrobeLayout.Rect;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import dev.quarkos.cosmetics.render.ThumbnailMesh;
 import net.minecraft.client.Minecraft;
+//? if >=26.3 {
+/*import net.minecraft.client.gui.GuiGraphicsExtractor;
+*///?} else {
 import net.minecraft.client.gui.GuiGraphics;
+//?}
 import net.minecraft.resources.Identifier;
 //? if >=1.21.11 {
 import net.minecraft.client.renderer.RenderPipelines;
@@ -31,7 +35,11 @@ public record Thumbnail(ModelLibrary.Resolved model, Identifier portrait) {
         return new Thumbnail(model, null);
     }
 
+    //? if >=26.3 {
+    /*public boolean draw(GuiGraphicsExtractor graphics, Rect box) {
+    *///?} else {
     public boolean draw(GuiGraphics graphics, Rect box) {
+    //?}
         if (box.w() <= 0 || box.h() <= 0) {
             return false;
         }

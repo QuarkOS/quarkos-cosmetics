@@ -396,7 +396,11 @@ public final class GalleryWork {
 
     private static void refreshScreen() {
         Minecraft minecraft = Minecraft.getInstance();
+        //? if >=26.3 {
+        /*if (minecraft.gui.screen() instanceof WardrobeScreen wardrobe) {
+        *///?} else {
         if (minecraft.screen instanceof WardrobeScreen wardrobe) {
+        //?}
             wardrobe.rebuild();
         }
     }

@@ -11,17 +11,38 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 //? if >=1.21.11 {
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.player.PlayerModel;
+//? if <26.3 {
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.OutlineBufferSource;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
+import net.minecraft.client.renderer.rendertype.RenderType;
+//?}
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
-import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.world.entity.player.PlayerModelType;
 
 @Mixin(ModelFeatureRenderer.class)
 public abstract class SkinShellMixin {
+    //? if >=26.3 {
+    /*@Redirect(method = "prepareModel(Lnet/minecraft/client/renderer/feature/ModelFeatureRenderer$Submit;)V",
+            at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/model/Model;renderToBuffer(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"))
+    private void quarkos$replaceOverlay(Model<?> model, PoseStack pose, VertexConsumer consumer, int light, int overlay,
+                                         int color, ModelFeatureRenderer.Submit<?> submit) {
+        Minecraft client = Minecraft.getInstance();
+        if (model instanceof PlayerModel playerModel && submit.state() instanceof AvatarRenderState state
+                && !state.isSpectator && state.skin != null && state.skin.body() != null
+                && submit.sheetedDecalPose() == null && submit.uvMapping() == null
+                && client.getEntityRenderDispatcher().getRenderer(state).getModel() == model) {
+            boolean self = client.player != null && state.id == client.player.getId();
+            SkinShellRenderer.render(playerModel, pose, consumer, light, overlay, color,
+                    state.skin.body().texturePath(), state.skin.model() == PlayerModelType.SLIM, self, state.distanceToCameraSq);
+        } else {
+            model.renderToBuffer(pose, consumer, light, overlay, color);
+        }
+    }
+    *///?} else {
     @Redirect(method = "renderModel", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/model/Model;renderToBuffer(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"))
     private void quarkos$replaceOverlay(Model<?> model, PoseStack pose, VertexConsumer consumer, int light, int overlay, int color,
@@ -39,6 +60,7 @@ public abstract class SkinShellMixin {
             model.renderToBuffer(pose, consumer, light, overlay, color);
         }
     }
+    //?}
 }
 //?} else {
 /*import net.minecraft.client.model.EntityModel;

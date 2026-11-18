@@ -179,7 +179,11 @@ public final class Chick {
             pose.translate(-place.x, place.y, place.z);
         }
         if (place.turn != null) {
+            //? if >=26.3 {
+            /*pose.rotate(place.turn);
+            *///?} else {
             pose.mulPose(place.turn);
+            //?}
         }
         pose.scale(scale, scale, scale);
         Matrix4f view = new Matrix4f(pose.last().pose());
@@ -211,7 +215,11 @@ public final class Chick {
 
     /** Bedrock pixels, upright, no mirror. Uniform and positive on every axis. */
     private static void bedrock(PoseStack pose) {
+        //? if >=26.3 {
+        /*pose.rotate(new Quaternionf().rotationZ((float) Math.PI));
+        *///?} else {
         pose.mulPose(new Quaternionf().rotationZ((float) Math.PI));
+        //?}
         pose.scale(1f / 16f, 1f / 16f, 1f / 16f);
     }
 

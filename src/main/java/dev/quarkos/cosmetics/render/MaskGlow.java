@@ -2,8 +2,10 @@ package dev.quarkos.cosmetics.render;
 
 import net.minecraft.resources.Identifier;
 
+//? if <26.3 {
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+//?}
 
 /**
  * 1.21.11 draws the rind and the candle in one mesh, after the world, into the main
@@ -20,7 +22,12 @@ public final class MaskGlow {
     public static void boot() {
     }
 
-    //? if >=1.21.11 {
+    //? if >=26.3 {
+    /*public static net.minecraft.client.renderer.rendertype.RenderType type(Identifier texture) {
+        return net.minecraft.client.renderer.rendertype.RenderTypes.entityTranslucentEmissive(texture);
+    }
+    *///?}
+    //? if >=1.21.11 && <26.3 {
     private static final Map<Identifier, net.minecraft.client.renderer.rendertype.RenderType> TYPES = new ConcurrentHashMap<>();
     private static com.mojang.blaze3d.pipeline.RenderPipeline PIPELINE;
     private static net.minecraft.client.renderer.rendertype.RenderType COMBINED;
@@ -69,8 +76,9 @@ public final class MaskGlow {
     private static net.minecraft.client.renderer.rendertype.RenderType create(Identifier texture) {
         return net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(texture);
     }
-    //?} else {
-    private static final Map<Identifier, net.minecraft.client.renderer.RenderType> TYPES = new ConcurrentHashMap<>();
+    //?}
+    //? if <1.21.11 {
+    /*private static final Map<Identifier, net.minecraft.client.renderer.RenderType> TYPES = new ConcurrentHashMap<>();
 
     public static net.minecraft.client.renderer.RenderType type(Identifier texture) {
         return TYPES.computeIfAbsent(texture, MaskGlow::create);
@@ -79,5 +87,5 @@ public final class MaskGlow {
     private static net.minecraft.client.renderer.RenderType create(Identifier texture) {
         return net.minecraft.client.renderer.RenderType.entityCutout(texture);
     }
-    //?}
+    *///?}
 }

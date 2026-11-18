@@ -28,6 +28,7 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -251,6 +252,63 @@ public final class ClientHarness {
     private ClientHarness() {
     }
 
+    private static Screen currentScreen(Minecraft client) {
+        //? if >=26.3 {
+        /*return client.gui.screen();
+        *///?} else {
+        return client.screen;
+        //?}
+    }
+
+    private static void setScreen(Minecraft client, Screen screen) {
+        //? if >=26.3 {
+        /*client.gui.setScreen(screen);
+        *///?} else {
+        client.setScreen(screen);
+        //?}
+    }
+
+    private static void setHudHidden(Minecraft client, boolean hidden) {
+        //? if >=26.3 {
+        /*if (client.gui.hud.isHidden() != hidden) {
+            client.gui.hud.toggle();
+        }
+        *///?} else {
+        client.options.hideGui = hidden;
+        //?}
+    }
+
+    private static void resizeGui(Minecraft client) {
+        //? if >=26.3 {
+        /*client.resizeGui();
+        *///?} else {
+        client.resizeDisplay();
+        //?}
+    }
+
+    private static void setStudioTime(Minecraft client, long time) {
+        var server = client.getSingleplayerServer();
+        if (server != null) {
+            //? if >=26.3 {
+            /*server.execute(() -> {
+                var world = server.overworld();
+                world.dimensionType().defaultClock().ifPresent(clock -> world.clockManager().setTotalTicks(clock, time));
+            });
+            *///?} else {
+            server.overworld().setDayTime(time);
+            //?}
+        }
+    }
+
+    private static void sleepInStudioBed(net.minecraft.world.entity.player.Player player) {
+        BlockPos bed = new BlockPos(1, 101, 0);
+        //? if >=26.3 {
+        /*player.startSleeping(bed);
+        *///?} else {
+        player.startSleepInBed(bed);
+        //?}
+    }
+
     public static boolean usesLayerTestSkin() {
         return layerTestSkin;
     }
@@ -271,7 +329,7 @@ public final class ClientHarness {
             client.options.fov().set(54);
             client.options.gamma().set(1.0);
             client.options.bobView().set(false);
-            client.options.hideGui = true;
+            setHudHidden(client, true);
             for (PlayerModelPart part : PlayerModelPart.values()) {
                 //? if >=1.21.11 {
                 client.options.setModelPart(part, true);
@@ -299,9 +357,13 @@ public final class ClientHarness {
     }
 
     private static void waitTitle(Minecraft client) {
-        if (client.getOverlay() != null || !(client.screen instanceof TitleScreen)) {
+        //? if >=26.3 {
+        /*if (client.gui.overlay() != null || !(currentScreen(client) instanceof TitleScreen)) {
+        *///?} else {
+        if (client.getOverlay() != null || !(currentScreen(client) instanceof TitleScreen)) {
+        //?}
             if (ticks > 20 * 180) {
-                LOGGER.error("title screen did not appear, screen={}", client.screen);
+                LOGGER.error("title screen did not appear, screen={}", currentScreen(client));
                 state = State.STOP;
             }
             return;
@@ -311,7 +373,7 @@ public final class ClientHarness {
     }
 
     private static void waitWorld(Minecraft client) {
-        Screen screen = client.screen;
+        Screen screen = currentScreen(client);
         if (screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
             pressFirst(screen);
             return;
@@ -319,7 +381,7 @@ public final class ClientHarness {
         if (!(screen instanceof CreateWorldScreen create)) {
             if (ticks == 1) {
                 //? if >=1.21.11 {
-                CreateWorldScreen.openFresh(client, () -> client.setScreen(new TitleScreen()));
+                CreateWorldScreen.openFresh(client, () -> setScreen(client, new TitleScreen()));
                 //?} else {
                 CreateWorldScreen.openFresh(client, new TitleScreen());
                 //?}
@@ -362,11 +424,11 @@ public final class ClientHarness {
 
     private static void shots(Minecraft client) {
         if (client.player == null || client.level == null) {
-            if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
-                pressFirst(client.screen);
+            if (currentScreen(client) instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
+                pressFirst(currentScreen(client));
             }
             if (ticks > 20 * 180) {
-                LOGGER.error("world did not load, screen={}", client.screen);
+                LOGGER.error("world did not load, screen={}", currentScreen(client));
                 state = State.STOP;
             }
             return;
@@ -534,8 +596,8 @@ public final class ClientHarness {
     }
 
     private static void prepare(Minecraft client, Shot shot) {
-        client.setScreen(null);
-        client.options.hideGui = true;
+        setScreen(client, null);
+        setHudHidden(client, true);
         client.options.fov().set(54);
         client.options.gamma().set(1.0);
         client.options.bobView().set(false);
@@ -653,7 +715,7 @@ public final class ClientHarness {
         client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, net.minecraft.world.item.ItemStack.EMPTY);
         client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, net.minecraft.world.item.ItemStack.EMPTY);
         client.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET, net.minecraft.world.item.ItemStack.EMPTY);
-        client.options.hideGui = true;
+        setHudHidden(client, true);
         client.options.bobView().set(false);
         if (!layerTestSkin) {
             ClientSettings.get().skinLayers = false;
@@ -664,10 +726,7 @@ public final class ClientHarness {
         boolean close = shot.name.contains("close");
         boolean three = shot.name.contains("three-quarter");
         client.options.gamma().set(night ? 0.0 : 1.0);
-        var server = client.getSingleplayerServer();
-        if (server != null) {
-            server.overworld().setDayTime(night ? 18000L : 6000L);
-        }
+        setStudioTime(client, night ? 18000L : 6000L);
         if (client.player.tickCount % 10 == 0) {
             client.player.connection.sendCommand("kill @e[type=!player]");
         }
@@ -737,7 +796,7 @@ public final class ClientHarness {
         client.player.getAbilities().mayfly = true;
         client.player.getAbilities().flying = fly;
         client.options.fov().set(wide ? 50 : 54);
-        client.options.hideGui = true;
+        setHudHidden(client, true);
         client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
         client.player.setYRot(180f);
         client.player.setYHeadRot(180f);
@@ -807,10 +866,7 @@ public final class ClientHarness {
             boolean three = shot.name.contains("three-quarter");
             float dist = zoom ? 1.12f : 1.28f;
             client.options.fov().set(zoom ? 30 : 40);
-            var server = client.getSingleplayerServer();
-            if (server != null) {
-                server.overworld().setDayTime(18000L);
-            }
+            setStudioTime(client, 18000L);
             client.options.gamma().set(0.0);
             if (side) {
                 lockX = 0.5 - dist;
@@ -853,7 +909,7 @@ public final class ClientHarness {
         client.player.getAbilities().flying = false;
         client.options.fov().set(50);
         if (side) {
-            client.options.hideGui = true;
+            setHudHidden(client, true);
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             portraitLock = true;
             // West of the player, looking east. Profile, so head depth and chick depth share the screen width.
@@ -866,13 +922,13 @@ public final class ClientHarness {
         }
         if (shot.name.equals("chick-chest-asleep")) {
             if (!client.player.isSleeping()) {
-                client.player.startSleepInBed(new BlockPos(1, 101, 0));
+                sleepInStudioBed(client.player);
             }
             clearSleepFade(client.player);
-            if (client.screen != null) {
-                client.setScreen(null);
+            if (currentScreen(client) != null) {
+                setScreen(client, null);
             }
-            client.options.hideGui = true;
+            setHudHidden(client, true);
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             portraitLock = true;
             lockX = 1.15;
@@ -884,15 +940,15 @@ public final class ClientHarness {
         }
         if (shot.name.equals("chick-to-chest")) {
             if (filmIndex >= 8 && !client.player.isSleeping()) {
-                client.player.startSleepInBed(new BlockPos(1, 101, 0));
+                sleepInStudioBed(client.player);
             }
             if (client.player.isSleeping()) {
                 clearSleepFade(client.player);
-                if (client.screen != null) {
-                    client.setScreen(null);
+                if (currentScreen(client) != null) {
+                    setScreen(client, null);
                 }
             }
-            client.options.hideGui = true;
+            setHudHidden(client, true);
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             portraitLock = true;
             lockX = 0.5;
@@ -904,13 +960,13 @@ public final class ClientHarness {
         }
         if (shot.name.contains("sleep")) {
             if (!client.player.isSleeping()) {
-                client.player.startSleepInBed(new BlockPos(1, 101, 0));
+                sleepInStudioBed(client.player);
             }
             clearSleepFade(client.player);
-            if (client.screen != null) {
-                client.setScreen(null);
+            if (currentScreen(client) != null) {
+                setScreen(client, null);
             }
-            client.options.hideGui = true;
+            setHudHidden(client, true);
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             // Bed sits on the platform: foot (0,101,0), head (1,101,0). Close side view, same field of view as the standing portraits.
             portraitLock = true;
@@ -948,16 +1004,16 @@ public final class ClientHarness {
     }
 
     private static boolean chickReady(Minecraft client, Shot shot) {
-        if (shot.name.equals("chick-chest-asleep") && (!client.player.isSleeping() || client.screen != null || !Chick.asleep())) {
+        if (shot.name.equals("chick-chest-asleep") && (!client.player.isSleeping() || currentScreen(client) != null || !Chick.asleep())) {
             if (ticks - settledAt > 20 * 15) {
-                LOGGER.error("chick never settled on the chest, sleeping={} screen={}", client.player.isSleeping(), client.screen);
+                LOGGER.error("chick never settled on the chest, sleeping={} screen={}", client.player.isSleeping(), currentScreen(client));
                 state = State.STOP;
             }
             return false;
         }
-        if (shot.name.contains("sleep") && (!client.player.isSleeping() || client.screen != null)) {
+        if (shot.name.contains("sleep") && (!client.player.isSleeping() || currentScreen(client) != null)) {
             if (ticks - settledAt > 20 * 12) {
-                LOGGER.error("player never slept, y={} screen={}", client.player.getY(), client.screen);
+                LOGGER.error("player never slept, y={} screen={}", client.player.getY(), currentScreen(client));
                 state = State.STOP;
             }
             return false;
@@ -1012,7 +1068,7 @@ public final class ClientHarness {
         if (shotQueued) {
             Path path = chickFrame(shot.name, filmIndex);
             try {
-                if (Files.size(path) > 1000L) {
+                if (shotWritten(path)) {
                     shotQueued = false;
                     filmIndex++;
                     if (filmIndex >= frames) {
@@ -1038,12 +1094,16 @@ public final class ClientHarness {
             state = State.STOP;
             return;
         }
-        //? if >=1.21.11 {
+        //? if >=26.3 {
+        /*requestShot(client, path);
+        *///?}
+        //? if >=1.21.11 && <26.3 {
         Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
-        //?} else {
-        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
-        writeImage(path, image);
         //?}
+        //? if <1.21.11 {
+        /*NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        *///?}
     }
 
     private static Path chickFrame(String name, int index) {
@@ -1083,7 +1143,7 @@ public final class ClientHarness {
         boolean head = pairShot == 0;
         portraitOrbit = head ? 0f : 36f;
         client.options.fov().set(50);
-        client.options.hideGui = true;
+        setHudHidden(client, true);
         Chick.hold(head ? "sit" : "idle", head ? 0.9f : 0.5f);
         if (ticks % 20 == 0) {
             client.player.connection.sendCommand("tp @s 0.5 90 0.5 180 0");
@@ -1235,7 +1295,7 @@ public final class ClientHarness {
             if (shotQueued) {
                 Path path = filmFrame(filmIndex);
                 try {
-                    if (Files.size(path) > 1000L) {
+                    if (shotWritten(path)) {
                         shotQueued = false;
                         filmIndex++;
                         LOGGER.info("flap frame {} at phase {}", filmIndex, phase);
@@ -1262,12 +1322,16 @@ public final class ClientHarness {
             state = State.STOP;
             return;
         }
-        //? if >=1.21.11 {
+        //? if >=26.3 {
+        /*requestShot(client, path);
+        *///?}
+        //? if >=1.21.11 && <26.3 {
         Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
-        //?} else {
-        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
-        writeImage(path, image);
         //?}
+        //? if <1.21.11 {
+        /*NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        *///?}
     }
 
     private static Path filmFrame(int index) {
@@ -1300,7 +1364,7 @@ public final class ClientHarness {
         portraitDrop = 0.4f;
         portraitOrbit = 0f;
         client.options.fov().set(54);
-        client.options.hideGui = true;
+        setHudHidden(client, true);
         if (ticks == 1 || ticks % 10 == 0) {
             if (client.player.isSleeping()) {
                 client.player.stopSleeping();
@@ -1338,13 +1402,13 @@ public final class ClientHarness {
         if (!wardrobeWorldReady(client)) {
             return;
         }
-        client.options.hideGui = true;
+        setHudHidden(client, true);
         afterGui = true;
         standInWardrobe(client);
         if (client.options.guiScale().get() != 1) {
-            client.setScreen(null);
+            setScreen(client, null);
             client.options.guiScale().set(1);
-            client.resizeDisplay();
+            resizeGui(client);
             screenAt = -1;
             return;
         }
@@ -1354,10 +1418,10 @@ public final class ClientHarness {
         })) {
             return;
         }
-        if (!(client.screen instanceof WardrobeScreen)) {
+        if (!(currentScreen(client) instanceof WardrobeScreen)) {
             resetLegacyWardrobe();
             clearWardrobeArmour(client);
-            client.setScreen(WardrobeScreen.legacyCapture());
+            setScreen(client, WardrobeScreen.legacyCapture());
             screenAt = ticks;
             return;
         }
@@ -1381,12 +1445,12 @@ public final class ClientHarness {
         if (!wardrobeWorldReady(client)) {
             return;
         }
-        client.options.hideGui = false;
+        setHudHidden(client, false);
         afterGui = true;
         standInWardrobe(client);
         if (preStudioSettings == null) {
             installStudioSettings();
-            client.setScreen(null);
+            setScreen(client, null);
             client.setCameraEntity(client.player);
             client.options.setCameraType(CameraType.FIRST_PERSON);
             client.player.getAbilities().flying = false;
@@ -1438,25 +1502,25 @@ public final class ClientHarness {
         settings.setTint(Slot.HAT, shot.colour() ? 0x7BBFFF : TintColor.DEFAULT);
         clearWardrobeArmour(client);
 
-        client.setScreen(null);
+        setScreen(client, null);
         client.options.guiScale().set(shot.scale());
         // Minecraft caps scale 4 below a 1280 × 960 framebuffer.
         if (shot.scale() == 4 && (client.getWindow().getWidth() < 1280 || client.getWindow().getHeight() < 960)) {
             client.getWindow().setWindowed(1920, 1080);
         }
-        client.resizeDisplay();
-        client.setScreen(WardrobeScreen.studioCapture(shot.view(), shot.slot(), shot.colour(), shot.previewYaw()));
+        resizeGui(client);
+        setScreen(client, WardrobeScreen.studioCapture(shot.view(), shot.slot(), shot.colour(), shot.previewYaw()));
     }
 
     private static boolean wardrobeWorldReady(Minecraft client) {
         if (client.player != null && client.level != null) {
             return true;
         }
-        if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
-            pressFirst(client.screen);
+        if (currentScreen(client) instanceof net.minecraft.client.gui.screens.ConfirmScreen) {
+            pressFirst(currentScreen(client));
         }
         if (ticks > 20 * 180) {
-            LOGGER.error("wardrobe world did not load, screen={}", client.screen);
+            LOGGER.error("wardrobe world did not load, screen={}", currentScreen(client));
             state = State.STOP;
         }
         return false;
@@ -1477,7 +1541,7 @@ public final class ClientHarness {
             return true;
         }
         if (ticks == 1 || ticks % 10 == 0) {
-            client.setScreen(null);
+            setScreen(client, null);
             if (!studio) {
                 studio = true;
                 client.player.connection.sendCommand("time set 6000");
@@ -1624,7 +1688,7 @@ public final class ClientHarness {
             return;
         }
         try {
-            if (Files.size(path) > 1000L) {
+            if (shotWritten(path)) {
                 next.run();
             } else if (ticks > 20 * 20) {
                 LOGGER.error("screenshot {} was not written", path);
@@ -1636,6 +1700,14 @@ public final class ClientHarness {
                 state = State.STOP;
             }
         }
+    }
+
+    private static boolean shotWritten(Path path) throws IOException {
+        //? if >=26.3 {
+        /*return path.equals(writtenShot);
+        *///?} else {
+        return Files.size(path) > 1000L;
+        //?}
     }
 
     private static void shootAndLog(Minecraft client, String name, Runnable next) {
@@ -1738,6 +1810,10 @@ public final class ClientHarness {
     }
 
     private static void requestShot(Minecraft client, Path path) {
+        //? if >=26.3 {
+        /*awaitingShotWrite = path;
+        writtenShot = null;
+        *///?}
         if (afterGui) {
             pendingGui = path;
             return;
@@ -1746,19 +1822,28 @@ public final class ClientHarness {
             pendingShot = path;
             return;
         }
-        //? if >=1.21.11 {
+        //? if >=26.3 {
+        /*writeTargetNow(client, path);
+        *///?}
+        //? if >=1.21.11 && <26.3 {
         if ("forge".equals(System.getProperty("quarkos_cosmetics.loader"))) {
             writeTargetNow(client, path);
             return;
         }
         Screenshot.takeScreenshot(client.getMainRenderTarget(), image -> writeImage(path, image));
-        //?} else {
-        NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
-        writeImage(path, image);
         //?}
+        //? if <1.21.11 {
+        /*NativeImage image = Screenshot.takeScreenshot(client.getMainRenderTarget());
+        writeImage(path, image);
+        *///?}
     }
 
-    //? if >=1.21.11 {
+    //? if >=26.3 {
+    /*private static void writeTargetNow(Minecraft client, Path path) {
+        Screenshot.takeScreenshot(client.gameRenderer.mainRenderTarget(), image -> writeImage(path, image));
+    }
+    *///?}
+    //? if >=1.21.11 && <26.3 {
     /** Read the main color texture on this thread, before the frame moves on. */
     private static void writeTargetNow(Minecraft client, Path path) {
         var target = client.getMainRenderTarget();
