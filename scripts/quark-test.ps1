@@ -167,7 +167,9 @@ Remove-Item $stopLock -ErrorAction SilentlyContinue
 try {
     $results["commit"] = (git rev-parse --short HEAD)
     if (-not $SkipTests) { Step "junit" @(":${TestVersion}:test") }
-    if (-not $SkipCompile) { Step "compile" ($CompileVersions | ForEach-Object { ":${_}:compileJava" }) }
+    # One Gradle run per version: Stonecutter's branch sync tasks trip Gradle's implicit-dependency
+    # check when two Forge versions compile in the same invocation.
+    if (-not $SkipCompile) { foreach ($v in $CompileVersions) { Step ("compile-" + ($v -replace ':', '-')) @(":${v}:compileJava") } }
     if (-not $SkipJar) {
         Step "jar" @(":${Version}:remapJar")
         $jar = Get-ChildItem "$Repo\versions\$Version\build\libs\*.jar" -ErrorAction SilentlyContinue |
