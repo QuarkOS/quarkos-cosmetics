@@ -218,7 +218,6 @@ try {
         } else { $results["harness"] = "SKIPPED (lock busy)" }
     }
 } finally {
-    & "$Repo\gradlew.bat" --stop *> $null
     Stop-RepoJava
     Drop-McLock
     New-Item -ItemType File -Force -Path $stopLock | Out-Null
