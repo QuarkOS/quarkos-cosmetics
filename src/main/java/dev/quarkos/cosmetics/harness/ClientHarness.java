@@ -10,6 +10,7 @@ import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.model.ModelException;
 import dev.quarkos.cosmetics.model.Slot;
 import dev.quarkos.cosmetics.render.Chick;
+import dev.quarkos.cosmetics.render.JackOLanternMask;
 import dev.quarkos.cosmetics.render.KiteWings;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.CameraType;
@@ -214,7 +215,13 @@ public final class ClientHarness {
             skinPreview("skin-preview-90", 90f, true),
             skinPreview("skin-preview-180", 180f, true),
             skinPreview("skin-preview-270", 270f, true),
-            skinPreview("skin-preview-off-0", 0f, false)
+            skinPreview("skin-preview-off-0", 0f, false),
+            maskPreview("mask-preview-0", 0f),
+            maskPreview("mask-preview-90", 90f),
+            maskPreview("mask-preview-180", 180f),
+            maskPreview("mask-preview-270", 270f),
+            maskCard("mask-card-zoom", false),
+            maskCard("mask-card-zoom-equipped", true)
     );
 
     private static List<Shot> active;
@@ -1491,17 +1498,18 @@ public final class ClientHarness {
 
     private static void openUiShot(Minecraft client, UiShot shot) {
         ClientSettings settings = ClientSettings.get();
-        layerTestSkin = shot.previewYaw() != null;
-        if (layerTestSkin) {
-            for (Slot slot : Slot.values()) {
-                settings.equip(slot, "");
-            }
+        layerTestSkin = shot.layerTestSkin();
+        for (Slot slot : Slot.values()) {
+            settings.equip(slot, "");
         }
         settings.skinLayers = shot.skinLayers();
         settings.equip(Slot.HAT, shot.hat());
         settings.setTint(Slot.HAT, shot.colour() ? 0x7BBFFF : TintColor.DEFAULT);
         clearWardrobeArmour(client);
 
+        // A filtered run can enter the wardrobe straight from a night portrait.
+        setStudioTime(client, 6000L);
+        client.options.gamma().set(1.0);
         setScreen(client, null);
         client.options.guiScale().set(shot.scale());
         // Minecraft caps scale 4 below a 1280 × 960 framebuffer.
@@ -1509,7 +1517,8 @@ public final class ClientHarness {
             client.getWindow().setWindowed(1920, 1080);
         }
         resizeGui(client);
-        setScreen(client, WardrobeScreen.studioCapture(shot.view(), shot.slot(), shot.colour(), shot.previewYaw()));
+        setScreen(client, WardrobeScreen.studioCapture(
+                shot.view(), shot.slot(), shot.colour(), shot.previewYaw(), shot.cardToReveal()));
     }
 
     private static boolean wardrobeWorldReady(Minecraft client) {
@@ -1969,13 +1978,23 @@ public final class ClientHarness {
     }
 
     private static UiShot skinPreview(String name, float yaw, boolean skinLayers) {
-        return new UiShot(name, WardrobeScreen.View.SETTINGS, Slot.HAT, "", 2, false, yaw, skinLayers);
+        return new UiShot(name, WardrobeScreen.View.SETTINGS, Slot.HAT, "", 2, false, yaw, true, skinLayers, null);
+    }
+
+    private static UiShot maskPreview(String name, float yaw) {
+        return new UiShot(name, WardrobeScreen.View.WARDROBE, Slot.HAT, JackOLanternMask.ID, 2, false,
+                yaw, false, true, null);
+    }
+
+    private static UiShot maskCard(String name, boolean equipped) {
+        return new UiShot(name, WardrobeScreen.View.WARDROBE, Slot.HAT, equipped ? JackOLanternMask.ID : "", 4, false,
+                null, false, true, JackOLanternMask.ID);
     }
 
     private record UiShot(String name, WardrobeScreen.View view, Slot slot, String hat, int scale, boolean colour,
-                          Float previewYaw, boolean skinLayers) {
+                          Float previewYaw, boolean layerTestSkin, boolean skinLayers, String cardToReveal) {
         private UiShot(String name, WardrobeScreen.View view, Slot slot, String hat, int scale, boolean colour) {
-            this(name, view, slot, hat, scale, colour, null, true);
+            this(name, view, slot, hat, scale, colour, null, false, true, null);
         }
     }
 }

@@ -86,6 +86,7 @@ public final class WardrobeScreen extends Screen {
     private final PlayerPreview preview;
     private final boolean studioGallery;
     private final boolean suppressHover;
+    private String studioCardId;
     private final Map<Slot, Integer> wardrobeScroll = new EnumMap<>(Slot.class);
     private final Map<Slot, Integer> galleryScroll = new EnumMap<>(Slot.class);
 
@@ -129,9 +130,11 @@ public final class WardrobeScreen extends Screen {
         preview = new PlayerPreview(studio, legacy);
     }
 
-    /** UI captures render with an off-screen pointer and use an offline catalog sample in Gallery. */
-    public static WardrobeScreen studioCapture(View view, Slot slot, boolean colourOpen, Float previewYaw) {
+    /** UI captures suppress hover, use an offline Gallery sample, and can reveal a specific wardrobe card. */
+    public static WardrobeScreen studioCapture(View view, Slot slot, boolean colourOpen, Float previewYaw,
+                                                String cardToReveal) {
         WardrobeScreen screen = new WardrobeScreen(null, view, slot, colourOpen, true, false);
+        screen.studioCardId = cardToReveal;
         if (previewYaw != null) {
             screen.preview.setYaw(previewYaw);
         }
@@ -463,13 +466,13 @@ public final class WardrobeScreen extends Screen {
             metrics = GridMetrics.fit(bounds, entries.size(), minCardWidth, cardHeight, columns);
         }
         List<FlatButton> buttons = new ArrayList<>();
-        int equippedIndex = -1;
+        int revealIndex = -1;
         for (int i = 0; i < entries.size(); i++) {
             Card card = entries.get(i);
             boolean worn = card.id().equals(equipped) || !isGallery && Chick.ID.equals(card.id())
                     && equipped.equals(ClientSettings.get().chickGallery.get(slot));
-            if (worn) {
-                equippedIndex = i;
+            if (studioCardId == null ? worn : card.id().equals(studioCardId)) {
+                revealIndex = i;
             }
             FlatButton button = new FlatButton(metrics.card(i, 0), Component.literal(worn ? card.name() + ", selected" : card.name()),
                     pressed -> chooseCard(card, isGallery),
@@ -482,8 +485,8 @@ public final class WardrobeScreen extends Screen {
         gridView = view;
         Map<Slot, Integer> positions = scrollPositions(view);
         int row = positions.getOrDefault(slot, 0);
-        if (!isGallery && (revealEquipped || !positions.containsKey(slot))) {
-            row = metrics.reveal(equippedIndex, row);
+        if (!isGallery && (studioCardId != null || revealEquipped || !positions.containsKey(slot))) {
+            row = metrics.reveal(revealIndex, row);
             revealEquipped = false;
         }
         grid = new CardGrid(metrics, buttons, row);
