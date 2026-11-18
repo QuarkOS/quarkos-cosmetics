@@ -34,6 +34,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# "-File" passes "a,b" as one string; split list parameters ourselves.
+$CompileVersions = @($CompileVersions | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
 New-Item -ItemType Directory -Force -Path $OutDir, "$OutDir\screens", "$OutDir\logs" | Out-Null
