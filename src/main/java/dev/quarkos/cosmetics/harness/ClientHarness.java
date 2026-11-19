@@ -239,6 +239,7 @@ public final class ClientHarness {
     private static boolean modelEquipped;
     private static boolean modelVisibilityFailed;
     private static ModelStudio modelStudio;
+    private static ReleaseModelCapture.Frame releaseFrame;
     private static int modelCategory;
     private static int modelPage = 1;
     private static WardrobeScreen modelWardrobe;
@@ -373,7 +374,7 @@ public final class ClientHarness {
             }
         } catch (RuntimeException e) {
             LOGGER.error("cosmetics harness failed in {}", state, e);
-            if (state == State.MODEL_WARDROBE || state == State.SHOTS && shotIndex < activeShots().size()
+            if (ReleaseModelCapture.enabled() || state == State.MODEL_WARDROBE || state == State.SHOTS && shotIndex < activeShots().size()
                     && modelShot(activeShots().get(shotIndex))) {
                 blockatoFailure = "capture";
             }
@@ -473,7 +474,8 @@ public final class ClientHarness {
             return;
         }
         if (shotIndex >= activeShots().size()) {
-            state = shotFilter().isEmpty() || shotFilter().stream().anyMatch(name -> name.contains("two-client"))
+            state = ReleaseModelCapture.enabled() ? State.STOP
+                    : shotFilter().isEmpty() || shotFilter().stream().anyMatch(name -> name.contains("two-client"))
                     ? State.PAIR : wardrobeState();
             ticks = 0;
             shotQueued = false;
@@ -482,6 +484,7 @@ public final class ClientHarness {
             return;
         }
         Shot shot = activeShots().get(shotIndex);
+        releaseFrame = shot.release;
         boolean model = modelShot(shot);
         layerTestSkin = shot.name.startsWith("skin-world-");
         if ((layerTestSkin || model) && preStudioSettings == null) {
@@ -509,6 +512,15 @@ public final class ClientHarness {
         if (model) {
             if (!takingModelShots()) {
                 modelStudio = ModelStudio.begin(client);
+            }
+            if (releaseFrame != null) {
+                if (client.player.tickCount % 20 == 0) {
+                    setStudioTime(client, 6000L);
+                }
+                if (ticks - settledAt >= 3) {
+                    shootRelease(client, shot);
+                }
+                return;
             }
             if (ticks - settledAt >= 4) {
                 shootModel(client, shot);
@@ -578,6 +590,34 @@ public final class ClientHarness {
         }
     }
 
+    private static void shootRelease(Minecraft client, Shot shot) {
+        var capture = shot.release;
+        if (!shotQueued) {
+            equipShot(shot);
+            if (capture.equipped()) {
+                if (Chick.ID.equals(shot.id)) {
+                    ClientSettings.get().setChickPerch(shot.slot);
+                } else {
+                    ClientSettings.get().equip(shot.slot, shot.id);
+                }
+            }
+            if (capture.perch()) {
+                Chick.startPerchMeasurement(shot.slot);
+            }
+        }
+        shootAndLog(client, capture.path(), "RELEASE_FRAME_DONE", () -> {
+            if (capture.perch()) {
+                checkChickPerch(shot);
+            }
+            shotIndex++;
+            ticks = 0;
+            settledAt = 0;
+            if (shotIndex == activeShots().size()) {
+                LOGGER.info("RELEASE_CAPTURE_DONE frames={}", shotIndex);
+            }
+        });
+    }
+
     private static void shootModel(Minecraft client, Shot shot) {
         String baseline = "model-baselines/" + shot.name;
         if (!modelEquipped) {
@@ -620,11 +660,26 @@ public final class ClientHarness {
     }
 
     private static boolean modelShot(Shot shot) {
-        return shot.name.startsWith("model-");
+        return shot.release != null || shot.name.startsWith("model-");
     }
 
     public static boolean takingModelShots() {
         return modelStudio != null;
+    }
+
+    public static boolean releasePlate() {
+        return releaseFrame != null && releaseFrame.plate();
+    }
+
+    public static boolean releaseCaptureEnabled() {
+        return ReleaseModelCapture.enabled() && Boolean.getBoolean("quarkos_cosmetics.harness");
+    }
+
+    public static float releaseAge(float age) {
+        if (releaseFrame == null) {
+            return age;
+        }
+        return releaseFrame.action().isEmpty() ? releaseFrame.age() : 0;
     }
 
     private static List<Shot> modelShots() {
@@ -665,6 +720,12 @@ public final class ClientHarness {
 
     private static List<Shot> activeShots() {
         if (active == null) {
+            if (ReleaseModelCapture.enabled()) {
+                active = ReleaseModelCapture.prepare(shots()).stream()
+                        .map(frame -> new Shot(frame.path(), frame.slot(), frame.id(), true, false, frame.yaw(), false, frame))
+                        .toList();
+                return active;
+            }
             Set<String> names = shotFilter();
             List<Shot> selected = new ArrayList<>();
             SHOTS.stream().filter(shot -> names.isEmpty() || names.contains(shot.name())).forEach(selected::add);
@@ -722,6 +783,7 @@ public final class ClientHarness {
 
     private static void restoreStudioSettings() {
         layerTestSkin = false;
+        releaseFrame = null;
         if (takingModelShots()) {
             modelStudio.restore();
             modelStudio = null;
@@ -905,6 +967,16 @@ public final class ClientHarness {
         }
         if (modelShot(shot)) {
             boolean head = shot.slot.wornOnHead();
+            if (shot.release != null) {
+                var capture = shot.release;
+                bodyPose = capture.sneak() ? BodyPose.SNEAK : BodyPose.STAND;
+                if ("chick".equals(capture.source())) {
+                    Chick.hold(capture.clip(), capture.age() / 20f);
+                }
+                if ("wings".equals(capture.source()) && "flap".equals(capture.clip())) {
+                    client.player.setSprinting(true);
+                }
+            }
             float distance = head ? 3.4f : 2.95f;
             float drop = head ? 0.23f : 0.42f;
             float yaw = (shot.front ? 0f : 180f) + shot.orbit;
@@ -2015,6 +2087,10 @@ public final class ClientHarness {
         if (takingModelShots()) {
             faceStudio(player);
             player.setDeltaMovement(0.0, 0.0, 0.0);
+            if (releaseFrame != null && releaseFrame.sneak()) {
+                player.setShiftKeyDown(true);
+                player.setPose(net.minecraft.world.entity.Pose.CROUCHING);
+            }
             //? if <1.21.11 {
             /*player.walkAnimation.setSpeed(0f);
             player.walkAnimation.update(0f, 1f);
@@ -2256,7 +2332,11 @@ public final class ClientHarness {
         STOP
     }
 
-    private record Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film) {
+    private record Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film,
+                        ReleaseModelCapture.Frame release) {
+        private Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film) {
+            this(name, slot, id, front, spread, orbit, film, null);
+        }
     }
 
     private record ModelStudio(OptionInstance<CloudStatus> clouds, CloudStatus cloudStatus,

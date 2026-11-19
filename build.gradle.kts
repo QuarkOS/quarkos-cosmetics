@@ -55,7 +55,10 @@ loom {
     runConfigs.all {
         preferGradleTask = true
         generateRunConfig = true
-        runDirectory = if (sc.current.version == "1.21.11") {
+        val releaseGameDir = providers.gradleProperty("releaseGameDir").orNull
+        runDirectory = if (releaseGameDir != null) {
+            rootProject.file(releaseGameDir)
+        } else if (sc.current.version == "1.21.11") {
             rootProject.file("run")
         } else {
             rootProject.file("run/${sc.current.version}")
@@ -141,6 +144,9 @@ tasks {
             args("--width", if (wide) "1920" else "960", "--height", if (wide) "1080" else "540")
             // Same offline player as the other head shots, so the default skin does not change.
             args("--username", "Player546")
+        }
+        providers.gradleProperty("releasePlan").orNull?.let {
+            systemProperty("quarkos_cosmetics.releasePlan", it)
         }
         if (providers.gradleProperty("wardrobeOnly").orNull == "true") {
             systemProperty("quarkos_cosmetics.wardrobeOnly", "true")

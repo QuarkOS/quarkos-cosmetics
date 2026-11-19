@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.quarkos.cosmetics.config.ClientSettings;
 import dev.quarkos.cosmetics.config.TintColor;
+import dev.quarkos.cosmetics.harness.ClientHarness;
 import dev.quarkos.cosmetics.model.Worn;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.resources.Identifier;
@@ -64,6 +65,9 @@ public final class CosmeticDrawer {
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart root, ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
                                  List<Worn.Placement> placed, boolean wingsFlap, boolean self, boolean wardrobePreview) {
+        if (self && !wardrobePreview) {
+            age = ClientHarness.releaseAge(age);
+        }
         Function<Worn.Anchor, ModelPart> parts = anchor -> switch (anchor) {
             case HEAD -> head;
             case BODY -> body;

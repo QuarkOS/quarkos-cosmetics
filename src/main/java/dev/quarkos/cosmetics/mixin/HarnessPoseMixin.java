@@ -1,6 +1,7 @@
 package dev.quarkos.cosmetics.mixin;
 
 import net.minecraft.client.Minecraft;
+import dev.quarkos.cosmetics.harness.ClientHarness;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
@@ -42,6 +43,10 @@ public class HarnessPoseMixin {
         EntityRenderState state = ci.getReturnValue();
         if (!(state instanceof net.minecraft.client.renderer.entity.state.HumanoidRenderState human)) {
             return;
+        }
+        if (ClientHarness.releasePlate()) {
+            human.isInvisible = true;
+            human.isInvisibleToPlayer = true;
         }
         dev.quarkos.cosmetics.harness.ClientHarness.BodyPose mode = dev.quarkos.cosmetics.harness.ClientHarness.bodyPose;
         if (mode == dev.quarkos.cosmetics.harness.ClientHarness.BodyPose.SNEAK) {

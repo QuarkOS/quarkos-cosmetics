@@ -89,6 +89,7 @@ public final class JackOLanternMask {
             return;
         }
         int tick = Minecraft.getInstance().player == null ? 0 : Minecraft.getInstance().player.tickCount;
+        tick = (int) dev.quarkos.cosmetics.harness.ClientHarness.releaseAge(tick);
         pose.pushPose();
         head.translateAndRotate(pose);
         // Call order is outer-first. The vertex sees the pixel translate, then the

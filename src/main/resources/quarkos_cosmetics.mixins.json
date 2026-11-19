@@ -18,6 +18,7 @@
     "WardrobePreviewStateMixin",
     "HarnessPoseMixin",
     "HarnessSkinMixin",
+    "HarnessMouseMixin",
     "GuiCaptureMixin",
     "PoseStateMixin"
   ],
