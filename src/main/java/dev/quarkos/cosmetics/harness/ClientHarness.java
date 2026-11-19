@@ -504,7 +504,8 @@ public final class ClientHarness {
             // Sleep moves the player onto the bed before the platform exists. Wait until they are over the studio.
             boolean overStudio = Math.abs(client.player.getX() - 0.5) < 4.0 && Math.abs(client.player.getZ() - 0.5) < 4.0
                     && client.player.getY() > 90.0;
-            if (studio && overStudio && ticks > 40) {
+            int warmup = ReleaseModelCapture.enabled() ? 100 : 40;
+            if (studio && overStudio && ticks > warmup) {
                 settledAt = ticks;
                 LOGGER.info("studio ready at {},{},{}", client.player.getX(), client.player.getY(), client.player.getZ());
             } else if (ticks > 20 * 30) {
@@ -817,6 +818,15 @@ public final class ClientHarness {
             client.player.connection.sendCommand("fill -24 100 -24 24 100 24 white_concrete");
             client.player.connection.sendCommand("fill -24 101 -24 24 116 24 air");
             client.player.connection.sendCommand("fill -2 89 -2 2 89 2 barrier");
+            if (ReleaseModelCapture.enabled()) {
+                //? if >=26.3 {
+                /*client.player.connection.sendCommand("gamerule minecraft:advance_time false");
+                client.player.connection.sendCommand("gamerule minecraft:spawn_mobs false");
+                *///?} else {
+                client.player.connection.sendCommand("gamerule doDaylightCycle false");
+                client.player.connection.sendCommand("gamerule doMobSpawning false");
+                //?}
+            }
         }
         if (shot.name.equals("chick-to-chest")) {
             client.player.connection.sendCommand("tp @s -0.5 101 0.5 180 8");

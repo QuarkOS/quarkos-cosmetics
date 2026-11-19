@@ -49,7 +49,7 @@ class View:
             raise ValueError(f"Player silhouette missing in {camera['baseline']}")
         x0, y0, x1, y1 = actor_box
         self.head_width = (y1 - y0) / 4
-        if self.head_width < 20 or x1 - x0 > 2.2 * self.head_width:
+        if self.head_width < 20 or x1 - x0 > 2.2 * self.head_width and camera["pose"] == "stand":
             raise ValueError(f"Unexpected player silhouette {actor_box} in {camera['baseline']}")
         center = (x0 + x1) / 2
         crop = (max(0, int(center - self.head_width * 3.1)), max(0, int(y0 - self.head_width * 2.2)),

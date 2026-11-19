@@ -149,8 +149,10 @@ def make_plan(config, only):
                                "perch": item_id == "quarkos:chick" and name == "sit" and i == 0})
             model["clips"].append({**clip, "action": action, "camera": clip_camera, "ticks": ages,
                                    "frames": clip_frames, "compare_seam": isolated and mode == "loop"})
-    # The clean plates and unequipped players precede all equipped frames.
+    # Warm up the first camera before taking the references used in the report.
     frames.sort(key=lambda f: bool(f["id"]))
+    warmup = {**frames[0], "path": "warmup"}
+    frames.insert(0, warmup)
     paths = [f["path"] for f in frames]
     if len(paths) != len(set(paths)):
         raise ValueError("Duplicate capture path, check authored clip names")
