@@ -37,10 +37,15 @@ public sealed class CosmeticsHiddenJob : IDisposable {
     static extern IntPtr CreateDesktopW(string name, IntPtr device, IntPtr devMode, uint flags, uint access, IntPtr security);
     [DllImport("user32.dll")]
     static extern bool CloseDesktop(IntPtr desktop);
-    [DllImport("user32.dll", SetLastError = true)]
-    static extern IntPtr GetThreadDesktop(uint thread);
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern bool GetUserObjectInformationW(IntPtr obj, int index, StringBuilder buffer, uint size, out uint required);
+    delegate bool WindowCallback(IntPtr window, IntPtr arg);
+    [DllImport("user32.dll")]
+    static extern bool EnumDesktopWindows(IntPtr desktop, WindowCallback callback, IntPtr arg);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int GetWindowTextW(IntPtr window, StringBuilder title, int size);
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern bool CreateProcessW(string app, StringBuilder cmd, IntPtr processAttrs, IntPtr threadAttrs,
         bool inherit, uint flags, IntPtr environment, string cwd, ref StartupInfo startup, out ProcessInfo process);
@@ -50,6 +55,10 @@ public sealed class CosmeticsHiddenJob : IDisposable {
     static extern bool SetInformationJobObject(IntPtr job, int kind, ref ExtendedLimits data, uint length);
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll")]
+    static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool belongs);
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern uint ResumeThread(IntPtr thread);
     [DllImport("kernel32.dll")]
@@ -70,6 +79,11 @@ public sealed class CosmeticsHiddenJob : IDisposable {
         try {
             desktop = CreateDesktopW(desktopName, IntPtr.Zero, IntPtr.Zero, 0, 0x10000000, IntPtr.Zero);
             Check(desktop != IntPtr.Zero, "CreateDesktop");
+            var name = new StringBuilder(256);
+            uint required;
+            Check(GetUserObjectInformationW(desktop, 2, name, 512, out required), "GetUserObjectInformation");
+            Desktop = name.ToString();
+            if (Desktop != desktopName) throw new InvalidOperationException("Unexpected desktop " + Desktop);
             job = CreateJobObjectW(IntPtr.Zero, null);
             Check(job != IntPtr.Zero, "CreateJobObject");
             var limits = new ExtendedLimits();
@@ -87,13 +101,6 @@ public sealed class CosmeticsHiddenJob : IDisposable {
             Pid = child.pid;
             Check(AssignProcessToJobObject(job, process), "AssignProcessToJobObject");
             Check(ResumeThread(child.thread) != uint.MaxValue, "ResumeThread");
-            var name = new StringBuilder(256);
-            uint required;
-            IntPtr childDesktop = GetThreadDesktop(child.tid);
-            Check(childDesktop != IntPtr.Zero &&
-                  GetUserObjectInformationW(childDesktop, 2, name, 512, out required), "GetUserObjectInformation");
-            Desktop = name.ToString();
-            if (Desktop != desktopName) throw new InvalidOperationException("Child started on desktop " + Desktop);
         } catch {
             if (process != IntPtr.Zero) TerminateProcess(process, 1);
             Dispose();
@@ -107,6 +114,24 @@ public sealed class CosmeticsHiddenJob : IDisposable {
         uint result = WaitForSingleObject(process, milliseconds);
         Check(result == 0 || result == 258, "WaitForSingleObject");
         return result == 0;
+    }
+
+    public uint MinecraftWindowProcess() {
+        uint client = 0;
+        EnumDesktopWindows(desktop, (window, arg) => {
+            var name = new StringBuilder(128);
+            if (GetWindowTextW(window, name, name.Capacity) == 0 || !name.ToString().StartsWith("Minecraft")) return true;
+            uint pid;
+            GetWindowThreadProcessId(window, out pid);
+            IntPtr handle = OpenProcess(0x1000, false, pid);
+            if (handle == IntPtr.Zero) return true;
+            try {
+                bool belongs;
+                if (IsProcessInJob(handle, job, out belongs) && belongs) client = pid;
+            } finally { CloseHandle(handle); }
+            return client == 0;
+        }, IntPtr.Zero);
+        return client;
     }
 
     public uint ExitCode() {

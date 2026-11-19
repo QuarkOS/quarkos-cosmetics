@@ -229,12 +229,19 @@ function Invoke-GradleJob([string]$name, [string]$targets, [int]$minutes) {
     $job = [CosmeticsHiddenJob]::new($desktop, $line, $repo)
     Log "$name pid=$($job.Pid) desktop=$($job.Desktop)"
     $deadline = [DateTime]::UtcNow.AddMinutes($minutes)
+    $windowPid = 0
     try {
         while (-not $job.Wait(5000)) {
             Update-CaptureLock
+            if ($name -eq 'client' -and -not $windowPid) {
+                $windowPid = $job.MinecraftWindowProcess()
+                if ($windowPid) { Log "Minecraft window pid=$windowPid desktop=$($job.Desktop)" }
+            }
             if ([DateTime]::UtcNow -ge $deadline) { throw "$name timed out. See $log" }
         }
-        $job.ExitCode()
+        $code = $job.ExitCode()
+        if ($name -eq 'client' -and $code -eq 0 -and -not $windowPid) { throw 'Minecraft window was not observed on the private desktop.' }
+        $code
     } finally {
         $job.Dispose()
         Log "Closed $name job."

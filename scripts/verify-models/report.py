@@ -147,15 +147,14 @@ def motion(raw, output, model, views, config, reasons):
         columns = max(len(previews) for _, previews in strips)
         strip = Image.new("RGB", (columns * 144, len(strips) * 138), "#eeeae2")
         draw = ImageDraw.Draw(strip)
-        font = ImageDraw.load_default()
         for row, (clip, previews) in enumerate(strips):
             y = row * 138
-            draw.text((5, y + 3), f"{clip['name']} ({clip['mode']})", fill="black", font=font)
+            draw.text((5, y + 3), f"{clip['name']} ({clip['mode']})", fill="black")
             for col, (path, tick) in enumerate(zip(previews, clip["ticks"])):
                 with Image.open(output / path) as shot:
                     shot.thumbnail((140, 100), Image.Resampling.LANCZOS)
                     strip.paste(shot, (col * 144 + (144 - shot.width) // 2, y + 20))
-                draw.text((col * 144 + 5, y + 121), f"tick {tick:g}", fill="black", font=font)
+                draw.text((col * 144 + 5, y + 121), f"tick {tick:g}", fill="black")
         path = f"models/{slug(model['id'])}/animation.png"
         strip.save(output / path)
         return frames, path
