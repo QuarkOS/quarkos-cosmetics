@@ -67,7 +67,10 @@ The animation column lists the bone loops played during ordinary wear. The origi
 - The manifest has 53 eligible entries. It lists Bat Wings in addition to the 49 numbered batch models, the two Halloween models, and Kite Wings.
 - Emilio approved Reindeer Antlers v9. This integration uses the staged v6 headband and its texture.
 - The staged Christmas Lights Scarf glow mask contains a single frame. The attached metadata describes its timing, so that frame repeats. The Star Tree Topper Halo has a preview glow note and ships here with its staged unlit texture.
-- The candy cane bow, snowflake wings, gingerbread buddy, owl, scarf, and Santa hat use catalog placement offsets in authored model pixels. The bow and wings sit lower on the back to clear the head. The scarf band sits over the jacket with the bulbs below the head.
+- The candy cane bow, snowflake wings, gingerbread buddy, owl, and scarf use catalog placement offsets in authored model pixels. The bow and wings sit lower on the back to clear the head. The scarf band sits over the jacket with the bulbs below the head.
+- Santa's brim starts one pixel below the base head top. The brim uses that authored overlap to seat the hat. The star topper starts 1.5 pixels above the head and adds up to 0.5 pixels of bob. Blockato's proof uses that hover.
+- The pizza slice is a horizontal plane. Its tip points toward the drip over the brow. The slice appears thin at eye level. The straight front view shows both earmuff cups.
+- The Blockbench renderer binds animated PNGs as full strips under private texture IDs. It uses the same frame metadata for alpha checks and UV sampling. GeckoLib exposes frame-sized textures under the original resource IDs. [GeckoLib animated texture implementation](https://github.com/bernie-g/geckolib/blob/main/common/src/main/java/com/geckolib/renderer/texture/GeckoLibAnimatedTexture.java)
 
 ## Excluded
 
@@ -75,4 +78,8 @@ The animation column lists the bone loops played during ordinary wear. The origi
 
 ## Windows client captures
 
-The Windows test script accepts `-Only blockato` to capture the added models in one studio world. It writes one `model-<id>.png` per addition and `wardrobe-<slot>-page-<n>.png` for each category page. It reports `MODEL id=<id> loaded=true cubes=<n> anim=<clip|none> slot=<slot>` for every catalog entry. Multiple active clips appear joined with `+`. A failed load reports `loaded=false` and ends the harness with `HARNESS_FAILED model_load`. Look for `MODEL_SHOT_DONE`, `WARDROBE_PAGE_DONE`, and `HARNESS_DONE` to confirm the captures.
+The Windows test script accepts `-Only blockato` to capture the added models in one studio world. It writes a three-quarter `model-<id>.png` for each addition, a straight rear `model-<id>-back.png` for Back and Tail, and a straight front `model-<id>-front.png` for Ears. Back and Tail three-quarter shots also face the rear. Each shot has a matching no-cosmetic image under `model-baselines/`. The script also writes `wardrobe-<slot>-page-<n>.png` for each category page.
+
+The harness reports `MODEL id=<id> loaded=true cubes=<n> anim=<clip|none> slot=<slot>` for every catalog entry. Multiple active clips appear joined with `+`. A failed load reports `loaded=false` and ends the harness with `HARNESS_FAILED model_load`.
+
+Each equipped shot reports `MODEL_VISIBLE id=<id> changedPx=<n> bboxPx=<w>x<h> view=<front|back>`. The comparison measures the center two thirds of the frame. It counts pixels with an RGB channel difference of at least 8. At 1920×1080 the minimum is 69 pixels. The harness saves all model shots and reports `HARNESS_FAILED model_invisible` if any fall below the minimum. Look for `MODEL_SHOT_DONE`, `WARDROBE_PAGE_DONE`, and `HARNESS_DONE` on a passing run.

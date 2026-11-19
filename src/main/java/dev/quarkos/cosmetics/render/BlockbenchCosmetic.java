@@ -50,7 +50,10 @@ final class BlockbenchCosmetic {
         boolean legacy = item.entry().legacyBlockbench();
         boolean ghost = "quarkos:ghost_buddy".equals(resolved.id());
         Vec offset = item.entry().offset();
-        Identifier glow = item.glow() == null ? null : ModelLibrary.location(item.glow());
+        Identifier base = ModelLibrary.blockbenchTexture(item.base(), legacy);
+        Identifier glow = item.glow() == null ? null : ModelLibrary.blockbenchTexture(item.glow(), legacy);
+        TextureFrames baseFrames = item.base().frames();
+        TextureFrames glowFrames = item.glow() == null ? null : item.glow().frames();
 
         for (Root root : model.roots()) {
             pose.pushPose();
@@ -82,18 +85,18 @@ final class BlockbenchCosmetic {
             walk(root.bone(), model.idle(), new Matrix4f(pose.last().pose()), age, legacy, ghost, posed, passes);
             if (legacy) {
                 Pass pass = ghost ? Pass.TRANSLUCENT : Pass.CUTOUT_NO_CULL;
-                submitter.submit(pose, resolved.texture(), pass,
-                        consumer -> paint(consumer, posed, light, tint, item.frames(), 0, pass, true));
+                submitter.submit(pose, base, pass,
+                        consumer -> paint(consumer, posed, light, tint, baseFrames, 0, pass, true));
                 if (glow != null) {
                     submitter.submit(pose, glow, Pass.GLOW,
-                            consumer -> paint(consumer, posed, FULL_BRIGHT, TintColor.DEFAULT, item.glowFrames(), 0, Pass.GLOW, true));
+                            consumer -> paint(consumer, posed, FULL_BRIGHT, TintColor.DEFAULT, glowFrames, 0, Pass.GLOW, true));
                 }
             } else {
                 for (Pass pass : passes) {
                     boolean emissive = pass == Pass.EMISSIVE;
-                    submitter.submit(pose, emissive ? glow : resolved.texture(), pass, consumer ->
+                    submitter.submit(pose, emissive ? glow : base, pass, consumer ->
                             paint(consumer, posed, emissive ? FULL_BRIGHT : light, emissive ? TintColor.DEFAULT : tint,
-                                    emissive ? item.glowFrames() : item.frames(), age, pass, false));
+                                    emissive ? glowFrames : baseFrames, age, pass, false));
                 }
             }
             pose.popPose();

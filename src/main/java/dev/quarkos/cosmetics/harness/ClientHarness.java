@@ -14,6 +14,8 @@ import dev.quarkos.cosmetics.render.JackOLanternMask;
 import dev.quarkos.cosmetics.render.KiteWings;
 import dev.quarkos.cosmetics.render.ModelLibrary;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.CloudStatus;
+import net.minecraft.client.OptionInstance;
 import net.minecraft.core.BlockPos;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -234,6 +236,9 @@ public final class ClientHarness {
     private static boolean shotQueued;
     private static boolean perchCheckFailed;
     private static String blockatoFailure;
+    private static boolean modelEquipped;
+    private static boolean modelVisibilityFailed;
+    private static ModelStudio modelStudio;
     private static int modelCategory;
     private static int modelPage = 1;
     private static WardrobeScreen modelWardrobe;
@@ -477,8 +482,9 @@ public final class ClientHarness {
             return;
         }
         Shot shot = activeShots().get(shotIndex);
+        boolean model = modelShot(shot);
         layerTestSkin = shot.name.startsWith("skin-world-");
-        if ((layerTestSkin || modelShot(shot)) && preStudioSettings == null) {
+        if ((layerTestSkin || model) && preStudioSettings == null) {
             installStudioSettings();
         }
         frame(client, shot);
@@ -500,9 +506,12 @@ public final class ClientHarness {
             }
             return;
         }
-        if (modelShot(shot)) {
+        if (model) {
+            if (!takingModelShots()) {
+                modelStudio = ModelStudio.begin(client);
+            }
             if (ticks - settledAt >= 4) {
-                shootAndLog(client, shot.name, "MODEL_SHOT_DONE", ClientHarness::nextModelShot);
+                shootModel(client, shot);
             }
             return;
         }
@@ -569,7 +578,36 @@ public final class ClientHarness {
         }
     }
 
+    private static void shootModel(Minecraft client, Shot shot) {
+        String baseline = "model-baselines/" + shot.name;
+        if (!modelEquipped) {
+            shootAndLog(client, baseline, "MODEL_BASELINE_DONE", () -> {
+                ClientSettings.get().equip(shot.slot, shot.id);
+                modelEquipped = true;
+                settledAt = ticks;
+            });
+            return;
+        }
+        shootAndLog(client, shot.name, "MODEL_SHOT_DONE", () -> {
+            ModelVisibility visibility;
+            try {
+                visibility = ModelVisibility.compare(shots().resolve(baseline + ".png"), shots().resolve(shot.name + ".png"));
+            } catch (IOException ex) {
+                throw new IllegalStateException("Could not compare model screenshots for " + shot.name, ex);
+            }
+            LOGGER.info("MODEL_VISIBLE id={} changedPx={} bboxPx={}x{} view={}", shot.id, visibility.changedPx(),
+                    visibility.width(), visibility.height(), shot.front ? "front" : "back");
+            if (!visibility.visible()) {
+                modelVisibilityFailed = true;
+                LOGGER.error("Model shot {} changed {} pixels, expected at least {}", shot.name,
+                        visibility.changedPx(), visibility.minimumPx());
+            }
+            nextModelShot();
+        });
+    }
+
     private static void nextModelShot() {
+        modelEquipped = false;
         shotIndex++;
         ticks = 0;
         if (shotIndex < activeShots().size() && modelShot(activeShots().get(shotIndex))) {
@@ -585,15 +623,31 @@ public final class ClientHarness {
         return shot.name.startsWith("model-");
     }
 
+    public static boolean takingModelShots() {
+        return modelStudio != null;
+    }
+
     private static List<Shot> modelShots() {
-        return ModelLibrary.packed().stream().filter(ModelLibrary.Resolved::blockato).map(model -> {
+        List<Shot> shots = new ArrayList<>();
+        for (ModelLibrary.Resolved model : ModelLibrary.packed()) {
+            if (!model.blockato()) {
+                continue;
+            }
             String id = model.id().substring("quarkos:".length());
             Slot slot = model.slot();
-            boolean rear = slot == Slot.BACK || slot == Slot.TAIL || id.equals("gingerbread_buddy_shoulder")
-                    || id.equals("balloon_buddy");
-            float orbit = slot == Slot.SHOULDER_LEFT && !rear || slot == Slot.SHOULDER_RIGHT && rear ? -40f : 40f;
-            return new Shot("model-" + id, slot, model.id(), !rear, false, orbit, false);
-        }).toList();
+            boolean rearSlot = slot == Slot.BACK || slot == Slot.TAIL;
+            boolean rear = rearSlot || id.equals("gingerbread_buddy_shoulder") || id.equals("balloon_buddy");
+            boolean orbitLeft = slot == Slot.SHOULDER_LEFT && !rear || slot == Slot.SHOULDER_RIGHT && rear;
+            float orbit = orbitLeft ? -40f : 40f;
+            String name = "model-" + id;
+            shots.add(new Shot(name, slot, model.id(), !rear, false, orbit, false));
+            if (rearSlot) {
+                shots.add(new Shot(name + "-back", slot, model.id(), false, false, 0f, false));
+            } else if (slot == Slot.EARS) {
+                shots.add(new Shot(name + "-front", slot, model.id(), true, false, 0f, false));
+            }
+        }
+        return shots;
     }
 
     /** Candle frame named on a gif shot, as in {@code gif-day-front-f15}. */
@@ -614,7 +668,8 @@ public final class ClientHarness {
             Set<String> names = shotFilter();
             List<Shot> selected = new ArrayList<>();
             SHOTS.stream().filter(shot -> names.isEmpty() || names.contains(shot.name())).forEach(selected::add);
-            modelShots().stream().filter(shot -> names.isEmpty() || names.contains("blockato") || names.contains(shot.name()))
+            modelShots().stream().filter(shot -> names.isEmpty() || names.contains("blockato") || names.contains(shot.name())
+                            || names.contains("model-" + shot.id.substring("quarkos:".length())))
                     .forEach(selected::add);
             active = List.copyOf(selected);
             if (!names.isEmpty()) {
@@ -667,6 +722,10 @@ public final class ClientHarness {
 
     private static void restoreStudioSettings() {
         layerTestSkin = false;
+        if (takingModelShots()) {
+            modelStudio.restore();
+            modelStudio = null;
+        }
         if (preStudioSettings != null) {
             ClientSettings.install(preStudioSettings);
             preStudioSettings = null;
@@ -753,6 +812,9 @@ public final class ClientHarness {
             settings.categoryOn.put(slot, true);
             settings.equip(slot, "");
         }
+        if (modelShot(shot)) {
+            return;
+        }
         if (Chick.ID.equals(shot.id) && Chick.isPerch(shot.slot)) {
             settings.setChickPerch(shot.slot);
         } else {
@@ -817,14 +879,7 @@ public final class ClientHarness {
                 client.player.connection.sendCommand("kill @e[type=!player]");
             }
         }
-        client.player.setYRot(180f);
-        client.player.setYHeadRot(180f);
-        client.player.yRotO = 180f;
-        client.player.yHeadRotO = 180f;
-        client.player.setYBodyRot(180f);
-        client.player.yBodyRotO = 180f;
-        client.player.setXRot(0f);
-        client.player.xRotO = 0f;
+        faceStudio(client.player);
         client.setCameraEntity(client.player);
         if (zoom || close) {
             // Close sits on the pumpkin, a little above, so the carved walls read the way the GIF does.
@@ -848,13 +903,24 @@ public final class ClientHarness {
             }
             return;
         }
-        if (modelShot(shot) && shot.slot.wornOnHead()) {
-            portraitDistance = 3.4f;
-            portraitDrop = 0.23f;
-        } else {
-            portraitDistance = modelShot(shot) ? 2.95f : 2.55f;
-            portraitDrop = 0.42f;
+        if (modelShot(shot)) {
+            boolean head = shot.slot.wornOnHead();
+            float distance = head ? 3.4f : 2.95f;
+            float drop = head ? 0.23f : 0.42f;
+            float yaw = (shot.front ? 0f : 180f) + shot.orbit;
+            double rad = Math.toRadians(yaw);
+            portraitLock = true;
+            lockX = .5 + Math.sin(rad) * distance;
+            lockY = 102.62 - drop + (head ? 0.18 : 0);
+            lockZ = .5 - Math.cos(rad) * distance;
+            lockYaw = yaw;
+            lockPitch = head ? 5f : 0f;
+            client.options.fov().set(54);
+            client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
+            return;
         }
+        portraitDistance = 2.55f;
+        portraitDrop = 0.42f;
         portraitOrbit = shot.orbit;
         client.options.fov().set(54);
         client.options.setCameraType(shot.front ? CameraType.THIRD_PERSON_FRONT : CameraType.THIRD_PERSON_BACK);
@@ -1946,6 +2012,15 @@ public final class ClientHarness {
     }
 
     public static void holdBody(net.minecraft.world.entity.player.Player player) {
+        if (takingModelShots()) {
+            faceStudio(player);
+            player.setDeltaMovement(0.0, 0.0, 0.0);
+            //? if <1.21.11 {
+            /*player.walkAnimation.setSpeed(0f);
+            player.walkAnimation.update(0f, 1f);
+            *///?}
+            return;
+        }
         if (bodyPose == BodyPose.STAND) {
             return;
         }
@@ -1982,6 +2057,17 @@ public final class ClientHarness {
         player.startFallFlying();
     }
 
+    private static void faceStudio(net.minecraft.world.entity.player.Player player) {
+        player.setYRot(180f);
+        player.yRotO = 180f;
+        player.setYHeadRot(180f);
+        player.yHeadRotO = 180f;
+        player.setYBodyRot(180f);
+        player.yBodyRotO = 180f;
+        player.setXRot(0f);
+        player.xRotO = 0f;
+    }
+
     public static void capturePending() {
         Path path = pendingShot;
         if (path == null) {
@@ -2006,7 +2092,7 @@ public final class ClientHarness {
             pendingGui = path;
             return;
         }
-        if (frameEndShots) {
+        if (frameEndShots || takingModelShots()) {
             pendingShot = path;
             return;
         }
@@ -2088,6 +2174,10 @@ public final class ClientHarness {
     private static void stop(Minecraft client) {
         if (ticks > 10) {
             restoreStudioSettings();
+            if (modelVisibilityFailed) {
+                LOGGER.error("HARNESS_FAILED model_invisible");
+                throw new AssertionError("Model visibility check failed. See MODEL_VISIBLE in the harness log.");
+            }
             if (perchCheckFailed) {
                 LOGGER.error("HARNESS_FAILED chick_perch");
                 throw new AssertionError("Chick perch check failed. See CHICK_PERCH in the harness log.");
@@ -2167,6 +2257,23 @@ public final class ClientHarness {
     }
 
     private record Shot(String name, Slot slot, String id, boolean front, boolean spread, float orbit, boolean film) {
+    }
+
+    private record ModelStudio(OptionInstance<CloudStatus> clouds, CloudStatus cloudStatus,
+                               OptionInstance<Boolean> entityShadows, boolean shadowsEnabled) {
+        static ModelStudio begin(Minecraft client) {
+            var clouds = client.options.cloudStatus();
+            var shadows = client.options.entityShadows();
+            var studio = new ModelStudio(clouds, clouds.get(), shadows, shadows.get());
+            clouds.set(CloudStatus.OFF);
+            shadows.set(false);
+            return studio;
+        }
+
+        void restore() {
+            clouds.set(cloudStatus);
+            entityShadows.set(shadowsEnabled);
+        }
     }
 
     private static UiShot skinPreview(String name, float yaw, boolean skinLayers) {

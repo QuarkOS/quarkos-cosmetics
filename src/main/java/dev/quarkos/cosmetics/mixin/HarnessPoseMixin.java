@@ -61,6 +61,10 @@ public class HarnessPoseMixin {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
             return;
         }
+        if (dev.quarkos.cosmetics.harness.ClientHarness.takingModelShots()) {
+            place(player, 0.5, 101.0, 0.5);
+            return;
+        }
         if ("1".equals(System.getProperty("quarkos_cosmetics.bed"))) {
             place(player, 0.5, 101.6875, 2.5);
             player.setDeltaMovement(0.0, 0.0, 0.0);
@@ -115,6 +119,10 @@ public class HarnessPoseMixin {
 
     private static void snap(Player player) {
         if (!Boolean.getBoolean("quarkos_cosmetics.harness")) {
+            return;
+        }
+        if (dev.quarkos.cosmetics.harness.ClientHarness.takingModelShots()) {
+            place(player, 0.5, 101.0, 0.5);
             return;
         }
         if ("1".equals(System.getProperty("quarkos_cosmetics.bed"))) {

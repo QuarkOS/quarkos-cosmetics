@@ -55,4 +55,8 @@ record TextureFrames(int width, int height, int frameWidth, int frameHeight, Lis
         }
         throw new IllegalStateException("texture has no frame at " + ageTicks);
     }
+
+    boolean usesStrip() {
+        return frameWidth != width || frameHeight != height;
+    }
 }

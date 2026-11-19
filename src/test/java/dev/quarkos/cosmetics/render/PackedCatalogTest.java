@@ -23,7 +23,7 @@ class PackedCatalogTest {
             assertEquals(item.entry().slot(), Slot.parse(result.slot()).orElseThrow());
             slots.add(item.entry().slot());
             assertTrue(item.cubes() > 0, result.id());
-            assertTrue(item.frames().width() > 0 && item.frames().height() > 0, result.id());
+            assertTrue(item.base().frames().width() > 0 && item.base().frames().height() > 0, result.id());
             if (item.blockbench() != null) {
                 assertTrue(item.blockbench().roots().stream().map(BlockbenchModel.Root::bone)
                         .flatMap(PackedCatalogTest::faces).findAny().isPresent(), result.id());
@@ -54,12 +54,25 @@ class PackedCatalogTest {
         assertTrue(faces.stream().anyMatch(face -> !face.translucent()));
 
         PackedCatalog.Item core = item(results, "energy_core_chest");
-        assertEquals(0, core.frames().at(0).y());
-        assertEquals(64, core.frames().at(2).y());
-        assertEquals(core.frames().at(39), core.glowFrames().at(39));
-        assertEquals(0, core.frames().at(40).y());
+        TextureFrames base = core.base().frames();
+        TextureFrames glow = core.glow().frames();
+        assertTrue(base.usesStrip() && glow.usesStrip());
+        assertEquals(0, base.at(0).y());
+        assertEquals(64, base.at(2).y());
+        assertEquals(base.at(39), glow.at(39));
+        assertEquals(0, base.at(40).y());
         assertTrue(core.blockbench().roots().stream().map(BlockbenchModel.Root::bone)
                 .flatMap(PackedCatalogTest::faces).anyMatch(BlockbenchModel.Face::glowing));
+    }
+
+    @Test
+    void pizzaWedgePointsTowardItsFrontDrip() throws Exception {
+        var pizza = item(PackedCatalog.load(PackedCatalogTest::resource), "pizza_slice_hat");
+        var wedge = pizza.blockbench().roots().getFirst().bone().children().getFirst().cubes().getFirst();
+        var top = wedge.faces().get(BlockbenchModel.Side.UP);
+        // The emitted top quad starts at the back (z=max). The crust is at texture row zero.
+        assertEquals(0f, top.v0());
+        assertEquals(9f / 64f, top.v1());
     }
 
     @Test

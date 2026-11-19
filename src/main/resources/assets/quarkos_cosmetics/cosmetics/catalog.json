@@ -123,12 +123,7 @@
       "slot": "hat",
       "texture": "textures/cosmetics/santa_hat.png",
       "model": "cosmetics/blockato/santa_hat.bbmodel",
-      "marker": "E6372D",
-      "model_offset": [
-        0,
-        2.05,
-        0
-      ]
+      "marker": "E6372D"
     },
     {
       "id": "quarkos:snowflake_wings",

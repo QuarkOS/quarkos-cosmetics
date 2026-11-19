@@ -28,6 +28,9 @@ public class GuiCaptureMixin {
     @Inject(method = "render", at = @At("TAIL"))
     private void quarkos$afterGui(DeltaTracker tracker, boolean renderLevel, CallbackInfo ci) {
         ClientHarness.captureGuiPending();
+        //? if <1.21.11 {
+        /*ClientHarness.capturePending();
+        *///?}
     }
     //?}
 }

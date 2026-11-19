@@ -170,7 +170,11 @@ record BlockbenchModel(List<Root> roots, List<Clip> idle, int cubes) {
             if (!legacy && (u0 == u1 || v0 == v1 || !hasArea(side, size))) {
                 continue;
             }
-            Face coords = new Face(u0 / width, v0 / height, u1 / width, v1 / height, false, false);
+            // Blockbench starts the UV rectangle at the opposite edge of our quad.
+            boolean flipV = !legacy && (side == Side.UP || side == Side.DOWN);
+            boolean flipU = !legacy && !flipV;
+            Face coords = new Face((flipU ? u1 : u0) / width, (flipV ? v1 : v0) / height,
+                    (flipU ? u0 : u1) / width, (flipV ? v0 : v1) / height, false, false);
             int alpha = legacy ? 0 : alpha(texture, frames, coords);
             if (!legacy && alpha == 0) {
                 continue;

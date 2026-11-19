@@ -12,14 +12,17 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class ModelLibrary {
     private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private static final Map<String, Resolved> PACKED = new LinkedHashMap<>();
     private static final Map<String, Resolved> GALLERY = new LinkedHashMap<>();
+    private static final Set<Identifier> PACKED_STRIPS = new HashSet<>();
     private static boolean loaded;
     private static List<PackedCatalog.Result> catalog = List.of();
 
@@ -59,6 +62,9 @@ public final class ModelLibrary {
     }
 
     public static void clearPacked() {
+        var textures = Minecraft.getInstance().getTextureManager();
+        PACKED_STRIPS.forEach(textures::release);
+        PACKED_STRIPS.clear();
         loaded = false;
         PACKED.clear();
         catalog = List.of();
@@ -99,7 +105,8 @@ public final class ModelLibrary {
         CosmeticModel.Texture texture = model.textures.get(0);
         Identifier location = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/gallery/" + id + ".png");
         register(location, texture.png());
-        Resolved resolved = new Resolved(id, name, description, slot, model, location, texture.width(), texture.height(), texture.png(), null);
+        Resolved resolved = new Resolved(id, name, description, slot, model, location,
+                texture.width(), texture.height(), texture.png(), null);
         synchronized (GALLERY) {
             GALLERY.put(id, resolved);
         }
@@ -127,9 +134,9 @@ public final class ModelLibrary {
                     continue;
                 }
                 PackedCatalog.Entry entry = item.entry();
+                PackedCatalog.Texture base = item.base();
                 PACKED.put(entry.id(), new Resolved(entry.id(), entry.name(), entry.description(), entry.slot(),
-                        item.packed(), location(entry.texture()), item.frames().width(), item.frames().height(),
-                        item.png(), item));
+                        item.packed(), location(base.path()), base.frames().width(), base.frames().height(), base.png(), item));
             }
         } catch (IOException | RuntimeException ex) {
             catalog = List.of(new PackedCatalog.Result("<catalog>", "none", null, ex.toString()));
@@ -137,18 +144,39 @@ public final class ModelLibrary {
         }
     }
 
+    static Identifier blockbenchTexture(PackedCatalog.Texture texture, boolean legacy) {
+        if (legacy || !texture.frames().usesStrip()) {
+            return location(texture.path());
+        }
+        // GeckoLib replaces a resource texture with one frame. These UVs address the full strip.
+        Identifier strip = location("dynamic/blockbench/" + texture.path());
+        if (!PACKED_STRIPS.contains(strip)) {
+            try {
+                uploadTexture(strip, texture.png());
+            } catch (IOException ex) {
+                throw new IllegalStateException("Could not upload Blockbench strip " + texture.path(), ex);
+            }
+            PACKED_STRIPS.add(strip);
+        }
+        return strip;
+    }
+
     public static void register(Identifier location, byte[] png) {
         try {
-            NativeImage image = NativeImage.read(new java.io.ByteArrayInputStream(png));
-            //? if >=1.21.11 {
-            DynamicTexture texture = new DynamicTexture(() -> location.toString(), image);
-            //?} else {
-            DynamicTexture texture = new DynamicTexture(image);
-            //?}
-            Minecraft.getInstance().getTextureManager().register(location, texture);
+            uploadTexture(location, png);
         } catch (IOException ignored) {
             // The cosmetic stays invisible until a valid PNG arrives.
         }
+    }
+
+    private static void uploadTexture(Identifier location, byte[] png) throws IOException {
+        NativeImage image = NativeImage.read(new java.io.ByteArrayInputStream(png));
+        //? if >=1.21.11 {
+        DynamicTexture texture = new DynamicTexture(() -> location.toString(), image);
+        //?} else {
+        DynamicTexture texture = new DynamicTexture(image);
+        //?}
+        Minecraft.getInstance().getTextureManager().register(location, texture);
     }
 
     public static List<Resolved> packed(Slot slot) {

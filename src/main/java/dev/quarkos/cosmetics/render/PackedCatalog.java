@@ -35,15 +35,18 @@ final class PackedCatalog {
         InputStream open(String path) throws IOException;
     }
 
-    record Entry(String id, String name, String description, Slot slot, String model, String texture, int marker,
+    record Entry(String id, String name, String description, Slot slot, String model, int marker,
                  Vec offset, boolean legacyBlockbench) {
         boolean blockato() {
             return model.startsWith("cosmetics/blockato/") || KITE_WINGS.equals(id);
         }
     }
 
-    record Item(Entry entry, CosmeticModel packed, BlockbenchModel blockbench, byte[] png, TextureFrames frames,
-                String glow, TextureFrames glowFrames, int cubes, String animation) {
+    record Texture(String path, byte[] png, TextureFrames frames) {
+    }
+
+    record Item(Entry entry, CosmeticModel packed, BlockbenchModel blockbench, Texture base, Texture glow,
+                int cubes, String animation) {
     }
 
     record Result(String id, String slot, Item item, String error) {
@@ -81,7 +84,7 @@ final class PackedCatalog {
             throw new IllegalArgumentException("marker must be a six-digit RGB colour");
         }
         Entry entry = new Entry(id, required(node, "name"), required(node, "description"), slot,
-                modelPath, texturePath, Integer.parseInt(marker, 16), Vec.read(node.path("model_offset"), Vec.ZERO),
+                modelPath, Integer.parseInt(marker, 16), Vec.read(node.path("model_offset"), Vec.ZERO),
                 LEGACY_BLOCKBENCH.contains(id));
         byte[] modelBytes = bytes(assets, modelPath);
         JsonNode root = JSON.readTree(modelBytes);
@@ -92,11 +95,13 @@ final class PackedCatalog {
             int height = root.path("resolution").path("height").asInt();
             TextureFrames frames = frames(assets, texturePath, texture, width, height);
             String glowPath = node.path("glow").asText(legacyGlow(id, texturePath));
-            BufferedImage glow = glowPath == null ? null : image(bytes(assets, glowPath), glowPath);
+            byte[] glowPng = glowPath == null ? null : bytes(assets, glowPath);
+            BufferedImage glow = glowPng == null ? null : image(glowPng, glowPath);
             TextureFrames glowFrames = glow == null ? null : frames(assets, glowPath, glow, width, height);
             BlockbenchModel model = BlockbenchModel.read(root, texture, frames, glow, glowFrames, entry.legacyBlockbench);
             String animation = String.join("+", model.idle().stream().map(BlockbenchModel.Clip::name).toList());
-            return new Item(entry, EMPTY_MESH, model, png, frames, glowPath, glowFrames,
+            return new Item(entry, EMPTY_MESH, model, new Texture(texturePath, png, frames),
+                    glow == null ? null : new Texture(glowPath, glowPng, glowFrames),
                     model.cubes(), animation.isEmpty() ? "none" : animation);
         }
 
@@ -117,7 +122,7 @@ final class PackedCatalog {
         TextureFrames frames = frames(assets, texturePath, texture,
                 dimensions.path("texture_width").asInt(texture.getWidth()),
                 dimensions.path("texture_height").asInt(texture.getHeight()));
-        return new Item(entry, packed, null, png, frames, null, null, cubes, animation);
+        return new Item(entry, packed, null, new Texture(texturePath, png, frames), null, cubes, animation);
     }
 
     private static String legacyGlow(String id, String texture) {
