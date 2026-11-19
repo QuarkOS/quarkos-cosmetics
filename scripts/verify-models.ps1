@@ -151,6 +151,18 @@ function Log([string]$message) {
     Add-Content -LiteralPath $runLog -Value "$([DateTime]::UtcNow.ToString('s'))Z $message"
 }
 
+function Invoke-PythonStep([string]$name, [string[]]$parameters) {
+    $log = Join-Path $RunDir "logs\$name.log"
+    $oldPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $health.python -B (Join-Path $tools "$name.py") @parameters *> $log
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $oldPreference }
+    if ($code -ne 0) { throw "$name failed ($code). See $log" }
+    Log (Get-Content -LiteralPath $log -Tail 1)
+}
+
 function Enter-CaptureLock {
     $deadline = [DateTime]::UtcNow.AddMinutes($request.lockWaitMinutes)
     while ([DateTime]::UtcNow -lt $deadline) {
@@ -259,9 +271,8 @@ try {
     Initialize-CosmeticsHiddenDesktop
     if (-not $request.buildOnly) {
         $select = if ($request.only) { @('--only', $request.only) } else { @() }
-        & $health.python -B (Join-Path $tools 'plan.py') $plan @select 2>&1 | Add-Content -LiteralPath $runLog
-        if ($LASTEXITCODE -ne 0) { throw 'Model plan failed.' }
-        @('soundCategory_master:0.0', 'pauseOnLostFocus:false', 'fullscreen:false') |
+        Invoke-PythonStep 'plan' (@($plan) + $select)
+        @('soundCategory_master:0.0', 'pauseOnLostFocus:false', 'fullscreen:false', 'tutorialStep:none', 'realmsNotifications:false') |
             Set-Content -LiteralPath (Join-Path $game 'options.txt') -Encoding Ascii
         $lockHandle = Enter-CaptureLock
         try {
@@ -272,8 +283,7 @@ try {
         if ($result.clientExitCode -ne 0 -or -not (Select-String -Path $clientLog -Pattern 'RELEASE_CAPTURE_DONE' -Quiet)) {
             throw "The client failed to complete. See $clientLog"
         }
-        & $health.python -B (Join-Path $tools 'report.py') $RunDir 2>&1 | Add-Content -LiteralPath $runLog
-        if ($LASTEXITCODE -ne 0) { throw 'Evidence generation failed. See logs\run.log.' }
+        Invoke-PythonStep 'report' @($RunDir)
         $result.evidence = Join-Path $RunDir 'evidence'
     }
     if ($request.buildOnly -or $request.buildChecks) {

@@ -44,7 +44,7 @@ Inspect every model in the all-model contact sheets. Open the original downscale
 python3 -B scripts/verify-models/report.py /workspace/ui-pass/pass2/cos-verify/after --review /tmp/cosmetics-review.json
 ```
 
-Keep the 1920 by 1080 frames on Quark in `raw`. Fetch the `evidence` directory with `/workspace/ui-pass/pass2/cosv/qfetch.sh`. Keep the combined box evidence under 400 MB.
+Keep the 1920 by 1080 frames on Quark in `raw`. On Quark, run `python -B scripts/verify-models/report.py "$run\evidence" --archive "$run\evidence.zip"`. Fetch the archive with `/workspace/ui-pass/pass2/cosv/qfetch.sh` and extract it on the box. Keep the combined box evidence under 400 MB.
 
 ## Cleanup
 

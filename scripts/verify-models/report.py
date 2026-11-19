@@ -5,11 +5,13 @@ from collections import Counter
 from pathlib import Path
 import re
 import textwrap
+from zipfile import ZipFile
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-from checks import authored_motion_checks, band, bounds, change, fit_checks, flag, gap_px, properties, silhouette_checks, upper
+from checks import (authored_motion_checks, band, bounds, change, fit_checks, flag, gap_px, properties,
+                    separated_headband_gap, silhouette_checks, upper)
 from plan import ASSETS, HEAD, THRESHOLDS, read_json, save_json, slug
 from raster import camera_for, mannequin, read_emission, render
 
@@ -199,6 +201,12 @@ def look_checks(raw, output, model, views, config, geometry, reasons):
             overlap = (eyes & cosmetic[y0:y1, x0:x1]).sum() / max(1, eyes.sum())
             upper(reasons, "unexpected_eye_or_face_overlay", "mod-side", overlap,
                   p["front_overlay_fraction_max"], "fraction", label)
+        if label == "front" and kind["horn"] and "headband" in name:
+            above_eyes = np.arange(cosmetic.shape[0])[:, None] < view.top + .5 * view.head_width
+            gap = separated_headband_gap(cosmetic, above_eyes, p["minimum_component_area_fraction"])
+            if gap is not None:
+                upper(reasons, "detached_headband_parts", "art", gap,
+                      round(view.head_width * p["headband_gap_head_width_fraction"]), "px", label)
         paired_view = "back" if kind["wing"] else "front"
         if group != "v1" and kind["paired"] and label == paired_view:
             split = view.center
@@ -392,20 +400,35 @@ def review(output, review_path, tile):
         if decisions:
             model["visual_notes"] = decisions.get("note", "")
             dismissed = set(decisions.get("dismiss", []))
-            model["dismissed_reasons"] = [r for r in model["reasons"] if r["check"] in dismissed]
-            model["reasons"] = [r for r in model["reasons"] if r["check"] not in dismissed]
+            measured = model["reasons"] + model.get("dismissed_reasons", [])
+            model["dismissed_reasons"] = [r for r in measured if r["check"] in dismissed]
+            model["reasons"] = [r for r in measured if r["check"] not in dismissed]
             model["class"] = sorted({r["class"] for r in model["reasons"]})
             model["status"] = "FLAG" if model["reasons"] else "PASS"
     finalize(output, report, tile)
 
 
+def archive(output, path):
+    read_json(output / "report.json")
+    if path.resolve().is_relative_to(output.resolve()):
+        raise ValueError("Place the archive beside the evidence directory")
+    with ZipFile(path, "x") as bundle:
+        for item in sorted(output.rglob("*")):
+            if item.is_file():
+                bundle.write(item, item.relative_to(output))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
-    parser.add_argument("--review", type=Path)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--review", type=Path)
+    mode.add_argument("--archive", type=Path)
     args = parser.parse_args()
     config = read_json(THRESHOLDS)
-    if args.review:
+    if args.archive:
+        archive(args.directory, args.archive)
+    elif args.review:
         review(args.directory, args.review, config["capture"]["tile_px"])
     else:
         generate(args.directory, config)

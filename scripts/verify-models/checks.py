@@ -31,6 +31,36 @@ def gap_px(a, b, limit):
     return limit + 1
 
 
+def separated_headband_gap(mask, region, min_area_fraction):
+    """Measure ornaments above a horizontal band in the front view."""
+    mask = mask & region
+    rectangle = bounds(mask)
+    if rectangle is None:
+        return None
+    x0, y0, x1, y1 = rectangle
+    scale = 3
+    cells = set(map(tuple, np.argwhere(mask[y0:y1:scale, x0:x1:scale])))
+    minimum = len(cells) * min_area_fraction
+    components = []
+    while cells:
+        part = [cells.pop()]
+        for y, x in part:
+            for dy, dx in ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)):
+                neighbor = (y + dy, x + dx)
+                if neighbor in cells:
+                    cells.remove(neighbor)
+                    part.append(neighbor)
+        if len(part) >= minimum:
+            components.append(np.array(part))
+    if len(components) < 2:
+        return None
+    anchor = max(components, key=lambda part: part[:, 0].max())
+    above = [part for part in components if part[:, 0].max() < anchor[:, 0].min()]
+    if not above:
+        return None
+    return scale * max(0, max(anchor[:, 0].min() - part[:, 0].max() - 1 for part in above))
+
+
 def flag(reasons, check, category, value, threshold, unit, evidence):
     if isinstance(value, (float, np.floating)):
         value = round(float(value), 3)

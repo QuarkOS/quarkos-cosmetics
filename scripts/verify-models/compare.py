@@ -42,6 +42,28 @@ def comparison(before, after, old, new, output):
     return path.name
 
 
+def action_comparison(before, after, old, new, output):
+    clips = [clip for clip in new["animation"].values() if clip["action"]]
+    if not clips:
+        return None
+    tile_w, tile_h = 370, 300
+    sheet = Image.new("RGB", (tile_w * 2, tile_h * len(clips)), "#eeeae2")
+    draw = ImageDraw.Draw(sheet)
+    for row, clip in enumerate(clips):
+        i = len(clip["frames"]) - 1 if clip["mode"] == "hold" else len(clip["frames"]) // 2
+        before_clip = old["animation"][clip["name"]]
+        for col, (label, directory, frame) in enumerate((("BEFORE", before, before_clip["frames"][i]),
+                                                         ("AFTER", after, clip["frames"][i]))):
+            x, y = col * tile_w, row * tile_h
+            draw.text((x + 8, y + 6), f"{label} {clip['name']} at tick {clip['ticks'][i]:g}", fill="black")
+            with Image.open(directory / frame) as source:
+                source.thumbnail((tile_w - 16, tile_h - 30), Image.Resampling.LANCZOS)
+                sheet.paste(source, (x + (tile_w - source.width) // 2, y + 22))
+    path = output / (slug(new["id"]) + "-actions.png")
+    sheet.save(path)
+    return path.name
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("before", type=Path)
@@ -56,7 +78,11 @@ def main():
     if before.keys() != after.keys() or not set(args.ids) <= after.keys():
         raise ValueError("Expected matching inventories and known model IDs")
     args.output.mkdir(parents=True, exist_ok=True)
-    rows = {short: comparison(args.before, args.after, before[short], after[short], args.output) for short in args.ids}
+    rows = {}
+    for short in args.ids:
+        old, new = before[short], after[short]
+        rows[short] = {"looks": comparison(args.before, args.after, old, new, args.output),
+                       "actions": action_comparison(args.before, args.after, old, new, args.output)}
     save_json(args.output / "index.json", {"before": a["commit"], "after": b["commit"], "images": rows})
 
 

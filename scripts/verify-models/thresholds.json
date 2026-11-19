@@ -18,6 +18,8 @@
     "jump_fraction_per_tick": 0.32,
     "loop_seam_fraction": 0.16,
     "seat_gap_head_width_fraction": 0.065,
+    "headband_gap_head_width_fraction": 0.02,
+    "minimum_component_area_fraction": 0.045,
     "pair_area_ratio_min": 0.25,
     "front_overlay_fraction_max": 0.1,
     "background_noise_fraction": 0.005,

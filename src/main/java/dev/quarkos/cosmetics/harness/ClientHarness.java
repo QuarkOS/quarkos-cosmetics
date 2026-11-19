@@ -999,7 +999,7 @@ public final class ClientHarness {
                     Chick.hold(capture.clip(), capture.age() / 20f);
                 }
                 if ("wings".equals(capture.source()) && "flap".equals(capture.clip())) {
-                    client.player.setSprinting(true);
+                    KiteWings.hold("flap", null);
                 }
             }
             float distance = head ? 3.4f : 2.95f;

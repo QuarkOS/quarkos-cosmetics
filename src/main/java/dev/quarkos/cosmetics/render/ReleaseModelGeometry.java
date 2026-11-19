@@ -35,7 +35,12 @@ public final class ReleaseModelGeometry {
                 if (model.blockbench()) {
                     BlockbenchCosmetic.draw(pose, sink, 0, 0, null, anchor -> null, model, 0xffffff, 0, 0, 0, null);
                 } else {
-                    KiteWings.draw(pose, sink, 0, 0, false, null, 0, 0, 0);
+                    KiteWings.hold("flap", 0f);
+                    try {
+                        KiteWings.draw(pose, sink, 0, 0, false, null, 0, 0, 0);
+                    } finally {
+                        KiteWings.hold(null, null);
+                    }
                 }
             }
             if (out.checkError()) {
@@ -104,11 +109,13 @@ public final class ReleaseModelGeometry {
         public VertexConsumer setUv3(float u, float v) {
             return this;
         }
+        *///?}
 
+        //? if >=1.21.11 {
         @Override
         public VertexConsumer setLineWidth(float width) {
             return this;
         }
-        *///?}
+        //?}
     }
 }
