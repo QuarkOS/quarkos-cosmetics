@@ -67,16 +67,30 @@ public final class KiteWings {
             announced = true;
             LOGGER.info("kite wings playing {} at {}s", clip, time);
         }
+        drawPose(pose, submitter, light, body, offsetX, offsetY, offsetZ, loaded, animation, time);
+    }
+
+    static void portrait(PoseStack pose, CosmeticDrawer.Submitter submitter, int light) {
+        Model loaded = load();
+        if (loaded != null) {
+            drawPose(pose, submitter, light, null, 0, 0, 0, loaded, loaded.clips.get("flap"), 0);
+        }
+    }
+
+    private static void drawPose(PoseStack pose, CosmeticDrawer.Submitter submitter, int light,
+                                 ModelPart body, float offsetX, float offsetY, float offsetZ,
+                                 Model loaded, Clip animation, double time) {
         pose.pushPose();
-        body.translateAndRotate(pose);
+        if (body != null) {
+            body.translateAndRotate(pose);
+        }
         pose.scale(1f / 16f, -1f / 16f, 1f / 16f);
         pose.translate(offsetX, offsetY, offsetZ);
         // Body origin is the shoulder line. Bedrock y=24 is that same line.
         pose.translate(0f, -24f, 0f);
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
-        double sample = time;
-        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT_NO_CULL, consumer -> render(consumer, view, normals, light, loaded, animation, sample));
+        submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT_NO_CULL, consumer -> render(consumer, view, normals, light, loaded, animation, time));
         pose.popPose();
     }
 
@@ -239,6 +253,10 @@ public final class KiteWings {
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)
                 .setNormal(normal.x, normal.y, normal.z);
+    }
+
+    static boolean modelReady() {
+        return load() != null;
     }
 
     private static Model load() {

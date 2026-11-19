@@ -980,6 +980,10 @@ public final class Chick {
                 .setNormal(normal.x, normal.y, normal.z);
     }
 
+    static boolean modelReady() {
+        return load() != null;
+    }
+
     private static Model load() {
         if (model != null || failed) {
             return model;

@@ -41,12 +41,15 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
             var type = switch (pass) {
                 case EYES -> RenderTypes.eyes(texture);
                 case GLOW -> MaskGlow.type(texture);
+                case EMISSIVE -> RenderTypes.entityTranslucentEmissive(texture);
                 case MASK_MENU -> MaskGlow.menu();
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(texture);
                 //? if >=26.3 {
-                /*case CUTOUT -> RenderTypes.entityCutoutCull(texture);
+                /*case TRANSLUCENT_CULL -> RenderTypes.entityTranslucentCull(texture);
+                case CUTOUT -> RenderTypes.entityCutoutCull(texture);
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutout(texture);
                 *///?} else {
+                case TRANSLUCENT_CULL -> RenderTypes.itemEntityTranslucentCull(texture);
                 case CUTOUT -> RenderTypes.entityCutout(texture);
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutoutNoCull(texture);
                 //?}
@@ -95,7 +98,9 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
             RenderType type = switch (pass) {
                 case EYES -> RenderType.eyes(texture);
                 case GLOW -> MaskGlow.type(texture);
+                case EMISSIVE -> RenderType.entityTranslucentEmissive(texture);
                 case TRANSLUCENT -> RenderType.entityTranslucent(texture);
+                case TRANSLUCENT_CULL -> RenderType.entityTranslucentCull(texture);
                 case CUTOUT -> RenderType.entityCutout(texture);
                 case CUTOUT_NO_CULL -> RenderType.entityCutoutNoCull(texture);
             };

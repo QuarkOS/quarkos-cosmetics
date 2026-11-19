@@ -49,7 +49,7 @@ public final class Worn {
                 case HAT, EARS -> Anchor.HEAD;
                 case SHOULDER_LEFT -> Anchor.LEFT_ARM;
                 case SHOULDER_RIGHT -> Anchor.RIGHT_ARM;
-                case BACK, TAIL -> Anchor.BODY;
+                case BACK, TAIL, BODY -> Anchor.BODY;
             };
             if (slot == Slot.HAT && helmet) {
                 y = 3f;

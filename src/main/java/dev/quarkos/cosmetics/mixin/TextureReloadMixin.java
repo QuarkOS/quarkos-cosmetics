@@ -1,6 +1,7 @@
 package dev.quarkos.cosmetics.mixin;
 
 import dev.quarkos.cosmetics.render.JackOLanternMask;
+import dev.quarkos.cosmetics.render.ModelLibrary;
 import dev.quarkos.cosmetics.render.SkinShellRenderer;
 import dev.quarkos.cosmetics.render.ThumbnailMesh;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ public abstract class TextureReloadMixin {
         callback.getReturnValue().thenRunAsync(() -> {
             SkinShellRenderer.clearCache();
             JackOLanternMask.clearCache();
+            ModelLibrary.clearPacked();
             ThumbnailMesh.clearCache();
         }, Minecraft.getInstance());
     }

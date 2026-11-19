@@ -1,0 +1,654 @@
+{
+ "meta": {
+  "format_version": "5.0",
+  "model_format": "geckolib_model",
+  "box_uv": false
+ },
+ "name": "cupcake_hat",
+ "geo_name": "cupcake_hat",
+ "geometry_name": "cupcake_hat",
+ "geckolib_model_type": "armor",
+ "model_identifier": "cupcake_hat",
+ "visible_box": [
+  1,
+  1,
+  0
+ ],
+ "variable_placeholders": "",
+ "variable_placeholder_buttons": [],
+ "timeline_setups": [],
+ "unhandled_marked_keys": [],
+ "resolution": {
+  "width": 64,
+  "height": 64
+ },
+ "elements": [
+  {
+   "name": "wrapper",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -4.0,
+    32.5,
+    -4.0
+   ],
+   "to": [
+    4.0,
+    36.5,
+    4.0
+   ],
+   "autouv": 0,
+   "color": 0,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    34.5,
+    0.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      0.0,
+      8.0,
+      8.0,
+      12.0
+     ],
+     "texture": 0
+    },
+    "north": {
+     "uv": [
+      8.0,
+      8.0,
+      16.0,
+      12.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      16.0,
+      8.0,
+      24.0,
+      12.0
+     ],
+     "texture": 0
+    },
+    "south": {
+     "uv": [
+      24.0,
+      8.0,
+      32.0,
+      12.0
+     ],
+     "texture": 0
+    },
+    "up": {
+     "uv": [
+      16.0,
+      8.0,
+      8.0,
+      0.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      24.0,
+      0.0,
+      16.0,
+      8.0
+     ],
+     "texture": 0
+    }
+   },
+   "type": "cube",
+   "uuid": "c959898c-ed4c-7d00-cead-46fe0cde8a4b"
+  },
+  {
+   "name": "frosting_base",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -4.5,
+    36.0,
+    -4.5
+   ],
+   "to": [
+    4.5,
+    38.0,
+    4.5
+   ],
+   "autouv": 0,
+   "color": 1,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    37.0,
+    0.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      0.0,
+      22.0,
+      9.0,
+      24.0
+     ],
+     "texture": 0
+    },
+    "north": {
+     "uv": [
+      9.0,
+      22.0,
+      18.0,
+      24.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      18.0,
+      22.0,
+      27.0,
+      24.0
+     ],
+     "texture": 0
+    },
+    "south": {
+     "uv": [
+      27.0,
+      22.0,
+      36.0,
+      24.0
+     ],
+     "texture": 0
+    },
+    "up": {
+     "uv": [
+      18.0,
+      22.0,
+      9.0,
+      13.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      27.0,
+      13.0,
+      18.0,
+      22.0
+     ],
+     "texture": 0
+    }
+   },
+   "type": "cube",
+   "uuid": "ee81c38e-86f8-52d3-75e2-4c6f3036b9d2"
+  },
+  {
+   "name": "frosting_swirl",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -3.0,
+    37.5,
+    -3.0
+   ],
+   "to": [
+    3.0,
+    40.5,
+    3.0
+   ],
+   "autouv": 0,
+   "color": 2,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    39.0,
+    0.0
+   ],
+   "rotation": [
+    0.0,
+    45.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      37.0,
+      19.0,
+      43.0,
+      22.0
+     ],
+     "texture": 0
+    },
+    "north": {
+     "uv": [
+      43.0,
+      19.0,
+      49.0,
+      22.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      49.0,
+      19.0,
+      55.0,
+      22.0
+     ],
+     "texture": 0
+    },
+    "south": {
+     "uv": [
+      55.0,
+      19.0,
+      61.0,
+      22.0
+     ],
+     "texture": 0
+    },
+    "up": {
+     "uv": [
+      49.0,
+      19.0,
+      43.0,
+      13.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      55.0,
+      13.0,
+      49.0,
+      19.0
+     ],
+     "texture": 0
+    }
+   },
+   "type": "cube",
+   "uuid": "f7d907d3-3724-8b14-ee6d-8032790efc95"
+  },
+  {
+   "name": "cherry_ball",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -1.0,
+    40.5,
+    -1.0
+   ],
+   "to": [
+    1.0,
+    42.5,
+    1.0
+   ],
+   "autouv": 0,
+   "color": 3,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    41.5,
+    0.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      0.0,
+      27.0,
+      2.0,
+      29.0
+     ],
+     "texture": 0
+    },
+    "north": {
+     "uv": [
+      2.0,
+      27.0,
+      4.0,
+      29.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      4.0,
+      27.0,
+      6.0,
+      29.0
+     ],
+     "texture": 0
+    },
+    "south": {
+     "uv": [
+      6.0,
+      27.0,
+      8.0,
+      29.0
+     ],
+     "texture": 0
+    },
+    "up": {
+     "uv": [
+      4.0,
+      27.0,
+      2.0,
+      25.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      6.0,
+      25.0,
+      4.0,
+      27.0
+     ],
+     "texture": 0
+    }
+   },
+   "type": "cube",
+   "uuid": "77290032-4cb3-df5c-2873-5929ba549ad4"
+  },
+  {
+   "name": "stem",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    0.0,
+    42.0,
+    0.0
+   ],
+   "to": [
+    1.0,
+    44.0,
+    0.0
+   ],
+   "autouv": 0,
+   "color": 4,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    42.0,
+    0.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    -15.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      9.0,
+      25.0,
+      9.0,
+      27.0
+     ],
+     "texture": null
+    },
+    "north": {
+     "uv": [
+      9.0,
+      25.0,
+      10.0,
+      27.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      10.0,
+      25.0,
+      10.0,
+      27.0
+     ],
+     "texture": null
+    },
+    "south": {
+     "uv": [
+      10.0,
+      25.0,
+      11.0,
+      27.0
+     ],
+     "texture": null
+    },
+    "up": {
+     "uv": [
+      10.0,
+      25.0,
+      9.0,
+      25.0
+     ],
+     "texture": null
+    },
+    "down": {
+     "uv": [
+      11.0,
+      25.0,
+      10.0,
+      25.0
+     ],
+     "texture": null
+    }
+   },
+   "type": "cube",
+   "uuid": "d0ce2d13-c2fe-dab4-87dc-b0a9c0234d20"
+  }
+ ],
+ "outliner": [
+  {
+   "name": "armorHead",
+   "origin": [
+    0.0,
+    24.0,
+    0.0
+   ],
+   "color": 0,
+   "uuid": "f5a42c06-32d7-34bd-941e-09f9242955c8",
+   "export": true,
+   "isOpen": true,
+   "locked": false,
+   "visibility": true,
+   "autouv": 0,
+   "children": [
+    {
+     "name": "cupcake",
+     "origin": [
+      0.0,
+      32.5,
+      0.0
+     ],
+     "color": 0,
+     "uuid": "66110712-a822-c164-940e-a0a6639375f3",
+     "export": true,
+     "isOpen": true,
+     "locked": false,
+     "visibility": true,
+     "autouv": 0,
+     "children": [
+      "c959898c-ed4c-7d00-cead-46fe0cde8a4b",
+      "ee81c38e-86f8-52d3-75e2-4c6f3036b9d2",
+      "f7d907d3-3724-8b14-ee6d-8032790efc95",
+      {
+       "name": "cherry",
+       "origin": [
+        0.0,
+        40.5,
+        0.0
+       ],
+       "color": 0,
+       "uuid": "c0d47395-c5e9-36f7-23ab-7b3548b2487a",
+       "export": true,
+       "isOpen": true,
+       "locked": false,
+       "visibility": true,
+       "autouv": 0,
+       "children": [
+        "77290032-4cb3-df5c-2873-5929ba549ad4",
+        "d0ce2d13-c2fe-dab4-87dc-b0a9c0234d20"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "textures": [
+  {
+   "path": "",
+   "name": "cupcake_hat.png",
+   "folder": "",
+   "namespace": "",
+   "id": "0",
+   "width": 64,
+   "height": 512,
+   "uv_width": 64,
+   "uv_height": 64,
+   "particle": false,
+   "render_mode": "default",
+   "render_sides": "double",
+   "frame_time": 3,
+   "frame_order_type": "loop",
+   "frame_order": "",
+   "frame_interpolate": false,
+   "visible": true,
+   "internal": true,
+   "saved": false,
+   "uuid": "8a8a26c7-a892-7a38-32fc-fb6e8fff8af1",
+   "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAIACAYAAAAyrmqbAAAFQklEQVR4nO3dv2seBRjA8SeSQDo4CQGl2vK2JSiKuKiQgpsVB5FSKk51cHTTqYIUQSf9B5x0cLBDax1Eu5RCKw4FKWpraYy0SoRIQTC0ISnEIb03P3jfN7ncNU/fu89n8b22793zPrm8ScF8OxKbePqDz5c3+zOD/PLhWyNVnn+/PZQ9QDYLyB4gmwVkD5DNArIHyDby9oXp5YiI63/eioiIA48/EmuPjzy/NyIiLv/9X0REPPvow+uOC/2ev9nx+TdfSP0+YbQY5NbVq/d+6cl1x5c3DFzYeNzv+Zsf52r9p0DrF9B6W3oDuvPVhZ5/IRo/vD/m5xdj9OzN+O3bHzc9z3NfvFfpDa/fHP2uvZXrjVYZaOHUdLUTPAC29R5wdHZ3HJ3dXfcsWzbWmYixzkQt5yr9ARzrTMTpzmJERCzN1DJDqlJ3wMat1/VRKGtpZi6WZuZqOVepBWy8aF1DZCr9KbA0Mxd3X35i5cn36VOg37t9vzvumXde632eV1/seZ5dbxzsfnXY1pv46Nmb96788cp/fz6+ndP0def3eu6srZyn2lexml944ca1mdgz2ek+jojYM9npvqBd+1buhLUvcOOv7do3se65a8+11sjG22380HQszJ5c9+KKW37X9MK6J787+lFERHx69/0tvbCN7xnFl9KTj/21+kLW3J47YeSnY58s99p2r+NeWy5zvNn5b1ybqfzdIiV1t337s+PLty9diblf/4mIiKcuXuz+3onvXl+OiDjxyteN++h03wRvX7rS9w9dv/nvTsySYuTK1NRyRMTeYy+tW0KvO6GJut8JDroDAAAAAAAAAACAobXp/wClH9BwFpA9QDYLyB4gmwVkD5BNP0A/oOVav4DWq9QP6P4EaVv7Ad2fIB1i+gHbubh+QJ/jnaIfUCP9gPLj6QesamI/oNdHVT9AP6C59AOKB/oB+gH6AQAAAAAAAAAA0ED6AdkDZLOA7AGyWUD2ANksIHuAbPoB+gEt1/oFtJ5+QJWB9AOS6AfUSD+g7IUHHQ8j/YDy4+kHrNIPqNYPODM5FV+eu6EfoB+QSD+geKAfoB+gHwAAAAAAAAAAAA2kH5A9QDYLyB4gmwVkD5DNArIHyKYfoB/Qcq1fQOvpB1QZSD8giX5AjfQDyl540PEw0g8oP55+wCr9gGr9gOJLqX6AfkAe/YDigX6AfoB+AAAAAAAAAAAANJB+QPYA2Swge4BsFpA9QDYLyB4gm36AfkDLtX4BracfUGUg/YAk+gE10g8oe+FBx8NIP6D8ePoBq/QD9ANKHesHPID0A4oH+gH6AfoBAAAAAAAAAADQQPoB2QNks4DsAbJZQPYA2Swge4Bs+gH6AS3X+gW0nn5AlYFa2w84MznVmH5A6QWMdSbiyNL1OH1wsZYBsukHlL3woONhpB9Qfjz9gFVt6QeMH94f8/OL+gH6AQ2kH1A80A/QD9APAAAAAAAAAACABtIPyB4gmwVkD5DNArIHyGYB2QNk0w/QD2i51i+g9fQDqgzU2n7A0dndjekHlL4DxjoTcbqz0g5Yuk8/PL2T9APKXnjQ8TDSDyg/3uq7//ih6ViYPdnefsDC9/sjov6GwAPXDyhuef0A/YDm0Q8oHugH6AfoBwAAAAAAAAAAQAPpB2QPkM0CsgfIZgHZA2SzgOwBsukH6Ae0XOsX0Hr6AVUG0g9Ioh9QI/2AshcedDyMttUPKP4x9tb2AxZOTa88scdPmtdhaPoBdb/wwtD0A84f+CG++eOcfoB+wBDTDyge6AfoB+gHAAAAAAAAAABAA/0PeUjt9b9cySIAAAAASUVORK5CYII="
+  }
+ ],
+ "animations": [
+  {
+   "uuid": "8c5fa25a-e2b4-4e43-58af-467f4cb4e687",
+   "name": "animation.cupcake_hat.idle",
+   "loop": "loop",
+   "override": false,
+   "length": 3.0,
+   "snapping": 20,
+   "selected": false,
+   "anim_time_update": "",
+   "blend_weight": "",
+   "start_delay": "",
+   "loop_delay": "",
+   "animators": {
+    "c0d47395-c5e9-36f7-23ab-7b3548b2487a": {
+     "name": "cherry",
+     "type": "bone",
+     "keyframes": [
+      {
+       "channel": "rotation",
+       "data_points": [
+        {
+         "x": "0",
+         "y": "0",
+         "z": "0"
+        }
+       ],
+       "uuid": "e7c4c240-6ea3-573d-88ac-6dec8f27d605",
+       "time": 0,
+       "color": -1,
+       "interpolation": "catmullrom"
+      },
+      {
+       "channel": "rotation",
+       "data_points": [
+        {
+         "x": "4",
+         "y": "0",
+         "z": "6"
+        }
+       ],
+       "uuid": "085ef570-8ab3-74b9-f992-64a5957365ac",
+       "time": 0.75,
+       "color": -1,
+       "interpolation": "catmullrom"
+      },
+      {
+       "channel": "rotation",
+       "data_points": [
+        {
+         "x": "0",
+         "y": "0",
+         "z": "0"
+        }
+       ],
+       "uuid": "d4d4f11f-e324-4da0-48b2-97b0a8049180",
+       "time": 1.5,
+       "color": -1,
+       "interpolation": "catmullrom"
+      },
+      {
+       "channel": "rotation",
+       "data_points": [
+        {
+         "x": "-4",
+         "y": "0",
+         "z": "-6"
+        }
+       ],
+       "uuid": "39195a13-331d-907e-caba-f585375ca663",
+       "time": 2.25,
+       "color": -1,
+       "interpolation": "catmullrom"
+      },
+      {
+       "channel": "rotation",
+       "data_points": [
+        {
+         "x": "0",
+         "y": "0",
+         "z": "0"
+        }
+       ],
+       "uuid": "0a92d151-18a6-aee1-379f-5fbc576e851f",
+       "time": 3.0,
+       "color": -1,
+       "interpolation": "catmullrom"
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "note": "house v6: pleated wrapper box + frosting base + frosting swirl turned 45 deg + cherry with stem plane; sprinkles painted, 8-frame twinkle strip"
+}

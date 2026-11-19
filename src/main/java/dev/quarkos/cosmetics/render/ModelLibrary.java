@@ -2,32 +2,70 @@ package dev.quarkos.cosmetics.render;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.quarkos.cosmetics.model.CosmeticModel;
-import dev.quarkos.cosmetics.model.ModelException;
 import dev.quarkos.cosmetics.model.Slot;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public final class ModelLibrary {
+    private static final Logger LOGGER = LoggerFactory.getLogger("quarkos_cosmetics");
     private static final Map<String, Resolved> PACKED = new LinkedHashMap<>();
     private static final Map<String, Resolved> GALLERY = new LinkedHashMap<>();
     private static boolean loaded;
+    private static List<PackedCatalog.Result> catalog = List.of();
 
     private ModelLibrary() {
     }
 
     public record Resolved(String id, String name, String description, Slot slot, CosmeticModel model,
-                           Identifier texture, int width, int height, byte[] png) {
+                           Identifier texture, int width, int height, byte[] png, PackedCatalog.Item builtin) {
+        public boolean blockato() {
+            return builtin != null && builtin.entry().blockato();
+        }
+
+        boolean blockbench() {
+            return builtin != null && builtin.blockbench() != null;
+        }
+    }
+
+    public record ModelCheck(String id, String slot, boolean loaded, int cubes, String animation, String error) {
+    }
+
+    public static List<ModelCheck> modelChecks() {
+        ensure();
+        return catalog.stream().map(result -> {
+            PackedCatalog.Item item = result.item();
+            if (item == null) {
+                return new ModelCheck(result.id(), result.slot(), false, 0, "none", result.error());
+            }
+            boolean ready = switch (result.id()) {
+                case Chick.ID -> Chick.modelReady();
+                case JackOLanternMask.ID -> JackOLanternMask.modelReady();
+                case PackedCatalog.KITE_WINGS -> KiteWings.modelReady();
+                default -> true;
+            };
+            return new ModelCheck(result.id(), result.slot(), ready, item.cubes(), item.animation(),
+                    ready ? null : "renderer could not load the model");
+        }).toList();
+    }
+
+    public static void clearPacked() {
+        loaded = false;
+        PACKED.clear();
+        catalog = List.of();
+    }
+
+    static Identifier location(String path) {
+        return Identifier.fromNamespaceAndPath("quarkos_cosmetics", path);
     }
 
     public static List<Resolved> packed() {
@@ -61,7 +99,7 @@ public final class ModelLibrary {
         CosmeticModel.Texture texture = model.textures.get(0);
         Identifier location = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "textures/gallery/" + id + ".png");
         register(location, texture.png());
-        Resolved resolved = new Resolved(id, name, description, slot, model, location, texture.width(), texture.height(), texture.png());
+        Resolved resolved = new Resolved(id, name, description, slot, model, location, texture.width(), texture.height(), texture.png(), null);
         synchronized (GALLERY) {
             GALLERY.put(id, resolved);
         }
@@ -77,57 +115,25 @@ public final class ModelLibrary {
         }
         loaded = true;
         ResourceManager resources = minecraft.getResourceManager();
-        Identifier catalogId = Identifier.fromNamespaceAndPath("quarkos_cosmetics", "cosmetics/catalog.json");
-        Optional<Resource> catalog = resources.getResource(catalogId);
-        if (catalog.isEmpty()) {
-            return;
-        }
-        try (InputStream stream = catalog.get().open()) {
-            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(stream);
-            for (com.fasterxml.jackson.databind.JsonNode item : root.path("items")) {
-                loadItem(resources, item);
-            }
-        } catch (IOException ignored) {
-            loaded = false;
-        }
-    }
-
-    private static void loadItem(ResourceManager resources, com.fasterxml.jackson.databind.JsonNode item) {
-        String id = item.path("id").asText("");
-        String modelPath = item.path("model").asText("");
-        String texturePath = item.path("texture").asText("");
-        Slot slot = Slot.parse(item.path("slot").asText("")).orElse(null);
-        if (id.isBlank() || slot == null) {
-            return;
-        }
         try {
-            String json = new String(resources.getResource(Identifier.fromNamespaceAndPath("quarkos_cosmetics", modelPath)).orElseThrow().open().readAllBytes());
-            com.fasterxml.jackson.databind.JsonNode modelNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-            // Armor geo is drawn by JackOLanternMask. The gallery cube format cannot hold an 80×1920 strip.
-            // Armor geo and Blockbench files are drawn by their own renderers.
-            CosmeticModel model = modelNode.has("minecraft:geometry") || modelPath.endsWith(".bbmodel")
-                    ? new CosmeticModel(List.of(), List.of())
-                    : CosmeticModel.parse(json);
-            byte[] png = resources.getResource(Identifier.fromNamespaceAndPath("quarkos_cosmetics", texturePath)).orElseThrow().open().readAllBytes();
-            int width = 16;
-            int height = 16;
-            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png));
-            if (image != null) {
-                width = image.getWidth();
-                height = image.getHeight();
+            catalog = PackedCatalog.load(path -> {
+                var resource = resources.getResource(location(path));
+                return resource.isEmpty() ? null : resource.get().open();
+            });
+            for (PackedCatalog.Result result : catalog) {
+                PackedCatalog.Item item = result.item();
+                if (item == null) {
+                    LOGGER.error("{} failed to load: {}", result.id(), result.error());
+                    continue;
+                }
+                PackedCatalog.Entry entry = item.entry();
+                PACKED.put(entry.id(), new Resolved(entry.id(), entry.name(), entry.description(), entry.slot(),
+                        item.packed(), location(entry.texture()), item.frames().width(), item.frames().height(),
+                        item.png(), item));
             }
-            PACKED.put(id, new Resolved(
-                    id,
-                    item.path("name").asText(id),
-                    item.path("description").asText(""),
-                    slot,
-                    model,
-                    Identifier.fromNamespaceAndPath("quarkos_cosmetics", texturePath),
-                    width,
-                    height,
-                    png));
-        } catch (IOException | ModelException ignored) {
-            // A broken packed file is skipped. The gallery can still publish other models.
+        } catch (IOException | RuntimeException ex) {
+            catalog = List.of(new PackedCatalog.Result("<catalog>", "none", null, ex.toString()));
+            LOGGER.error("Could not load the cosmetics catalog", ex);
         }
     }
 

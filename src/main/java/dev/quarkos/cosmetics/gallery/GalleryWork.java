@@ -112,6 +112,9 @@ public final class GalleryWork {
             try {
                 GalleryClient.Page page = client().list(query, slot, null, 20);
                 onClient(() -> {
+                    if (browseView != request) {
+                        return;
+                    }
                     browse = List.copyOf(page.items());
                     finishBrowse(request, BrowseStatus.READY);
                     status = browse.isEmpty() ? "Nothing published for this slot yet." : browse.size() + " gallery cosmetics.";

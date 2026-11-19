@@ -68,14 +68,20 @@ class ClientSettingsTest {
         settings.chickGallery.put(Slot.SHOULDER_RIGHT, "published-chick");
         settings.setChickPerch(Slot.SHOULDER_RIGHT);
         settings.equip(Slot.SHOULDER_RIGHT, "published-chick");
-        settings.equip(Slot.SHOULDER_LEFT, "quarkos:ink_wren");
+        settings.equip(Slot.SHOULDER_LEFT, "quarkos:bee_buddy_shoulder");
+        settings.equip(Slot.BACK, "quarkos:kite_wings");
+        settings.equip(Slot.TAIL, "quarkos:fox_tail");
+        settings.equip(Slot.BODY, "quarkos:energy_core_chest");
         settings.save(gameDir);
 
         ClientSettings restored = ClientSettings.load(gameDir);
         assertEquals("shoulder_right", restored.chickPerch);
         assertEquals("published-chick", restored.equippedId(Slot.SHOULDER_RIGHT));
         assertEquals("quarkos:lantern_cap", restored.equippedId(Slot.HAT));
-        assertEquals("", restored.equippedId(Slot.SHOULDER_LEFT));
+        assertEquals("quarkos:bee_buddy_shoulder", restored.equippedId(Slot.SHOULDER_LEFT));
+        assertEquals("quarkos:kite_wings", restored.equippedId(Slot.BACK));
+        assertEquals("quarkos:fox_tail", restored.equippedId(Slot.TAIL));
+        assertEquals("quarkos:energy_core_chest", restored.equippedId(Slot.BODY));
     }
 
     @Test

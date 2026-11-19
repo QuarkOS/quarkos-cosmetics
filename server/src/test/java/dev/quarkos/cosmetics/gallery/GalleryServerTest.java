@@ -260,6 +260,22 @@ class GalleryServerTest {
         assertEquals(409, second.status);
     }
 
+    @Test
+    void browsesAndEquipsBodyCosmetics() throws Exception {
+        String ada = signIn("Ada", ADA);
+        Response published = send("POST", "/v1/cosmetics", modelBody("Scarf", "body"), ada);
+        assertEquals(201, published.status);
+        String scarf = published.json.path("id").asText();
+        Response list = send("GET", "/v1/cosmetics?slot=body", null, null);
+        assertEquals(scarf, list.json.path("items").path(0).path("id").asText());
+        Response equipped = send("PUT", "/v1/equipment",
+                MAPPER.createObjectNode().put("slot", "body").put("cosmeticId", scarf).toString(), ada);
+        assertEquals(200, equipped.status);
+        Response wearing = send("GET", "/v1/equipment/" + ADA, null, null);
+        assertEquals(scarf, wearing.json.path("slots").path("body").asText());
+        assertTrue(wearing.json.path("slots").path("back").isNull());
+    }
+
     private String signIn(String name, String rawUuid) throws Exception {
         Response challenge = send("POST", "/v1/session/challenges", null, null);
         assertEquals(201, challenge.status);

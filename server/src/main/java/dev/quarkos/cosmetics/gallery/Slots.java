@@ -14,7 +14,8 @@ public final class Slots {
             "shoulder_left",
             "shoulder_right",
             "back",
-            "tail"
+            "tail",
+            "body"
     );
     public static final Set<String> SET = Set.copyOf(ALL);
 

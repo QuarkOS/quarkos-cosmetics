@@ -42,6 +42,10 @@ public final class CardGrid {
         return true;
     }
 
+    public boolean nextPage() {
+        return row < metrics.maxScroll() && page(1);
+    }
+
     public boolean grab(double x, double y) {
         Rect track = metrics.scrollbar();
         Rect hit = new Rect(track.x() - 3, track.y(), track.w() + 3, track.h());

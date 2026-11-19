@@ -77,8 +77,8 @@ public final class WardrobeScreen extends Screen {
     private record Card(String id, String name, String author, Thumbnail thumbnail) {
     }
 
-    private static final List<Slot> HEAD_SLOTS = Arrays.stream(Slot.values()).filter(Slot::wornOnHead).toList();
-    private static final List<Slot> WARDROBE_SLOTS = List.of(Slot.HAT, Slot.EARS, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT);
+    private static final List<Slot> SLOTS = List.of(
+            Slot.HAT, Slot.EARS, Slot.BACK, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT, Slot.TAIL, Slot.BODY);
     private static final int[] SKIN_DISTANCES = {8, 16, 32, 64};
     private final Screen parent;
     private final PlayerPreview preview;
@@ -139,6 +139,15 @@ public final class WardrobeScreen extends Screen {
         return screen;
     }
 
+    public static WardrobeScreen studioCategory(Slot slot) {
+        Float yaw = slot == Slot.BACK || slot == Slot.TAIL ? 155f : null;
+        return studioCapture(View.WARDROBE, slot, false, yaw, "");
+    }
+
+    public boolean nextStudioPage() {
+        return grid != null && grid.nextPage();
+    }
+
     public static WardrobeScreen legacyCapture() {
         return new WardrobeScreen(null, View.WARDROBE, Slot.HAT, false, true, true);
     }
@@ -157,7 +166,7 @@ public final class WardrobeScreen extends Screen {
 
         ClientSettings settings = ClientSettings.get();
         if (slot == null) {
-            slot = WARDROBE_SLOTS.stream().filter(value -> !settings.equippedId(value).isBlank()).findFirst().orElse(Slot.HAT);
+            slot = SLOTS.stream().filter(value -> !settings.equippedId(value).isBlank()).findFirst().orElse(Slot.HAT);
         }
         if (urlDraft == null) {
             urlDraft = settings.galleryUrl;
@@ -229,10 +238,10 @@ public final class WardrobeScreen extends Screen {
 
     private void open(View next) {
         if (view != next) {
-            if (next == View.GALLERY && slot.isShoulder()) {
-                slot = Slot.HAT;
-            }
             view = next;
+            if (view == View.GALLERY && !studioGallery && GalleryWork.browseStatus(slot) == GalleryWork.BrowseStatus.IDLE) {
+                searchGallery();
+            }
             rebuild();
         }
     }
@@ -245,7 +254,7 @@ public final class WardrobeScreen extends Screen {
         Rect toolbar = collection.toolbar();
         String visibleLabel = toolbar.w() >= 237 ? "Category visible" : "Visible";
         int toggleWidth = font.width(visibleLabel) + 42;
-        int categoryWidth = Math.min(290, toolbar.w() - toggleWidth - 4);
+        int categoryWidth = toolbar.w() - toggleWidth - 4;
         categories(new Rect(toolbar.x(), toolbar.y(), categoryWidth, toolbar.h()), true);
         addRenderableWidget(ToggleSwitch.create(trailing(toolbar, toggleWidth), visibleLabel,
                 () -> settings.categoryOn.getOrDefault(slot, true), on -> {
@@ -256,12 +265,10 @@ public final class WardrobeScreen extends Screen {
         List<Card> cards = new ArrayList<>();
         cards.add(new Card("", "None", null, null));
         for (ModelLibrary.Resolved model : ModelLibrary.packed(slot)) {
-            if (!slot.isShoulder() || Chick.ID.equals(model.id())) {
-                cards.add(new Card(model.id(), model.name(), null, Thumbnail.of(model)));
-            }
+            cards.add(new Card(model.id(), model.name(), null, Thumbnail.of(model)));
         }
         GridMetrics metrics = buildGrid(collection.grid(), cards, false, equipped);
-        if (cards.size() == 1 && slot.wornOnHead()) {
+        if (cards.size() == 1) {
             Rect none = metrics.card(0, 0);
             int left = none.right() + 12;
             emptyWardrobe = new Rect(left, none.y() + 8, collection.grid().right() - left, 17);
@@ -307,44 +314,55 @@ public final class WardrobeScreen extends Screen {
     }
 
     private void categories(Rect bar, boolean wardrobe) {
-        List<Slot> slots = wardrobe ? WARDROBE_SLOTS : HEAD_SLOTS;
-        for (int i = 0; i < slots.size(); i++) {
-            Slot target = slots.get(i);
+        if (bar.w() < 374) {
+            int index = SLOTS.indexOf(slot);
+            FlatButton previous = button(leading(bar, 18), "‹",
+                    () -> selectCategory(SLOTS.get(Math.floorMod(index - 1, SLOTS.size()))));
+            FlatButton next = button(trailing(bar, 18), "›",
+                    () -> selectCategory(SLOTS.get((index + 1) % SLOTS.size())));
+            previous.setTooltip(Tooltip.create(Component.literal("Previous category")));
+            next.setTooltip(Tooltip.create(Component.literal("Next category")));
+            String label = slotName(slot);
+            FlatButton category = new FlatButton(new Rect(bar.x() + 20, bar.y(), bar.w() - 40, bar.h()),
+                    Component.literal(label), pressed -> selectCategory(SLOTS.get((index + 1) % SLOTS.size())),
+                    (widget, graphics, font, bounds, hovered) -> {
+                        UiTheme.frame(graphics, bounds, widget.fill(hovered), UiTheme.ACCENT);
+                        UiTheme.centered(graphics, font, label, bounds.inset(2), UiTheme.TEXT);
+                    });
+            category.setTooltip(Tooltip.create(Component.literal(label)));
+            addRenderableWidget(category);
+            return;
+        }
+        for (int i = 0; i < SLOTS.size(); i++) {
+            Slot target = SLOTS.get(i);
             String label = slotName(target);
-            int count = wardrobe && !target.isShoulder() ? ModelLibrary.packed(target).size() : 0;
-            FlatButton button = new FlatButton(bar.column(i, slots.size(), 4), Component.literal(label), pressed -> {
-                if (slot != target) {
-                    slot = target;
-                    gallerySelection = "";
-                    colourOpen = false;
-                    rebuild();
-                }
-            }, (widget, graphics, font, bounds, hovered) -> {
-                boolean selected = slot == target;
-                UiTheme.frame(graphics, bounds, selected ? UiTheme.HOVER : widget.fill(hovered),
-                        selected ? UiTheme.ACCENT : widget.border());
-                int ink = selected ? UiTheme.TEXT : UiTheme.MUTED;
-                if (target.isShoulder() || (wardrobe && bounds.w() < 54)) {
-                    String caption = target.isShoulder() && font.width(label) > bounds.w() - 4
-                            ? target == Slot.SHOULDER_LEFT ? "Left" : "Right" : label;
-                    UiTheme.centered(graphics, font, caption, bounds.inset(2), ink);
-                    return;
-                }
-                UiTheme.slotIcon(graphics, target, bounds.x() + 5, bounds.y() + (bounds.h() - 12) / 2, ink);
-                String countLabel = Integer.toString(count);
-                int numberWidth = font.width(countLabel);
-                int reserve = wardrobe ? numberWidth + 7 : 5;
-                UiTheme.text(graphics, font, label, new Rect(bounds.x() + 21, bounds.y(), bounds.w() - 21 - reserve, bounds.h()), ink);
-                if (wardrobe) {
-                    UiTheme.text(graphics, font, countLabel,
-                            new Rect(bounds.right() - numberWidth - 5, bounds.y(), numberWidth, bounds.h()), UiTheme.MUTED);
-                }
-            });
-            if (wardrobe) {
-                button.setTooltip(Tooltip.create(Component.literal(label)));
-            }
+            int count = wardrobe ? ModelLibrary.packed(target).size() : 0;
+            Rect bounds = bar.column(i, SLOTS.size(), 3);
+            String text = font.width(label) > bounds.w() - 8 && target.isShoulder()
+                    ? (target == Slot.SHOULDER_LEFT ? "Left" : "Right") : label;
+            FlatButton button = new FlatButton(bounds, Component.literal(label), pressed -> selectCategory(target),
+                    (widget, graphics, font, rect, hovered) -> {
+                        boolean selected = slot == target;
+                        UiTheme.frame(graphics, rect, selected ? UiTheme.HOVER : widget.fill(hovered),
+                                selected ? UiTheme.ACCENT : widget.border());
+                        UiTheme.centered(graphics, font, text, rect.inset(4), selected ? UiTheme.TEXT : UiTheme.MUTED);
+                    });
+            button.setTooltip(Tooltip.create(Component.literal(wardrobe ? label + " (" + count + ")" : label)));
             addRenderableWidget(button);
         }
+    }
+
+    private void selectCategory(Slot target) {
+        if (slot == target) {
+            return;
+        }
+        slot = target;
+        gallerySelection = "";
+        colourOpen = false;
+        if (view == View.GALLERY && !studioGallery) {
+            searchGallery();
+        }
+        rebuild();
     }
 
     private void initGallery(ClientSettings settings) {
@@ -375,13 +393,13 @@ public final class WardrobeScreen extends Screen {
         }
 
         Rect filters = gallery.filters();
-        int categoryWidth = Math.min(166, filters.w() * 2 / 5);
+        int categoryWidth = Math.min(450, Math.max(86, filters.w() * 2 / 5));
         categories(leading(filters, categoryWidth), false);
         queryBox = addRenderableWidget(new FlatEditBox(font,
                 new Rect(filters.x() + categoryWidth + 8, filters.y(), filters.w() - categoryWidth - 67, filters.h()),
                 Component.literal("Search gallery")));
         queryBox.setMaxLength(48);
-        queryBox.setHint(Component.literal(slot == Slot.HAT ? "Search hats" : "Search ears"));
+        queryBox.setHint(Component.literal("Search cosmetics"));
         queryBox.setValue(query);
         queryBox.setResponder(value -> query = value);
         button(trailing(filters, 53), "Search", this::searchGallery);
@@ -429,13 +447,13 @@ public final class WardrobeScreen extends Screen {
         if (!studioGallery) {
             return GalleryWork.browse();
         }
-        return ModelLibrary.packed().stream().filter(item -> item.slot().wornOnHead())
+        return ModelLibrary.packed().stream()
                 .map(item -> new GalleryClient.Listed(item.id(), item.name(), item.description(), item.slot().wire, "Quarkos Studio"))
                 .toList();
     }
 
     private static boolean matchesSlot(GalleryClient.Listed listed, Slot slot) {
-        return Slot.parse(listed.slot()).orElse(slot) == slot;
+        return Slot.parse(listed.slot()).orElse(null) == slot;
     }
 
     private void applyGalleryUrl() {
@@ -461,6 +479,7 @@ public final class WardrobeScreen extends Screen {
         }
         galleryNotice = "";
         gallerySelection = "";
+        rememberScroll();
         galleryScroll.remove(slot);
         grid = null;
         GalleryWork.browse(slot, query);
@@ -657,7 +676,7 @@ public final class WardrobeScreen extends Screen {
             UiTheme.frame(graphics, collection.colour(), UiTheme.STAGE, UiTheme.BORDER);
         }
         if (emptyWardrobe != null) {
-            UiTheme.text(graphics, font, "No packed " + (slot == Slot.HAT ? "hats" : "ears") + " in this build.", emptyWardrobe, UiTheme.MUTED);
+            UiTheme.text(graphics, font, "No packed cosmetics in this category.", emptyWardrobe, UiTheme.MUTED);
         }
     }
 

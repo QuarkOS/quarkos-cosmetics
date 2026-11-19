@@ -14,7 +14,6 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 //? if >=1.21.11 {
-import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 //?} else {
 /*import net.minecraft.client.renderer.RenderType;
@@ -36,9 +35,6 @@ import static net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
 public final class ThumbnailMesh {
     private static final int CACHE_LIMIT = 64;
     private static final Map<ModelLibrary.Resolved, Optional<ThumbnailMesh>> CACHE = new LinkedHashMap<>(16, 0.75f, true);
-    //? if >=1.21.11 {
-    private static final ModelPart ORIGIN = new ModelPart(List.of(), Map.of());
-    //?}
     private final List<Batch> batches;
     private final Vector3f min = new Vector3f(Float.POSITIVE_INFINITY);
     private final Vector3f max = new Vector3f(Float.NEGATIVE_INFINITY);
@@ -77,19 +73,19 @@ public final class ThumbnailMesh {
             }
         };
         int light = FULL_BRIGHT;
+        if (model.blockbench()) {
+            BlockbenchCosmetic.portrait(pose, submitter, light, model);
+        } else if (PackedCatalog.KITE_WINGS.equals(model.id())) {
+            KiteWings.portrait(pose, submitter, light);
         //? if >=1.21.11 {
-        if (Chick.draws(model.id())) {
+        } else if (Chick.draws(model.id())) {
             Chick.portrait(pose, submitter, light);
         } else if (JackOLanternMask.ID.equals(model.id())) {
             JackOLanternMask.portrait(pose, submitter);
-        } else if (BlockbenchCosmetic.draws(model.id())) {
-            BlockbenchCosmetic.draw(pose, submitter, light, 0f, ORIGIN, ORIGIN, model.id(), TintColor.DEFAULT);
+        //?}
         } else {
             CosmeticDrawer.packed(pose, submitter, light, 0f, model, TintColor.DEFAULT, 0f, 0f, 0f);
         }
-        //?} else {
-        /*CosmeticDrawer.packed(pose, submitter, light, 0f, model, TintColor.DEFAULT, 0f, 0f, 0f);
-        *///?}
         return batches.isEmpty() ? Optional.empty() : Optional.of(new ThumbnailMesh(batches));
     }
 
@@ -107,6 +103,8 @@ public final class ThumbnailMesh {
                 case CUTOUT -> RenderTypes.entityCutoutCull(batch.texture());
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutout(batch.texture());
                 case GLOW -> MaskGlow.type(batch.texture());
+                case EMISSIVE -> RenderTypes.entityTranslucentEmissive(batch.texture());
+                case TRANSLUCENT_CULL -> RenderTypes.entityTranslucentCull(batch.texture());
                 case MASK_MENU -> MaskGlow.menu();
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(batch.texture());
                 case EYES -> RenderTypes.eyes(batch.texture());
@@ -125,13 +123,22 @@ public final class ThumbnailMesh {
             //? if >=1.21.11 {
             var type = switch (batch.pass()) {
                 case CUTOUT, GLOW -> RenderTypes.entityCutout(batch.texture());
+                case EMISSIVE -> RenderTypes.entityTranslucentEmissive(batch.texture());
+                case TRANSLUCENT_CULL -> RenderTypes.itemEntityTranslucentCull(batch.texture());
                 case MASK_MENU -> MaskGlow.menu();
                 case CUTOUT_NO_CULL -> RenderTypes.entityCutoutNoCull(batch.texture());
                 case TRANSLUCENT -> RenderTypes.entityTranslucent(batch.texture());
                 case EYES -> RenderTypes.eyes(batch.texture());
             };
             //?} else {
-            /*var type = RenderType.entityCutoutNoCull(batch.texture());
+            /*var type = switch (batch.pass()) {
+                case CUTOUT -> RenderType.entityCutout(batch.texture());
+                case CUTOUT_NO_CULL, GLOW -> RenderType.entityCutoutNoCull(batch.texture());
+                case EMISSIVE -> RenderType.entityTranslucentEmissive(batch.texture());
+                case TRANSLUCENT -> RenderType.entityTranslucent(batch.texture());
+                case TRANSLUCENT_CULL -> RenderType.entityTranslucentCull(batch.texture());
+                case EYES -> RenderType.eyes(batch.texture());
+            };
             *///?}
             drawBatch(entry, buffer.getBuffer(type), batch, position, normal);
         }

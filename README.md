@@ -2,7 +2,7 @@
 
 Free Minecraft Java client cosmetics by Emilio Schwaiger. The mod id is `quarkos_cosmetics`. It is client-only, MIT licensed, and does not depend on `quarkos_capes`.
 
-The packed wardrobe includes hats, ears, and a chick that perches on your head or either shoulder. The gallery is optional. The client stores a player UUID and never stores a Minecraft access token.
+The packed wardrobe includes hats, ears, wings, backpacks, shoulder buddies, tails, and body accessories. The chick can perch on your head or either shoulder. The gallery is optional. The client stores a player UUID and never stores a Minecraft access token.
 
 ## Run
 
@@ -30,8 +30,10 @@ The game client owns the base URL. Routes start at `/v1`. Sign-in is:
 
 The Bearer token stays in memory. Browse is `GET /v1/cosmetics`. Publish is `POST /v1/cosmetics`. Equip is `PUT /v1/equipment`. Another player's loadout is `GET /v1/equipment/{uuid}`, then `GET /v1/cosmetics/{id}` for each id. Report is `POST /v1/cosmetics/{id}/reports`.
 
-Packed `quarkos:` cosmetics equip locally. Publishing one creates a gallery id the other client can read. The wardrobe buttons are Sign in, Refresh, the gallery row (equip), Publish packed, and Report.
+Packed `quarkos:` cosmetics equip locally. Publishing a compatible model creates a gallery id other clients can read. The wardrobe buttons are Sign in, Refresh, the gallery row (equip), Publish packed, and Report.
 
 ## Slots
 
-Packed cosmetics use `cosmetics-model-1`. Element names containing `flap` or `idle` animate. To move the chick, select its card in the **Hat**, **Left shoulder**, or **Right shoulder** wardrobe category. The second-skin shell is an original per-pixel extrusion of the 64×64 overlay, culled past the configured distance (default 16 blocks).
+The packed wardrobe reads Blockbench cosmetics and their idle clips. The gallery accepts `cosmetics-model-1`. The [Blockato model inventory](docs/BLOCKATO-MODELS.md) lists the packed pieces and their slots.
+
+To move the chick, select its card in the **Hat**, **Left shoulder**, or **Right shoulder** wardrobe category. The second-skin shell is an original per-pixel extrusion of the 64×64 overlay, culled past the configured distance (default 16 blocks).

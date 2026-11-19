@@ -26,7 +26,7 @@ public final class EquipmentMirror {
             holder.inflight = true;
             GalleryWork.refreshEquipment(key);
         }
-        return Map.copyOf(holder.slots);
+        return holder.slots;
     }
 
     public static void accept(String uuid, GalleryClient.Equipment equipment) {
@@ -34,13 +34,11 @@ public final class EquipmentMirror {
         EnumMap<Slot, String> next = new EnumMap<>(Slot.class);
         for (Slot slot : Slot.values()) {
             String id = equipment.id(slot);
-            // The drawer identifies shoulder chicks once their gallery model has loaded.
-            if (id != null && !id.isBlank() && (slot.wornOnHead() || slot.isShoulder())) {
+            if (id != null && !id.isBlank()) {
                 next.put(slot, id);
             }
         }
-        holder.slots.clear();
-        holder.slots.putAll(next);
+        holder.slots = Map.copyOf(next);
         holder.fetchedAt = System.currentTimeMillis();
         holder.inflight = false;
     }
@@ -54,7 +52,7 @@ public final class EquipmentMirror {
     }
 
     private static final class Holder {
-        private final EnumMap<Slot, String> slots = new EnumMap<>(Slot.class);
+        private volatile Map<Slot, String> slots = Map.of();
         private volatile long fetchedAt;
         private volatile boolean inflight;
     }

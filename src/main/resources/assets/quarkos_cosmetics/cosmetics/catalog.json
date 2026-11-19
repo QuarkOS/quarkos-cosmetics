@@ -44,6 +44,528 @@
       "texture": "textures/cosmetics/ghost_buddy.png",
       "model": "cosmetics/ghost_buddy.bbmodel",
       "marker": "C9C3E6"
+    },
+    {
+      "id": "quarkos:candy_cane_back_bow",
+      "name": "Candy cane bow",
+      "description": "A striped candy cane with a bow for your back.",
+      "slot": "back",
+      "texture": "textures/cosmetics/candy_cane_back_bow.png",
+      "model": "cosmetics/blockato/candy_cane_back_bow.bbmodel",
+      "marker": "EB4141",
+      "model_offset": [
+        0,
+        -6,
+        -10.875
+      ]
+    },
+    {
+      "id": "quarkos:christmas_lights_scarf",
+      "name": "Christmas lights scarf",
+      "description": "A knit scarf wrapped in glowing Christmas lights.",
+      "slot": "body",
+      "texture": "textures/cosmetics/christmas_lights_scarf.png",
+      "model": "cosmetics/blockato/christmas_lights_scarf.bbmodel",
+      "marker": "379646",
+      "glow": "textures/cosmetics/christmas_lights_scarf_glowmask.png",
+      "model_offset": [
+        0,
+        -3,
+        0
+      ]
+    },
+    {
+      "id": "quarkos:earmuffs",
+      "name": "Earmuffs",
+      "description": "A pair of pink-lined earmuffs on a headband.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/earmuffs.png",
+      "model": "cosmetics/blockato/earmuffs.bbmodel",
+      "marker": "FFFAF5"
+    },
+    {
+      "id": "quarkos:gingerbread_buddy_shoulder",
+      "name": "Gingerbread buddy",
+      "description": "A gingerbread cookie that waves from your left shoulder.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/gingerbread_buddy_shoulder.png",
+      "model": "cosmetics/blockato/gingerbread_buddy_shoulder.bbmodel",
+      "marker": "C3823E",
+      "model_offset": [
+        -3,
+        -2.7,
+        -3
+      ]
+    },
+    {
+      "id": "quarkos:ice_crown",
+      "name": "Ice crown",
+      "description": "A circlet of translucent ice shards with glowing edges.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/ice_crown.png",
+      "model": "cosmetics/blockato/ice_crown.bbmodel",
+      "marker": "D2F5FF",
+      "glow": "textures/cosmetics/ice_crown_glowmask.png"
+    },
+    {
+      "id": "quarkos:reindeer_antlers_headband",
+      "name": "Reindeer antlers",
+      "description": "A headband with branching antlers and little bells.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/reindeer_antlers_headband.png",
+      "model": "cosmetics/blockato/reindeer_antlers_headband.bbmodel",
+      "marker": "E1C38C"
+    },
+    {
+      "id": "quarkos:santa_hat",
+      "name": "Santa hat",
+      "description": "A floppy red Santa hat with a bouncing pompom.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/santa_hat.png",
+      "model": "cosmetics/blockato/santa_hat.bbmodel",
+      "marker": "E6372D",
+      "model_offset": [
+        0,
+        2.05,
+        0
+      ]
+    },
+    {
+      "id": "quarkos:snowflake_wings",
+      "name": "Snowflake wings",
+      "description": "A pair of flapping wings made of translucent ice shards.",
+      "slot": "back",
+      "texture": "textures/cosmetics/snowflake_wings.png",
+      "model": "cosmetics/blockato/snowflake_wings.bbmodel",
+      "marker": "FCFEFF",
+      "model_offset": [
+        0,
+        -5,
+        -8
+      ]
+    },
+    {
+      "id": "quarkos:star_tree_topper_halo",
+      "name": "Star tree topper",
+      "description": "A gold star that spins overhead.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/star_tree_topper_halo.png",
+      "model": "cosmetics/blockato/star_tree_topper_halo.bbmodel",
+      "marker": "FFFFC8"
+    },
+    {
+      "id": "quarkos:bat_wings",
+      "name": "Bat wings",
+      "description": "A pair of ribbed bat wings that flap.",
+      "slot": "back",
+      "texture": "textures/cosmetics/bat_wings.png",
+      "model": "cosmetics/blockato/bat_wings.bbmodel",
+      "marker": "A183AE"
+    },
+    {
+      "id": "quarkos:crystal_crown",
+      "name": "Crystal crown",
+      "description": "A gold circlet with translucent, glowing crystal shards.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/crystal_crown.png",
+      "model": "cosmetics/blockato/crystal_crown.bbmodel",
+      "marker": "DC8630",
+      "glow": "textures/cosmetics/crystal_crown_glowmask.png"
+    },
+    {
+      "id": "quarkos:dragon_wings",
+      "name": "Dragon wings",
+      "description": "A pair of dragon wings with scales and translucent membranes.",
+      "slot": "back",
+      "texture": "textures/cosmetics/dragon_wings.png",
+      "model": "cosmetics/blockato/dragon_wings.bbmodel",
+      "marker": "3F3479"
+    },
+    {
+      "id": "quarkos:elf_ears",
+      "name": "Elf ears",
+      "description": "Long pointed ears that sweep back from the head.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/elf_ears.png",
+      "model": "cosmetics/blockato/elf_ears.bbmodel",
+      "marker": "B07267"
+    },
+    {
+      "id": "quarkos:fairy_wings",
+      "name": "Fairy wings",
+      "description": "A pair of fluttering glassy wings with a gold clasp.",
+      "slot": "back",
+      "texture": "textures/cosmetics/fairy_wings.png",
+      "model": "cosmetics/blockato/fairy_wings.bbmodel",
+      "marker": "8EF6F7"
+    },
+    {
+      "id": "quarkos:floating_spellbook_buddy",
+      "name": "Spellbook buddy",
+      "description": "An open spellbook that hovers and flips its pages.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/floating_spellbook_buddy.png",
+      "model": "cosmetics/blockato/floating_spellbook_buddy.bbmodel",
+      "marker": "7A48B4"
+    },
+    {
+      "id": "quarkos:knight_helmet_visor",
+      "name": "Knight helmet",
+      "description": "A crested knight helmet with a hinged visor.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/knight_helmet_visor.png",
+      "model": "cosmetics/blockato/knight_helmet_visor.bbmodel",
+      "marker": "5B5F79"
+    },
+    {
+      "id": "quarkos:phoenix_tail",
+      "name": "Phoenix tail",
+      "description": "A swaying fan of fiery feathers with a gold clasp.",
+      "slot": "tail",
+      "texture": "textures/cosmetics/phoenix_tail.png",
+      "model": "cosmetics/blockato/phoenix_tail.bbmodel",
+      "marker": "F8A43C",
+      "glow": "textures/cosmetics/phoenix_tail_glowmask.png"
+    },
+    {
+      "id": "quarkos:unicorn_horn",
+      "name": "Unicorn horn",
+      "description": "A unicorn horn with a shifting rainbow sheen.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/unicorn_horn.png",
+      "model": "cosmetics/blockato/unicorn_horn.bbmodel",
+      "marker": "F7B2CD"
+    },
+    {
+      "id": "quarkos:viking_helmet",
+      "name": "Viking helmet",
+      "description": "A steel helmet with ivory horns and a bronze brow band.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/viking_helmet.png",
+      "model": "cosmetics/blockato/viking_helmet.bbmodel",
+      "marker": "75839C"
+    },
+    {
+      "id": "quarkos:wizard_hat_stars",
+      "name": "Wizard hat",
+      "description": "A crooked wizard hat dotted with twinkling stars.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/wizard_hat_stars.png",
+      "model": "cosmetics/blockato/wizard_hat_stars.bbmodel",
+      "marker": "393087",
+      "glow": "textures/cosmetics/wizard_hat_stars_glowmask.png"
+    },
+    {
+      "id": "quarkos:frog_hat",
+      "name": "Frog hat",
+      "description": "A green frog that blinks from the top of your head.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/frog_hat.png",
+      "model": "cosmetics/blockato/frog_hat.bbmodel",
+      "marker": "7FBF4F"
+    },
+    {
+      "id": "quarkos:cat_ears",
+      "name": "Cat ears",
+      "description": "A headband with pink-lined ears that twitch.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/cat_ears.png",
+      "model": "cosmetics/blockato/cat_ears.bbmodel",
+      "marker": "C25580"
+    },
+    {
+      "id": "quarkos:fox_tail",
+      "name": "Fox tail",
+      "description": "A swaying fox tail with a cream tip.",
+      "slot": "tail",
+      "texture": "textures/cosmetics/fox_tail.png",
+      "model": "cosmetics/blockato/fox_tail.bbmodel",
+      "marker": "CC6328"
+    },
+    {
+      "id": "quarkos:bee_buddy_shoulder",
+      "name": "Bee buddy",
+      "description": "A bee that buzzes over your left shoulder.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/bee_buddy_shoulder.png",
+      "model": "cosmetics/blockato/bee_buddy_shoulder.bbmodel",
+      "marker": "2F2026"
+    },
+    {
+      "id": "quarkos:axolotl_hat",
+      "name": "Axolotl hat",
+      "description": "An axolotl with wiggling gills that sits on your head.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/axolotl_hat.png",
+      "model": "cosmetics/blockato/axolotl_hat.bbmodel",
+      "marker": "F2A6B6"
+    },
+    {
+      "id": "quarkos:penguin_backpack",
+      "name": "Penguin backpack",
+      "description": "A penguin pack with a chest harness.",
+      "slot": "back",
+      "texture": "textures/cosmetics/penguin_backpack.png",
+      "model": "cosmetics/blockato/penguin_backpack.bbmodel",
+      "marker": "566394"
+    },
+    {
+      "id": "quarkos:owl_shoulder_buddy",
+      "name": "Owl buddy",
+      "description": "An owl that turns and blinks over your right shoulder.",
+      "slot": "shoulder_right",
+      "texture": "textures/cosmetics/owl_shoulder_buddy.png",
+      "model": "cosmetics/blockato/owl_shoulder_buddy.bbmodel",
+      "marker": "B8834F",
+      "model_offset": [
+        0,
+        -1.125,
+        0
+      ]
+    },
+    {
+      "id": "quarkos:bunny_ears",
+      "name": "Bunny ears",
+      "description": "A headband with two tall rabbit ears.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/bunny_ears.png",
+      "model": "cosmetics/blockato/bunny_ears.bbmodel",
+      "marker": "FBF5EE"
+    },
+    {
+      "id": "quarkos:duck_float_ring",
+      "name": "Duck float ring",
+      "description": "A yellow duck float that sits around your waist.",
+      "slot": "body",
+      "texture": "textures/cosmetics/duck_float_ring.png",
+      "model": "cosmetics/blockato/duck_float_ring.bbmodel",
+      "marker": "F7D05E"
+    },
+    {
+      "id": "quarkos:snail_shell_backpack",
+      "name": "Snail shell backpack",
+      "description": "A snail with a spiral shell that crawls up your back.",
+      "slot": "back",
+      "texture": "textures/cosmetics/snail_shell_backpack.png",
+      "model": "cosmetics/blockato/snail_shell_backpack.bbmodel",
+      "marker": "8A4A2A"
+    },
+    {
+      "id": "quarkos:cyber_halo",
+      "name": "Cyber halo",
+      "description": "A neon ring with pulsing lights.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/cyber_halo.png",
+      "model": "cosmetics/blockato/cyber_halo.bbmodel",
+      "marker": "646991",
+      "glow": "textures/cosmetics/cyber_halo_glowmask.png"
+    },
+    {
+      "id": "quarkos:drone_buddy",
+      "name": "Drone buddy",
+      "description": "A lit drone with a spinning rotor that hovers at your shoulder.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/drone_buddy.png",
+      "model": "cosmetics/blockato/drone_buddy.bbmodel",
+      "marker": "3D4466",
+      "glow": "textures/cosmetics/drone_buddy_glowmask.png"
+    },
+    {
+      "id": "quarkos:energy_core_chest",
+      "name": "Energy core",
+      "description": "A glowing core mounted on a chest harness.",
+      "slot": "body",
+      "texture": "textures/cosmetics/energy_core_chest.png",
+      "model": "cosmetics/blockato/energy_core_chest.bbmodel",
+      "marker": "6F7AA6",
+      "glow": "textures/cosmetics/energy_core_chest_glowmask.png"
+    },
+    {
+      "id": "quarkos:headphones_led",
+      "name": "LED headphones",
+      "description": "Headphones with animated equalizer lights.",
+      "slot": "ears",
+      "texture": "textures/cosmetics/headphones_led.png",
+      "model": "cosmetics/blockato/headphones_led.bbmodel",
+      "marker": "545E88",
+      "glow": "textures/cosmetics/headphones_led_glowmask.png"
+    },
+    {
+      "id": "quarkos:hover_board_back",
+      "name": "Hoverboard",
+      "description": "A hoverboard with glowing emitters and a back harness.",
+      "slot": "back",
+      "texture": "textures/cosmetics/hover_board_back.png",
+      "model": "cosmetics/blockato/hover_board_back.bbmodel",
+      "marker": "C4C9D8",
+      "glow": "textures/cosmetics/hover_board_back_glowmask.png"
+    },
+    {
+      "id": "quarkos:jetpack",
+      "name": "Jetpack",
+      "description": "A twin-canister jetpack with flickering exhaust.",
+      "slot": "back",
+      "texture": "textures/cosmetics/jetpack.png",
+      "model": "cosmetics/blockato/jetpack.bbmodel",
+      "marker": "6F7AA6",
+      "glow": "textures/cosmetics/jetpack_glowmask.png"
+    },
+    {
+      "id": "quarkos:mech_shoulder_cannon",
+      "name": "Mech shoulder cannon",
+      "description": "A mechanical cannon with a lit barrel and shoulder mount.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/mech_shoulder_cannon.png",
+      "model": "cosmetics/blockato/mech_shoulder_cannon.bbmodel",
+      "marker": "767B98",
+      "glow": "textures/cosmetics/mech_shoulder_cannon_glowmask.png"
+    },
+    {
+      "id": "quarkos:robot_antenna",
+      "name": "Robot antenna",
+      "description": "A headband with a blinking robot antenna.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/robot_antenna.png",
+      "model": "cosmetics/blockato/robot_antenna.bbmodel",
+      "marker": "6F7AA6",
+      "glow": "textures/cosmetics/robot_antenna_glowmask.png"
+    },
+    {
+      "id": "quarkos:satellite_dish_hat",
+      "name": "Satellite dish hat",
+      "description": "A rotating satellite dish with a flashing feed.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/satellite_dish_hat.png",
+      "model": "cosmetics/blockato/satellite_dish_hat.bbmodel",
+      "marker": "545E88",
+      "glow": "textures/cosmetics/satellite_dish_hat_glowmask.png"
+    },
+    {
+      "id": "quarkos:visor_goggles_hud",
+      "name": "HUD visor goggles",
+      "description": "Wraparound goggles with a translucent display and scanning light.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/visor_goggles_hud.png",
+      "model": "cosmetics/blockato/visor_goggles_hud.bbmodel",
+      "marker": "9A6C4E",
+      "glow": "textures/cosmetics/visor_goggles_hud_glowmask.png"
+    },
+    {
+      "id": "quarkos:balloon_buddy",
+      "name": "Balloon buddy",
+      "description": "A balloon with a face and a swaying string.",
+      "slot": "shoulder_left",
+      "texture": "textures/cosmetics/balloon_buddy.png",
+      "model": "cosmetics/blockato/balloon_buddy.bbmodel",
+      "marker": "DC4040"
+    },
+    {
+      "id": "quarkos:boba_tea_backpack",
+      "name": "Boba tea backpack",
+      "description": "A cup of bubble tea with a striped straw and pink straps.",
+      "slot": "back",
+      "texture": "textures/cosmetics/boba_tea_backpack.png",
+      "model": "cosmetics/blockato/boba_tea_backpack.bbmodel",
+      "marker": "EE86AE"
+    },
+    {
+      "id": "quarkos:chef_hat",
+      "name": "Chef hat",
+      "description": "A white chef's toque with a folded crown.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/chef_hat.png",
+      "model": "cosmetics/blockato/chef_hat.bbmodel",
+      "marker": "BCC4D1"
+    },
+    {
+      "id": "quarkos:cupcake_hat",
+      "name": "Cupcake hat",
+      "description": "A cupcake with frosting and twinkling sprinkles.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/cupcake_hat.png",
+      "model": "cosmetics/blockato/cupcake_hat.bbmodel",
+      "marker": "2C7EA0"
+    },
+    {
+      "id": "quarkos:donut_float_halo",
+      "name": "Doughnut halo",
+      "description": "A frosted doughnut that spins above your head.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/donut_float_halo.png",
+      "model": "cosmetics/blockato/donut_float_halo.bbmodel",
+      "marker": "B56B33"
+    },
+    {
+      "id": "quarkos:fish_bowl_helmet",
+      "name": "Fishbowl helmet",
+      "description": "A glass helmet with a swimming fish and bubbles inside.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/fish_bowl_helmet.png",
+      "model": "cosmetics/blockato/fish_bowl_helmet.bbmodel",
+      "marker": "73C3DC"
+    },
+    {
+      "id": "quarkos:party_hat_confetti",
+      "name": "Confetti party hat",
+      "description": "A cone party hat topped with a pompom.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/party_hat_confetti.png",
+      "model": "cosmetics/blockato/party_hat_confetti.bbmodel",
+      "marker": "3F7FD6"
+    },
+    {
+      "id": "quarkos:pizza_slice_hat",
+      "name": "Pizza slice hat",
+      "description": "A slice of pizza with a curled crust and a drip of cheese.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/pizza_slice_hat.png",
+      "model": "cosmetics/blockato/pizza_slice_hat.bbmodel",
+      "marker": "B46A35"
+    },
+    {
+      "id": "quarkos:propeller_beanie",
+      "name": "Propeller beanie",
+      "description": "A colourful beanie with a spinning propeller.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/propeller_beanie.png",
+      "model": "cosmetics/blockato/propeller_beanie.bbmodel",
+      "marker": "D99620"
+    },
+    {
+      "id": "quarkos:traffic_cone_hat",
+      "name": "Traffic cone hat",
+      "description": "An orange traffic cone with reflective stripes.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/traffic_cone_hat.png",
+      "model": "cosmetics/blockato/traffic_cone_hat.bbmodel",
+      "marker": "EE7A2C"
+    },
+    {
+      "id": "quarkos:devil_horns_headband",
+      "name": "Devil horns headband",
+      "description": "A studded headband with two twitching horns.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/devil_horns_headband.png",
+      "model": "cosmetics/blockato/devil_horns_headband.bbmodel",
+      "marker": "64555A"
+    },
+    {
+      "id": "quarkos:witch_hat",
+      "name": "Witch hat",
+      "description": "A crooked purple velvet hat with a gold band.",
+      "slot": "hat",
+      "texture": "textures/cosmetics/witch_hat.png",
+      "model": "cosmetics/blockato/witch_hat.bbmodel",
+      "marker": "37284B"
+    },
+    {
+      "id": "quarkos:kite_wings",
+      "name": "Kite wings",
+      "description": "A pair of folding kite wings that flap when you sprint or fly.",
+      "slot": "back",
+      "texture": "textures/cosmetics/wings.png",
+      "model": "geo/wings.geo.json",
+      "marker": "2C1054"
     }
   ]
 }

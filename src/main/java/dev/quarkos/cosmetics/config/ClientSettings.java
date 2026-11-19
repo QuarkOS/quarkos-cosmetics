@@ -218,8 +218,7 @@ public final class ClientSettings {
         if (slot == null) {
             return;
         }
-        boolean allowed = slot.wornOnHead() || (slot.isShoulder() && (Chick.ID.equals(id) || isChickGallery(id)));
-        equipped.put(slot, allowed && id != null ? id : "");
+        equipped.put(slot, id == null ? "" : id);
     }
 
     public boolean isChickGallery(String id) {

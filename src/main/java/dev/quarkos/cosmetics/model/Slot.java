@@ -9,7 +9,8 @@ public enum Slot {
     SHOULDER_LEFT("shoulder_left"),
     SHOULDER_RIGHT("shoulder_right"),
     BACK("back"),
-    TAIL("tail");
+    TAIL("tail"),
+    BODY("body");
 
     public final String wire;
 

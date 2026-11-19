@@ -517,7 +517,7 @@ components:
           format: date-time
     Slot:
       type: string
-      enum: [hat, ears, shoulder_left, shoulder_right, back, tail]
+      enum: [hat, ears, shoulder_left, shoulder_right, back, tail, body]
     Author:
       type: object
       required: [uuid, name]
@@ -708,7 +708,7 @@ components:
           nullable: true
         slots:
           type: object
-          required: [hat, ears, shoulder_left, shoulder_right, back, tail]
+          required: [hat, ears, shoulder_left, shoulder_right, back, tail, body]
           properties:
             hat:
               type: string
@@ -726,5 +726,8 @@ components:
               type: string
               nullable: true
             tail:
+              type: string
+              nullable: true
+            body:
               type: string
               nullable: true

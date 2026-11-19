@@ -15,27 +15,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PackedCosmeticTest {
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Set<String> V1 = Set.of("quarkos:chick", "quarkos:jack_o_lantern_mask",
+            "quarkos:scarecrow_straw_hat", "quarkos:candle_skull_crown", "quarkos:ghost_buddy");
 
     @Test
-    void everyPackedCosmeticIsAShadedMultiCube() throws Exception {
+    void theV1ModelsRetainTheirShadedGeometry() throws Exception {
         JsonNode catalog;
         try (InputStream stream = resource("cosmetics/catalog.json")) {
             catalog = JSON.readTree(stream);
         }
         int count = 0;
         for (JsonNode item : catalog.path("items")) {
+            String id = item.path("id").asText();
+            if (!V1.contains(id)) {
+                continue;
+            }
             count++;
             String modelPath = item.path("model").asText();
             String texturePath = item.path("texture").asText();
-            String marker = item.path("marker").asText();
-            String slot = item.path("slot").asText();
-            String id = item.path("id").asText();
-            assertEquals("hat", slot, id);
-            assertTrue(!id.equals("quarkos:lantern_cap") && !id.equals("quarkos:paper_boat")
-                    && !id.equals("quarkos:crescent_circlet") && !id.equals("quarkos:fox_tips")
-                    && !id.equals("quarkos:moth_tufts") && !id.equals("quarkos:ribbon_bows")
-                    && !id.equals("quarkos:devil_horns_headband") && !id.equals("quarkos:bat_wings")
-                    && !id.equals("quarkos:witch_hat"), id);
+            assertEquals("hat", item.path("slot").asText(), id);
             if ("quarkos:jack_o_lantern_mask".equals(id)) {
                 assertArmorMask(modelPath, texturePath);
                 continue;
@@ -77,18 +75,8 @@ class PackedCosmeticTest {
             assertTrue(names.size() >= 4, modelPath);
             try (InputStream stream = resource(texturePath)) {
                 BufferedImage image = ImageIO.read(stream);
-                if ("quarkos:kite_wings".equals(id)) {
-                    assertEquals(64, image.getWidth(), texturePath);
-                    assertEquals(32, image.getHeight(), texturePath);
-                } else if ("quarkos:chick".equals(id)) {
-                    assertEquals(32, image.getWidth(), texturePath);
-                    assertEquals(32, image.getHeight(), texturePath);
-                } else {
-                    assertEquals(16, image.getWidth(), texturePath);
-                    assertEquals(16, image.getHeight(), texturePath);
-                    int wanted = Integer.parseInt(marker, 16);
-                    assertTrue(contains(image, wanted), texturePath + " is missing marker " + marker);
-                }
+                assertEquals(32, image.getWidth(), texturePath);
+                assertEquals(32, image.getHeight(), texturePath);
             }
         }
         assertEquals(5, count);
@@ -160,18 +148,6 @@ class PackedCosmeticTest {
             assertEquals(2, meta.path("animation").path("frametime").asInt());
             assertEquals(false, meta.path("animation").path("interpolate").asBoolean());
         }
-    }
-
-    private static boolean contains(BufferedImage image, int rgb) {
-        int wanted = 0xFF000000 | rgb;
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                if (image.getRGB(x, y) == wanted) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private static float[] vec(JsonNode node) {

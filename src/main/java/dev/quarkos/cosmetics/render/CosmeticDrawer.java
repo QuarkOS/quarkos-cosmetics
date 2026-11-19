@@ -12,6 +12,7 @@ import org.joml.Matrix4f;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public final class CosmeticDrawer {
     public enum Pass {
@@ -20,10 +21,12 @@ public final class CosmeticDrawer {
         EYES,
         /** Emissive candle. Same frames as the base strip, biased forward so it does not z-fight. */
         GLOW,
+        EMISSIVE,
         //? if >=1.21.11 {
         MASK_MENU,
         //?}
-        TRANSLUCENT
+        TRANSLUCENT,
+        TRANSLUCENT_CULL
     }
 
     public interface Submitter {
@@ -39,15 +42,8 @@ public final class CosmeticDrawer {
     }
 
     /** Packed id, or a gallery copy of the same wings (the cube mesh is the folded rest pose). */
-    private static boolean kiteWings(String id) {
-        if ("quarkos:kite_wings".equals(id)) {
-            return true;
-        }
-        ModelLibrary.Resolved resolved = ModelLibrary.resolve(id);
-        if (resolved == null) {
-            return false;
-        }
-        if ("Kite wings".equals(resolved.name())) {
+    private static boolean kiteWings(ModelLibrary.Resolved resolved) {
+        if (PackedCatalog.KITE_WINGS.equals(resolved.id()) || "Kite wings".equals(resolved.name())) {
             return true;
         }
         for (var element : resolved.model().elements) {
@@ -62,19 +58,20 @@ public final class CosmeticDrawer {
     public static boolean canTint(String id) {
         ModelLibrary.Resolved packed = ModelLibrary.packedById(id);
         return packed != null && packed.slot().wornOnHead() && !Chick.ID.equals(id) && !JackOLanternMask.ID.equals(id)
-                && (BlockbenchCosmetic.draws(id) || !packed.model().elements.isEmpty());
+                && (packed.blockbench() || !packed.model().elements.isEmpty());
     }
 
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart root, ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
                                  List<Worn.Placement> placed, boolean wingsFlap, boolean self, boolean wardrobePreview) {
+        Function<Worn.Anchor, ModelPart> parts = anchor -> switch (anchor) {
+            case HEAD -> head;
+            case BODY -> body;
+            case LEFT_ARM -> leftArm;
+            case RIGHT_ARM -> rightArm;
+        };
         for (Worn.Placement placement : placed) {
-            ModelPart part = switch (placement.anchor()) {
-                case HEAD -> head;
-                case BODY -> body;
-                case LEFT_ARM -> leftArm;
-                case RIGHT_ARM -> rightArm;
-            };
+            ModelPart part = parts.apply(placement.anchor());
             if (Chick.isPerch(placement.slot()) && Chick.draws(placement.id())) {
                 pose.pushPose();
                 if (root != null) {
@@ -84,26 +81,24 @@ public final class CosmeticDrawer {
                 pose.popPose();
                 continue;
             }
-            if (placement.slot().isShoulder()) {
-                continue;
-            }
-            if (kiteWings(placement.id())) {
-                KiteWings.draw(pose, submitter, light, age, wingsFlap, part,
-                        placement.offsetX(), placement.offsetY(), placement.offsetZ());
-                continue;
-            }
             if (JackOLanternMask.ID.equals(placement.id())) {
                 JackOLanternMask.draw(pose, submitter, light, part,
                         placement.offsetX(), placement.offsetY(), placement.offsetZ(), wardrobePreview);
                 continue;
             }
-            int tint = self && canTint(placement.id()) ? ClientSettings.get().tint(placement.slot()) : TintColor.DEFAULT;
-            if (BlockbenchCosmetic.draws(placement.id())) {
-                BlockbenchCosmetic.draw(pose, submitter, light, age, head, body, placement.id(), tint);
-                continue;
-            }
             ModelLibrary.Resolved resolved = ModelLibrary.resolve(placement.id());
             if (resolved == null) {
+                continue;
+            }
+            if (kiteWings(resolved)) {
+                KiteWings.draw(pose, submitter, light, age, wingsFlap, part,
+                        placement.offsetX(), placement.offsetY(), placement.offsetZ());
+                continue;
+            }
+            int tint = self && canTint(placement.id()) ? ClientSettings.get().tint(placement.slot()) : TintColor.DEFAULT;
+            if (resolved.blockbench()) {
+                BlockbenchCosmetic.draw(pose, submitter, light, age, root, parts, resolved, tint,
+                        placement.offsetX(), placement.offsetY(), placement.offsetZ());
                 continue;
             }
             pose.pushPose();

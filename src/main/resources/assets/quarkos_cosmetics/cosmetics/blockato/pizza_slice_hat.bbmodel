@@ -1,0 +1,454 @@
+{
+ "meta": {
+  "format_version": "5.0",
+  "model_format": "geckolib_model",
+  "box_uv": false
+ },
+ "name": "pizza_slice_hat",
+ "geo_name": "pizza_slice_hat",
+ "geometry_name": "pizza_slice_hat",
+ "geckolib_model_type": "armor",
+ "model_identifier": "pizza_slice_hat",
+ "visible_box": [
+  1,
+  1,
+  0
+ ],
+ "variable_placeholders": "",
+ "variable_placeholder_buttons": [],
+ "timeline_setups": [],
+ "unhandled_marked_keys": [],
+ "resolution": {
+  "width": 64,
+  "height": 64
+ },
+ "elements": [
+  {
+   "name": "wedge",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -5.5,
+    33.0,
+    -5.5
+   ],
+   "to": [
+    5.5,
+    33.0,
+    3.5
+   ],
+   "autouv": 0,
+   "color": 0,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    33.0,
+    -1.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      0.0,
+      9.0,
+      9.0,
+      9.0
+     ],
+     "texture": null
+    },
+    "north": {
+     "uv": [
+      9.0,
+      9.0,
+      20.0,
+      9.0
+     ],
+     "texture": null
+    },
+    "west": {
+     "uv": [
+      20.0,
+      9.0,
+      29.0,
+      9.0
+     ],
+     "texture": null
+    },
+    "south": {
+     "uv": [
+      29.0,
+      9.0,
+      40.0,
+      9.0
+     ],
+     "texture": null
+    },
+    "up": {
+     "uv": [
+      20.0,
+      9.0,
+      9.0,
+      0.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      31.0,
+      0.0,
+      20.0,
+      9.0
+     ],
+     "texture": null
+    }
+   },
+   "type": "cube",
+   "uuid": "debfccd6-0bd3-3d1c-1719-8a4e3955d2ec"
+  },
+  {
+   "name": "crust",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -6.0,
+    32.5,
+    1.5
+   ],
+   "to": [
+    6.0,
+    34.5,
+    4.5
+   ],
+   "autouv": 0,
+   "color": 1,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    33.5,
+    3.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      0.0,
+      13.0,
+      3.0,
+      15.0
+     ],
+     "texture": 0
+    },
+    "north": {
+     "uv": [
+      3.0,
+      13.0,
+      15.0,
+      15.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      15.0,
+      13.0,
+      18.0,
+      15.0
+     ],
+     "texture": 0
+    },
+    "south": {
+     "uv": [
+      18.0,
+      13.0,
+      30.0,
+      15.0
+     ],
+     "texture": 0
+    },
+    "up": {
+     "uv": [
+      15.0,
+      13.0,
+      3.0,
+      10.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      27.0,
+      10.0,
+      15.0,
+      13.0
+     ],
+     "texture": 0
+    }
+   },
+   "type": "cube",
+   "uuid": "22a17af5-cd2e-62e9-0419-d2b28036ab55"
+  },
+  {
+   "name": "pepperoni",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -2.0,
+    33.0,
+    -2.0
+   ],
+   "to": [
+    0.0,
+    34.0,
+    0.0
+   ],
+   "autouv": 0,
+   "color": 2,
+   "inflate": 0.0,
+   "origin": [
+    -1.0,
+    33.5,
+    -1.0
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      31.0,
+      12.0,
+      33.0,
+      13.0
+     ],
+     "texture": 0
+    },
+    "north": {
+     "uv": [
+      33.0,
+      12.0,
+      35.0,
+      13.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      35.0,
+      12.0,
+      37.0,
+      13.0
+     ],
+     "texture": 0
+    },
+    "south": {
+     "uv": [
+      37.0,
+      12.0,
+      39.0,
+      13.0
+     ],
+     "texture": 0
+    },
+    "up": {
+     "uv": [
+      35.0,
+      12.0,
+      33.0,
+      10.0
+     ],
+     "texture": 0
+    },
+    "down": {
+     "uv": [
+      37.0,
+      10.0,
+      35.0,
+      12.0
+     ],
+     "texture": 0
+    }
+   },
+   "type": "cube",
+   "uuid": "4ad9e5df-2e1e-6012-8875-5ec6279d22ff"
+  },
+  {
+   "name": "drip_tip",
+   "box_uv": false,
+   "rescale": false,
+   "locked": false,
+   "light_emission": 0,
+   "render_order": "default",
+   "allow_mirror_modeling": true,
+   "from": [
+    -0.5,
+    31.0,
+    -5.25
+   ],
+   "to": [
+    0.5,
+    33.0,
+    -5.25
+   ],
+   "autouv": 0,
+   "color": 3,
+   "inflate": 0.0,
+   "origin": [
+    0.0,
+    32.0,
+    -5.25
+   ],
+   "rotation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "faces": {
+    "east": {
+     "uv": [
+      40.0,
+      10.0,
+      40.0,
+      12.0
+     ],
+     "texture": null
+    },
+    "north": {
+     "uv": [
+      40.0,
+      10.0,
+      41.0,
+      12.0
+     ],
+     "texture": 0
+    },
+    "west": {
+     "uv": [
+      41.0,
+      10.0,
+      41.0,
+      12.0
+     ],
+     "texture": null
+    },
+    "south": {
+     "uv": [
+      41.0,
+      10.0,
+      42.0,
+      12.0
+     ],
+     "texture": null
+    },
+    "up": {
+     "uv": [
+      41.0,
+      10.0,
+      40.0,
+      10.0
+     ],
+     "texture": null
+    },
+    "down": {
+     "uv": [
+      42.0,
+      10.0,
+      41.0,
+      10.0
+     ],
+     "texture": null
+    }
+   },
+   "type": "cube",
+   "uuid": "d73421be-f07e-d712-1626-02e20e10ddf5"
+  }
+ ],
+ "outliner": [
+  {
+   "name": "armorHead",
+   "origin": [
+    0.0,
+    24.0,
+    0.0
+   ],
+   "color": 0,
+   "uuid": "6947a322-be28-969a-4f2b-d72ebaae4d8d",
+   "export": true,
+   "isOpen": true,
+   "locked": false,
+   "visibility": true,
+   "autouv": 0,
+   "children": [
+    {
+     "name": "pizza",
+     "origin": [
+      0.0,
+      32.5,
+      0.0
+     ],
+     "color": 0,
+     "uuid": "7ad6c231-a12c-21db-fe97-269fdb456b94",
+     "export": true,
+     "isOpen": true,
+     "locked": false,
+     "visibility": true,
+     "autouv": 0,
+     "children": [
+      "debfccd6-0bd3-3d1c-1719-8a4e3955d2ec",
+      "22a17af5-cd2e-62e9-0419-d2b28036ab55",
+      "4ad9e5df-2e1e-6012-8875-5ec6279d22ff",
+      "d73421be-f07e-d712-1626-02e20e10ddf5"
+     ]
+    }
+   ]
+  }
+ ],
+ "textures": [
+  {
+   "path": "",
+   "name": "pizza_slice_hat.png",
+   "folder": "",
+   "namespace": "",
+   "id": "0",
+   "width": 64,
+   "height": 64,
+   "uv_width": 64,
+   "uv_height": 64,
+   "particle": false,
+   "render_mode": "default",
+   "render_sides": "double",
+   "frame_time": 1,
+   "frame_order_type": "loop",
+   "frame_order": "",
+   "frame_interpolate": false,
+   "visible": true,
+   "internal": true,
+   "saved": false,
+   "uuid": "31c425cf-15a1-78fa-61c6-a14e15df050c",
+   "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABu0lEQVR4nO3WP0/CQBgG8KcEgw6IkwPCUCYZMGV1J3FwcnEiXZyc6aeAMDq5GCc+Q+PgIIsDKAkyEBiKxHSSOGhjQh1MSaFt5CiYDs9vu/Yu9+99707CEtrVkp0rTJFIywAAazwEAE95Mskge34j+bVXNN3zPQpiYRq3Kr0/6xgN1f7SP9GuluwwfW3KUgugaLo06MRgjYewxkMk0vLc7ifScuDuR53QgINSIWjyRkO19/Nbs3qDTgxRSwXhFOjWLbQqPU8kLHIm724XxVSIi1RWNF1yosBhvnwHhr77sCzWfsuDTpjhrp9wBDjnQbduBU7evfvdujX3L1eYRioKQt0CfoyGaqdSo1mKAPAcnlFahJUWQNF0abu0s9SpX6wdrtIF/Ze5HTQaqlBYPt13hTo7vXr0jZjB5ZkNAA/NNwBAud2c1bOeL2wASBxdb+T6nEuB5EEWyYPs0uV12sv7X6fO+bEpvtfg4iSDy2IRsOhWObYBwOybMPum53u53ZR2T+42+nCS3GEvursfr8bKHUfl2Rx353FGHgs1Hg3f1zwcIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiCu0H6kG9idFr4LcAAAAASUVORK5CYII="
+  }
+ ],
+ "animations": [],
+ "note": "house v5 (pass 3): cheese wedge = one 11x9 plane 1 u above the base head (alpha triangle, 2:1 edges, baked-edge rim painted) tip 1 u past the brow; crust box seats on the head; 1 raised pepperoni; tip cheese drip plane"
+}
