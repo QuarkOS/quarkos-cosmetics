@@ -3,7 +3,7 @@
     {
       "id": "quarkos:chick",
       "name": "Chick",
-      "description": "A chick that sits on your head.",
+      "description": "A chick that perches on your head or shoulder.",
       "slot": "hat",
       "texture": "textures/cosmetics/chick.png",
       "model": "cosmetics/chick.json",

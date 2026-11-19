@@ -45,18 +45,14 @@ public final class Chick {
     private static final String ANIMATION = "/assets/quarkos_cosmetics/geckolib/animations/chick.animation.json";
     private static final float[] ZERO = new float[3];
     private static final float[] ONE = {1f, 1f, 1f};
-    /** In-bed travel. One name, so a newer walk clip drops in without a path change. */
-    private static final String TRAVEL_CLIP = "walk";
+    private static final String WALK_CLIP = "walk";
     private static final String SETTLE_CLIP = "settle";
     private static final String SLEEP_CLIP = "sleep";
     /** 1.25 s from the perch to the chest, inside the 1–1.5 s window. */
     private static final float TRAVEL_TICKS = 25f;
-    private static final float HEAD_PX = 8f;
-    /** Run6 bounds of the whole chick: wings, feet to tuft, beak to tail. */
-    private static final float CHICK_WIDE_PX = 6f;
-    private static final float CHICK_TALL_PX = 9f;
-    private static final float CHICK_LONG_PX = 6.5f;
-    private static boolean loggedScale;
+    private static final int SIT_AFTER_TICKS = 60;
+    private static final String LEFT_LEG = "left_leg";
+    private static final String RIGHT_LEG = "right_leg";
 
     private static Model model;
     private static boolean failed;
@@ -65,6 +61,10 @@ public final class Chick {
     private static Player bound;
     private static boolean boundHelmet;
     private static boolean boundHat;
+    private static float boundLeftSleeve;
+    private static float boundRightSleeve;
+    private static Slot measuredSlot;
+    private static PerchMeasurement perchMeasurement;
     private static final Map<UUID, Mood> MOODS = new LinkedHashMap<>();
     private static final Set<String> POSE_DET = new HashSet<>();
     private static final Set<String> BONE_DET = new HashSet<>();
@@ -82,7 +82,7 @@ public final class Chick {
     }
 
     public static boolean isPerch(Slot slot) {
-        return slot == Slot.HAT;
+        return slot != null && slot.isChickPerch();
     }
 
     public static boolean draws(String id) {
@@ -130,17 +130,31 @@ public final class Chick {
         return mood != null && mood.bed == Bed.ASLEEP;
     }
 
-    public static void bind(Player player, boolean helmet, boolean hatLayer) {
+    public static void bind(Player player, boolean helmet, boolean hatLayer, ModelPart leftSleeve, ModelPart rightSleeve,
+                            boolean skinShell) {
         bound = player;
         boundHelmet = helmet;
         boundHat = hatLayer;
+        float sleeveDepth = skinShell ? SkinShell.DEPTH : 0.25f;
+        boundLeftSleeve = leftSleeve.visible && !leftSleeve.skipDraw ? sleeveDepth : 0f;
+        boundRightSleeve = rightSleeve.visible && !rightSleeve.skipDraw ? sleeveDepth : 0f;
+    }
+
+    public record PerchMeasurement(float gapPx, float widthRatio) {
+    }
+
+    public static void startPerchMeasurement(Slot slot) {
+        measuredSlot = slot;
+        perchMeasurement = null;
+    }
+
+    public static PerchMeasurement finishPerchMeasurement() {
+        measuredSlot = null;
+        return perchMeasurement;
     }
 
     public static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age, Slot slot,
-                            ModelPart head, ModelPart body) {
-        if (!isPerch(slot)) {
-            return;
-        }
+                            ModelPart part, ModelPart body, boolean measureSelf) {
         Model loaded = load();
         if (loaded == null) {
             return;
@@ -154,14 +168,19 @@ public final class Chick {
             logged = announce;
             LOGGER.info("chick playing {} at {}s on {}", sample.clip, sample.time, slot.wire);
         }
-        float scale = chickScale(loaded);
-        float contact = sitContact(loaded);
-        if (!loggedScale) {
-            loggedScale = true;
-            LOGGER.info("chick scale {} ({} px tall, {} px wide, {} px long, head {} px)", scale,
-                    CHICK_TALL_PX * scale, CHICK_WIDE_PX * scale, CHICK_LONG_PX * scale, HEAD_PX);
+        float scale = loaded.perchScale;
+        Place perch = perch(slot, part);
+        Place place = place(pose, perch, body);
+        boolean perched = place == perch;
+        Map<String, Matrix4f> bones = boneTransforms(loaded, sample);
+        Bounds animated = bounds(loaded, bones, null);
+        float contactY = animated.minY;
+        if (perched) {
+            plantFeet(bones, animated, plantedWeight(sample));
+            if ("happy".equals(sample.clip) || "happy".equals(sample.fromClip)) {
+                contactY -= sample.position(loaded, "root")[1];
+            }
         }
-        Place place = place(pose, slot, head, body, scale, contact);
         noteSubmit(slot, age, place.world != null);
         pose.pushPose();
         if (place.world != null) {
@@ -174,6 +193,8 @@ public final class Chick {
         // Bedrock +Y is up. A 180° roll stands the chick up. A negative Y scale would
         // mirror it, flip the winding, and draw the inside faces.
         bedrock(pose);
+        Matrix4f perchFrame = perched && measuredSlot == slot && measureSelf
+                ? new Matrix4f(pose.last().pose()) : null;
         if (place.world == null) {
             // The roll negates X compared with a Y mirror. The perch stays on the same side.
             pose.translate(-place.x, place.y, place.z);
@@ -185,12 +206,20 @@ public final class Chick {
             pose.mulPose(place.turn);
             //?}
         }
+        pose.translate(0f, ChickPerch.anchorOffset(contactY, scale), 0f);
         pose.scale(scale, scale, scale);
         Matrix4f view = new Matrix4f(pose.last().pose());
+        if (perchFrame != null) {
+            Bounds placed = bounds(loaded, bones, perchFrame.invert().mul(view));
+            float leftGap = placed.leftSoleY - perch.y;
+            float rightGap = placed.rightSoleY - perch.y;
+            float gap = Math.abs(leftGap) >= Math.abs(rightGap) ? leftGap : rightGap;
+            perchMeasurement = new PerchMeasurement(gap, placed.width() / ChickPerch.HEAD_WIDTH_PX);
+        }
         logPoseDet(slot, view);
         Matrix3f normals = new Matrix3f(pose.last().normal());
         submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT, consumer -> {
-            int quads = render(consumer, view, normals, light, loaded, sample);
+            int quads = render(consumer, view, normals, light, loaded, bones);
             notePaint(quads);
         });
         pose.popPose();
@@ -206,9 +235,9 @@ public final class Chick {
         bedrock(pose);
         Matrix4f view = new Matrix4f(pose.last().pose());
         Matrix3f normals = new Matrix3f(pose.last().normal());
-        Sample sample = new Sample("sit", 0, null, 0, 1f);
+        Map<String, Matrix4f> bones = boneTransforms(loaded, new Sample("sit", 0, null, 0, 1f));
         submitter.submit(pose, TEXTURE, CosmeticDrawer.Pass.CUTOUT,
-                consumer -> render(consumer, view, normals, light, loaded, sample));
+                consumer -> render(consumer, view, normals, light, loaded, bones));
         pose.popPose();
     }
     //?}
@@ -291,31 +320,23 @@ public final class Chick {
      * body level with world up, beak toward the pillow. After it arrives it sits. The bed
      * rotation never rides along.
      */
-    private static Place place(PoseStack pose, Slot slot, ModelPart head, ModelPart body,
-                               float scale, float contact) {
-        float[] perch = perch(slot, scale, contact);
-        ModelPart part = slot == Slot.HAT ? head : body;
+    private static Place place(PoseStack pose, Place perch, ModelPart body) {
         Mood mood = bound == null ? null : MOODS.get(bound.getUUID());
-        if (heldClip != null || mood == null || mood.bed == Bed.PERCH || bound == null || !bound.isSleeping()) {
-            if (heldClip != null || mood == null || mood.bed == Bed.PERCH) {
-                return new Place(part, perch[0], perch[1], perch[2], null, null);
-            }
-            return alongBody(pose, slot, head, body, perch, mood, scale, contact);
+        if (heldClip != null || mood == null || mood.bed == Bed.PERCH) {
+            return perch;
         }
-        return onChest(pose, part, body, perch, mood);
+        return bound.isSleeping() ? onChest(pose, body, perch, mood) : alongBody(pose, body, perch, mood);
     }
 
     /** Awake return trip. The player model is standing again, so body space is the perch frame. */
-    private static Place alongBody(PoseStack pose, Slot slot, ModelPart head, ModelPart body, float[] perch,
-                                   Mood mood, float scale, float contact) {
-        ModelPart part = slot == Slot.HAT ? head : body;
+    private static Place alongBody(PoseStack pose, ModelPart body, Place perch, Mood mood) {
         Matrix4f toBody = bodyPixels(pose, body);
-        Vector3f start = toBody(toBody, anchor(pose, part, perch[0], perch[1], perch[2]));
-        Vector3f startUp = axis(pose, toBody, part, perch, 0f, 1f, 0f);
-        Vector3f startBeak = axis(pose, toBody, part, perch, 0f, 0f, -1f);
+        Vector3f start = toBody(toBody, anchor(pose, perch.part, perch.x, perch.y, perch.z));
+        Vector3f startUp = axis(pose, toBody, perch, 0f, 1f, 0f);
+        Vector3f startBeak = axis(pose, toBody, perch, 0f, 0f, -1f);
         Vector3f outward = new Vector3f(0f, 0f, -1f);
         Vector3f surface = new Vector3f(0f, -4.5f, -2f);
-        Vector3f chest = new Vector3f(surface).fma(0.1f - contact * scale, outward);
+        Vector3f chest = new Vector3f(surface).fma(0.1f, outward);
         Vector3f control = new Vector3f(chest).add(0f, 8f, -6f);
         boolean settled = mood.bed == Bed.SETTLE || mood.bed == Bed.ASLEEP;
         float s = settled ? 1f : smooth(mood.trip);
@@ -359,8 +380,8 @@ public final class Chick {
      * The body stays level for the whole trip. The beak turns toward the pillow as it arrives.
      * Settle and sleep are the clips themselves: no extra bone pitch or position on top.
      */
-    private static Place onChest(PoseStack pose, ModelPart part, ModelPart body, float[] perch, Mood mood) {
-        Vector3f start = anchor(pose, part, perch[0], perch[1], perch[2]);
+    private static Place onChest(PoseStack pose, ModelPart body, Place perch, Mood mood) {
+        Vector3f start = anchor(pose, perch.part, perch.x, perch.y, perch.z);
         Vector3f chest = anchor(pose, body, 0f, -4.5f, -2f);
         chest.y += 0.2f / 16f;
         Vector3f towardHead = new Vector3f(anchor(pose, body, 0f, 0f, 0f)).sub(anchor(pose, body, 0f, -8f, 0f));
@@ -396,49 +417,26 @@ public final class Chick {
         return new Place(body, 0f, 0f, 0f, facing(up, aim), pos);
     }
 
-    /**
-     * Feet stay 0.1 px clear of the part. Sit tucks the belly to {@code contact}.
-     * The contact point is {@code contact * scale} above the anchor, so Y moves with the
-     * scale and the belly stays flush when the chick shrinks.
-     */
-    private static float[] perch(Slot slot, float scale, float contact) {
-        float x = slot == Slot.SHOULDER_RIGHT ? -7f : slot == Slot.SHOULDER_LEFT ? 7f : 0f;
-        float y = slot == Slot.HAT ? 32.1f : 24.1f;
+    private static Place perch(Slot slot, ModelPart part) {
         if (slot == Slot.HAT) {
-            if (boundHelmet) {
-                y += 1f;
-            } else if (boundHat) {
-                y += 0.5f;
-            }
+            return new Place(part, 0f, ChickPerch.headSurfaceY(boundHelmet, boundHat), 0f, null, null);
         }
-        y -= contact * (scale - 1f);
-        return new float[] {x, y - 24f, 0f};
+        boolean left = slot == Slot.SHOULDER_LEFT;
+        // The slim arm's center keeps the feet within both arm widths. Its top is 2 px above the pivot.
+        float x = left ? 0.5f : -0.5f;
+        float sleeve = left ? boundLeftSleeve : boundRightSleeve;
+        return new Place(part, x, 2f + sleeve, 0f, null, null);
     }
 
-    /** One uniform scale. The whole chick (9 px tall) becomes two thirds of the 8 px head. */
-    private static float chickScale(Model loaded) {
-        return (HEAD_PX * 2f / 3f) / CHICK_TALL_PX;
+    private static boolean planted(String clip) {
+        return "idle".equals(clip) || "peck".equals(clip) || "sit".equals(clip) || SLEEP_CLIP.equals(clip);
     }
 
-    /** Lowest body corner once the sit tuck is applied. Measured from the body cubes and the sit clip. */
-    private static float sitContact(Model loaded) {
-        Bone body = loaded.bones.get("body");
-        float minY = 0f;
-        if (body != null) {
-            minY = Float.POSITIVE_INFINITY;
-            for (Cube cube : body.cubes) {
-                minY = Math.min(minY, cube.oy);
-            }
+    private static float plantedWeight(Sample sample) {
+        if (planted(sample.clip)) {
+            return 1f;
         }
-        Clip sit = loaded.clips.get("sit");
-        float drop = 0f;
-        if (sit != null) {
-            Channel channel = sit.bones.get("body");
-            if (channel != null && channel.position.times.length > 0) {
-                drop = channel.position.sample(0)[1];
-            }
-        }
-        return minY + drop;
+        return planted(sample.fromClip) ? 1f - sample.blend : 0f;
     }
 
     private static void updateBed(Player player, Mood mood, Model loaded, float age) {
@@ -515,7 +513,7 @@ public final class Chick {
         if (mood.bed == Bed.ASLEEP) {
             return authored(loaded, SLEEP_CLIP, age - mood.phaseAge, true);
         }
-        Clip clip = loaded.clips.get(TRAVEL_CLIP);
+        Clip clip = loaded.clips.get(WALK_CLIP);
         double length = clip == null || clip.length <= 0.0001 ? 0.6 : clip.length;
         String from = null;
         double fromTime = 0;
@@ -530,7 +528,7 @@ public final class Chick {
                 fromTime = (age / 20.0) % sitLength;
             }
         }
-        return new Sample(TRAVEL_CLIP, (age / 20.0) % length, from, fromTime, blend);
+        return new Sample(WALK_CLIP, (age / 20.0) % length, from, fromTime, blend);
     }
 
     /** One clip, from its own keys. {@code loop} wraps; otherwise the sample holds the last frame. */
@@ -566,10 +564,10 @@ public final class Chick {
         return inverseBody.transformPosition(new Vector3f(point));
     }
 
-    private static Vector3f axis(PoseStack pose, Matrix4f inverseBody, ModelPart part, float[] perch,
+    private static Vector3f axis(PoseStack pose, Matrix4f inverseBody, Place perch,
                                  float dx, float dy, float dz) {
-        Vector3f origin = toBody(inverseBody, anchor(pose, part, perch[0], perch[1], perch[2]));
-        Vector3f shifted = toBody(inverseBody, anchor(pose, part, perch[0] + dx, perch[1] + dy, perch[2] + dz));
+        Vector3f origin = toBody(inverseBody, anchor(pose, perch.part, perch.x, perch.y, perch.z));
+        Vector3f shifted = toBody(inverseBody, anchor(pose, perch.part, perch.x + dx, perch.y + dy, perch.z + dz));
         return shifted.sub(origin);
     }
 
@@ -639,7 +637,7 @@ public final class Chick {
         if (mood.bed != Bed.PERCH) {
             return bedSample(loaded, mood, age);
         }
-        String clip = choose(bound, slot, mood, age);
+        String clip = choose(bound, mood, age);
         if (mood.clip != null && !mood.clip.equals(clip)) {
             mood.fromClip = mood.clip;
             mood.fromTime = mood.time;
@@ -657,7 +655,7 @@ public final class Chick {
         return new Sample(clip, mood.time, mood.fromClip, mood.fromTime, blend);
     }
 
-    private static String choose(Player player, Slot slot, Mood mood, float age) {
+    private static String choose(Player player, Mood mood, float age) {
         int tick = player.tickCount;
         boolean hostile = hostile(player);
         boolean hurt = player.hurtTime > 0;
@@ -668,7 +666,8 @@ public final class Chick {
         } else if (mood.stillSince < 0) {
             mood.stillSince = tick;
         }
-        boolean sleeping = player.isSleeping() || (!hostile && !hurt && tick - mood.stillSince >= 600);
+        int stillTicks = tick - mood.stillSince;
+        boolean sleeping = player.isSleeping() || (!hostile && !hurt && stillTicks >= 600);
         boolean wet = player.isInWater();
         boolean rain = player.level().isRainingAt(player.blockPosition());
         if (mood.wasWet && !wet && tick >= mood.shakeReady) {
@@ -701,7 +700,7 @@ public final class Chick {
         if (hostile || hurt) {
             mood.alertUntil = Math.max(mood.alertUntil, tick + 60);
         }
-        String resting = slot == Slot.HAT || sneaking || !moving ? "sit" : "idle";
+        String resting = sneaking || stillTicks >= SIT_AFTER_TICKS ? "sit" : moving ? WALK_CLIP : "idle";
         if ((resting.equals("idle") || resting.equals("sit")) && mood.oneshot == null && tick >= mood.nextPeck) {
             start(mood, "peck", age, mood.shakeReady);
             mood.nextPeck = tick + 160 + player.getRandom().nextInt(241);
@@ -794,18 +793,64 @@ public final class Chick {
         return false;
     }
 
-    private static int render(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded, Sample sample) {
+    private static Map<String, Matrix4f> boneTransforms(Model loaded, Sample sample) {
         Map<String, Matrix4f> worlds = new LinkedHashMap<>();
-        Map<String, Matrix3f> turns = new LinkedHashMap<>();
+        for (Bone bone : loaded.bones.values()) {
+            world(loaded, bone, sample, worlds);
+        }
+        return worlds;
+    }
+
+    private static Bounds bounds(Model loaded, Map<String, Matrix4f> bones, Matrix4f toPart) {
+        Bounds bounds = new Bounds();
+        Matrix4f combined = toPart == null ? null : new Matrix4f();
+        Vector3f min = new Vector3f();
+        Vector3f max = new Vector3f();
+        for (Bone bone : loaded.bones.values()) {
+            if (bone.cubes.isEmpty()) {
+                continue;
+            }
+            Matrix4f local = bones.get(bone.name);
+            Matrix4f transform = combined == null ? local : combined.set(toPart).mul(local);
+            float boneMinY = Float.POSITIVE_INFINITY;
+            for (Cube cube : bone.cubes) {
+                float inflate = cube.inflate;
+                transform.transformAab(cube.ox - inflate, cube.oy - inflate, cube.oz - inflate,
+                        cube.ox + cube.sx + inflate, cube.oy + cube.sy + inflate, cube.oz + cube.sz + inflate, min, max);
+                bounds.minX = Math.min(bounds.minX, min.x);
+                bounds.maxX = Math.max(bounds.maxX, max.x);
+                boneMinY = Math.min(boneMinY, min.y);
+            }
+            bounds.minY = Math.min(bounds.minY, boneMinY);
+            if (LEFT_LEG.equals(bone.name)) {
+                bounds.leftSoleY = boneMinY;
+            } else if (RIGHT_LEG.equals(bone.name)) {
+                bounds.rightSoleY = boneMinY;
+            }
+        }
+        return bounds;
+    }
+
+    private static void plantFeet(Map<String, Matrix4f> bones, Bounds animated, float planted) {
+        // In sit, the belly is below both tucked soles. Moving only the anchor would bury it.
+        float lowestSole = Math.min(animated.leftSoleY, animated.rightSoleY);
+        float leftOffset = ChickPerch.footOffset(animated.minY, lowestSole, animated.leftSoleY, planted);
+        float rightOffset = ChickPerch.footOffset(animated.minY, lowestSole, animated.rightSoleY, planted);
+        bones.get(LEFT_LEG).translateLocal(0f, leftOffset, 0f);
+        bones.get(RIGHT_LEG).translateLocal(0f, rightOffset, 0f);
+    }
+
+    private static int render(VertexConsumer consumer, Matrix4f view, Matrix3f normals, int light, Model loaded,
+                              Map<String, Matrix4f> bones) {
         int quads = 0;
         for (Bone bone : loaded.bones.values()) {
-            world(loaded, bone, sample, worlds, turns);
-        }
-        for (Bone bone : loaded.bones.values()) {
-            Matrix4f local = worlds.get(bone.name);
-            Matrix3f turn = turns.get(bone.name);
-            if (local == null || bone.cubes.isEmpty()) {
+            if (bone.cubes.isEmpty()) {
                 continue;
+            }
+            Matrix4f local = bones.get(bone.name);
+            Matrix3f turn = new Matrix3f(local);
+            if (Math.abs(turn.determinant()) > 0.0001f) {
+                turn.invert().transpose();
             }
             Matrix4f combined = new Matrix4f(view).mul(local);
             for (Cube cube : bone.cubes) {
@@ -815,7 +860,7 @@ public final class Chick {
         return quads;
     }
 
-    private static Matrix4f world(Model loaded, Bone bone, Sample sample, Map<String, Matrix4f> worlds, Map<String, Matrix3f> turns) {
+    private static Matrix4f world(Model loaded, Bone bone, Sample sample, Map<String, Matrix4f> worlds) {
         Matrix4f cached = worlds.get(bone.name);
         if (cached != null) {
             return cached;
@@ -824,7 +869,7 @@ public final class Chick {
         if (bone.parent != null) {
             Bone parent = loaded.bones.get(bone.parent);
             if (parent != null) {
-                matrix.set(world(loaded, parent, sample, worlds, turns));
+                matrix.set(world(loaded, parent, sample, worlds));
             }
         }
         float[] position = sample.position(loaded, bone.name);
@@ -843,11 +888,6 @@ public final class Chick {
         if (matrix.determinant() < 0f && BONE_DET.add(bone.name)) {
             LOGGER.info("chick bone det {} = {}", bone.name, String.format(Locale.ROOT, "%.8g", matrix.determinant()));
         }
-        Matrix3f turn = new Matrix3f(matrix);
-        if (Math.abs(turn.determinant()) > 0.0001f) {
-            turn.invert().transpose();
-        }
-        turns.put(bone.name, turn);
         return matrix;
     }
 
@@ -1014,6 +1054,18 @@ public final class Chick {
         PERCH, TO_CHEST, SETTLE, ASLEEP, TO_PERCH
     }
 
+    private static final class Bounds {
+        float minX = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float leftSoleY = Float.POSITIVE_INFINITY;
+        float rightSoleY = Float.POSITIVE_INFINITY;
+
+        float width() {
+            return maxX - minX;
+        }
+    }
+
     private static final class Place {
         final ModelPart part;
         final float x;
@@ -1067,12 +1119,15 @@ public final class Chick {
         final float textureHeight;
         final Map<String, Bone> bones;
         final Map<String, Clip> clips;
+        final float perchScale;
 
         Model(float textureWidth, float textureHeight, Map<String, Bone> bones, Map<String, Clip> clips) {
             this.textureWidth = textureWidth;
             this.textureHeight = textureHeight;
             this.bones = bones;
             this.clips = clips;
+            Map<String, Matrix4f> rest = boneTransforms(this, new Sample("", 0, null, 0, 1f));
+            this.perchScale = ChickPerch.scaleForWidth(bounds(this, rest, null).width());
         }
 
         static Model parse() {

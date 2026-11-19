@@ -34,8 +34,8 @@ public final class EquipmentMirror {
         EnumMap<Slot, String> next = new EnumMap<>(Slot.class);
         for (Slot slot : Slot.values()) {
             String id = equipment.id(slot);
-            // v1 renders hats and ears. Body slots stay in the gallery protocol and are not drawn.
-            if (id != null && !id.isBlank() && slot.wornOnHead()) {
+            // The drawer identifies shoulder chicks once their gallery model has loaded.
+            if (id != null && !id.isBlank() && (slot.wornOnHead() || slot.isShoulder())) {
                 next.put(slot, id);
             }
         }

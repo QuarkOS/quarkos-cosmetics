@@ -2,6 +2,7 @@ package dev.quarkos.cosmetics.config;
 
 import dev.quarkos.cosmetics.gallery.GalleryClient;
 import dev.quarkos.cosmetics.model.Slot;
+import dev.quarkos.cosmetics.render.Chick;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Persistent wardrobe settings. The Minecraft access token is never written. */
 public final class ClientSettings {
@@ -32,9 +34,8 @@ public final class ClientSettings {
     public final Map<Slot, Boolean> categoryOn = new EnumMap<>(Slot.class);
     private final Map<Slot, Integer> tints = new EnumMap<>(Slot.class);
     public final Set<String> disabled = new LinkedHashSet<>();
-    /** v1 perch. The chick stays on the hat. */
     public String chickPerch = Slot.HAT.wire;
-    public final Map<Slot, String> chickGallery = new EnumMap<>(Slot.class);
+    public final Map<Slot, String> chickGallery = new ConcurrentHashMap<>();
 
     public ClientSettings() {
         for (Slot slot : Slot.values()) {
@@ -78,19 +79,17 @@ public final class ClientSettings {
         settings.skinDistance = parseDistance(properties.getProperty("skinDistance", "16"));
         settings.uuid = properties.getProperty("uuid", "");
         settings.playerName = properties.getProperty("playerName", "");
+        settings.chickPerch = Slot.parse(properties.getProperty("chickPerch")).filter(Slot::isChickPerch).orElse(Slot.HAT).wire;
         for (Slot slot : Slot.values()) {
-            String equippedId = properties.getProperty("equipped." + slot.wire, "");
-            // Body cosmetics stay in the codebase. v1 does not equip them.
-            settings.equipped.put(slot, slot.wornOnHead() ? equippedId : "");
-            settings.categoryOn.put(slot, Boolean.parseBoolean(properties.getProperty("category." + slot.wire, "true")));
-            settings.setTint(slot, TintColor.decode(properties.getProperty("tint." + slot.wire)));
-        }
-        settings.chickPerch = Slot.HAT.wire;
-        for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
             String published = properties.getProperty("chickGallery." + slot.wire, "");
-            if (!published.isBlank()) {
+            if (slot.isChickPerch() && !published.isBlank()) {
                 settings.chickGallery.put(slot, published.trim());
             }
+        }
+        for (Slot slot : Slot.values()) {
+            settings.equip(slot, properties.getProperty("equipped." + slot.wire, ""));
+            settings.categoryOn.put(slot, Boolean.parseBoolean(properties.getProperty("category." + slot.wire, "true")));
+            settings.setTint(slot, TintColor.decode(properties.getProperty("tint." + slot.wire)));
         }
         settings.disabled.clear();
         String disabled = properties.getProperty("disabled", "");
@@ -126,8 +125,10 @@ public final class ClientSettings {
         }
         properties.setProperty("disabled", String.join(",", disabled));
         properties.setProperty("chickPerch", chickPerch == null || chickPerch.isBlank() ? Slot.HAT.wire : chickPerch);
-        for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
-            properties.setProperty("chickGallery." + slot.wire, chickGallery.getOrDefault(slot, ""));
+        for (Slot slot : Slot.values()) {
+            if (slot.isChickPerch()) {
+                properties.setProperty("chickGallery." + slot.wire, chickGallery.getOrDefault(slot, ""));
+            }
         }
         Path file = configFile(gameDir);
         try {
@@ -214,35 +215,29 @@ public final class ClientSettings {
     }
 
     public void equip(Slot slot, String id) {
-        if (slot == null || !slot.wornOnHead()) {
-            if (slot != null) {
-                equipped.put(slot, "");
-            }
+        if (slot == null) {
             return;
         }
-        equipped.put(slot, id == null ? "" : id);
+        boolean allowed = slot.wornOnHead() || (slot.isShoulder() && (Chick.ID.equals(id) || isChickGallery(id)));
+        equipped.put(slot, allowed && id != null ? id : "");
     }
 
     public boolean isChickGallery(String id) {
         return id != null && chickGallery.containsValue(id);
     }
 
-    /** v1 keeps the hat perch. Shoulder perches are not equipped. */
     public void setChickPerch(Slot perch) {
-        if (perch != Slot.HAT) {
+        if (perch == null || !perch.isChickPerch()) {
             return;
         }
         chickPerch = perch.wire;
-        for (Slot slot : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
-            if (slot == perch) {
-                continue;
-            }
+        for (Slot slot : Slot.values()) {
             String equippedId = equippedId(slot);
-            if ("quarkos:chick".equals(equippedId) || (chickGallery.get(slot) != null && chickGallery.get(slot).equals(equippedId))) {
+            if (slot != perch && slot.isChickPerch() && (Chick.ID.equals(equippedId) || isChickGallery(equippedId))) {
                 equip(slot, "");
             }
         }
-        equip(perch, "quarkos:chick");
+        equip(perch, Chick.ID);
     }
 
     public static String hyphenate(String raw) {

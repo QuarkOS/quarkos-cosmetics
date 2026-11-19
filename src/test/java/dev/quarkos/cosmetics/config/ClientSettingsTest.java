@@ -57,6 +57,28 @@ class ClientSettingsTest {
     }
 
     @Test
+    void movesAndRestoresTheChickAcrossPerches() {
+        ClientSettings settings = new ClientSettings();
+        settings.setChickPerch(Slot.HAT);
+        settings.setChickPerch(Slot.SHOULDER_LEFT);
+        assertEquals("", settings.equippedId(Slot.HAT));
+        assertEquals("quarkos:chick", settings.equippedId(Slot.SHOULDER_LEFT));
+
+        settings.equip(Slot.HAT, "quarkos:lantern_cap");
+        settings.chickGallery.put(Slot.SHOULDER_RIGHT, "published-chick");
+        settings.setChickPerch(Slot.SHOULDER_RIGHT);
+        settings.equip(Slot.SHOULDER_RIGHT, "published-chick");
+        settings.equip(Slot.SHOULDER_LEFT, "quarkos:ink_wren");
+        settings.save(gameDir);
+
+        ClientSettings restored = ClientSettings.load(gameDir);
+        assertEquals("shoulder_right", restored.chickPerch);
+        assertEquals("published-chick", restored.equippedId(Slot.SHOULDER_RIGHT));
+        assertEquals("quarkos:lantern_cap", restored.equippedId(Slot.HAT));
+        assertEquals("", restored.equippedId(Slot.SHOULDER_LEFT));
+    }
+
+    @Test
     void loadsEachTintIndependentlyAndDropsDefaultKeys() throws Exception {
         Path file = ClientSettings.configFile(gameDir);
         Files.createDirectories(file.getParent());

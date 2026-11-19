@@ -18,8 +18,8 @@
   "text.quarkos_cosmetics.off": "Off",
   "text.quarkos_cosmetics.clear": "Empty",
   "slot.quarkos_cosmetics.hat": "Hat",
-  "slot.quarkos_cosmetics.left_shoulder": "Left shoulder",
-  "slot.quarkos_cosmetics.right_shoulder": "Right shoulder",
+  "slot.quarkos_cosmetics.shoulder_left": "Left shoulder",
+  "slot.quarkos_cosmetics.shoulder_right": "Right shoulder",
   "slot.quarkos_cosmetics.back": "Back",
   "slot.quarkos_cosmetics.tail": "Tail",
   "slot.quarkos_cosmetics.ears": "Ears"

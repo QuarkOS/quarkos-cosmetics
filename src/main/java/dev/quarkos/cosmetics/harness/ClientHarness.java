@@ -35,6 +35,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -180,6 +181,8 @@ public final class ClientHarness {
             new Shot("chick-head", Slot.HAT, Chick.ID, false, false, 0f, false),
             new Shot("chick-shoulder", Slot.SHOULDER_LEFT, Chick.ID, false, false, 36f, false),
             new Shot("chick-head-side", Slot.HAT, Chick.ID, false, false, 0f, false),
+            new Shot("chick-head-front-close", Slot.HAT, Chick.ID, true, false, 0f, false),
+            new Shot("chick-head-side-close", Slot.HAT, Chick.ID, false, false, 0f, false),
             new Shot("chick-shoulder-side", Slot.SHOULDER_LEFT, Chick.ID, false, false, 0f, false),
             new Shot("chick-chest-asleep", Slot.HAT, Chick.ID, false, false, 0f, false),
             new Shot("chick-to-chest", Slot.HAT, Chick.ID, false, false, 0f, false),
@@ -229,6 +232,7 @@ public final class ClientHarness {
     private static int ticks;
     private static boolean armed;
     private static boolean shotQueued;
+    private static boolean perchCheckFailed;
     private static boolean frameEndShots;
     private static Path pendingShot;
     private static boolean studio;
@@ -518,6 +522,9 @@ public final class ClientHarness {
             }
             LOGGER.info("gif shot {} locked to candle frame {}", shot.name, candle);
         }
+        if (!shotQueued && checksChickPerch(shot)) {
+            checkChickPerch(shot);
+        }
         Runnable next = () -> {
             restoreStudioSettings();
             shotIndex++;
@@ -676,6 +683,9 @@ public final class ClientHarness {
             settings.setChickPerch(shot.slot);
         } else {
             settings.equip(shot.slot, shot.id);
+        }
+        if (checksChickPerch(shot)) {
+            Chick.startPerchMeasurement(shot.slot);
         }
         if (!layerTestSkin) {
             settings.save(client.gameDirectory.toPath());
@@ -905,6 +915,7 @@ public final class ClientHarness {
         portraitOrbit = shot.orbit;
         String clip = chickClipName(shot.name);
         boolean side = shot.name.equals("chick-head-side") || shot.name.equals("chick-shoulder-side");
+        boolean close = shot.name.equals("chick-head-front-close") || shot.name.equals("chick-head-side-close");
         if (shot.name.equals("chick-to-chest") || shot.name.equals("chick-chest-asleep")) {
             Chick.hold(null, null);
         } else if (side) {
@@ -926,6 +937,17 @@ public final class ClientHarness {
             lockYaw = 270f;
             lockPitch = 2f;
             client.options.fov().set(32);
+        }
+        if (close) {
+            client.player.setXRot(0f);
+            client.player.xRotO = 0f;
+            portraitLock = true;
+            lockX = shot.front ? 0.5 : -1.1;
+            lockY = 102.9;
+            lockZ = shot.front ? -1.1 : 0.5;
+            lockYaw = shot.front ? 0f : 270f;
+            lockPitch = 0f;
+            client.options.fov().set(42);
         }
         if (shot.name.equals("chick-chest-asleep")) {
             if (!client.player.isSleeping()) {
@@ -1035,13 +1057,36 @@ public final class ClientHarness {
         return true;
     }
 
+    private static boolean checksChickPerch(Shot shot) {
+        return switch (shot.name) {
+            case "chick-head", "chick-head-side", "chick-head-front-close", "chick-head-side-close",
+                    "chick-shoulder", "chick-shoulder-side", "chick-idle", "chick-peck", "chick-sit" -> true;
+            default -> false;
+        };
+    }
+
+    private static void checkChickPerch(Shot shot) {
+        Chick.PerchMeasurement measure = Chick.finishPerchMeasurement();
+        if (measure == null) {
+            perchCheckFailed = true;
+            LOGGER.error("CHICK_PERCH slot={} shot={} status=FAIL reason=no_perch_render", shot.slot.wire, shot.name);
+            return;
+        }
+        float gap = measure.gapPx();
+        float ratio = measure.widthRatio();
+        boolean pass = Math.abs(gap) <= 0.3f && ratio >= 0.55f && ratio <= 0.8f;
+        perchCheckFailed |= !pass;
+        LOGGER.info(String.format(Locale.ROOT, "CHICK_PERCH slot=%s gapPx=%.6f widthRatio=%.6f shot=%s status=%s",
+                shot.slot.wire, gap, ratio, shot.name, pass ? "PASS" : "FAIL"));
+    }
+
     private static String chickClipName(String name) {
         String body = name.startsWith("chick-") ? name.substring("chick-".length()) : name;
         if (body.endsWith("-clip")) {
             body = body.substring(0, body.length() - "-clip".length());
         }
         return switch (body) {
-            case "head", "head-side" -> "sit";
+            case "head", "head-side", "head-front-close", "head-side-close" -> "sit";
             case "shoulder", "shoulder-side" -> "idle";
             default -> body;
         };
@@ -1909,6 +1954,10 @@ public final class ClientHarness {
     private static void stop(Minecraft client) {
         if (ticks > 10) {
             restoreStudioSettings();
+            if (perchCheckFailed) {
+                LOGGER.error("HARNESS_FAILED chick_perch");
+                throw new AssertionError("Chick perch check failed. See CHICK_PERCH in the harness log.");
+            }
             LOGGER.info("cosmetics harness finished");
             LOGGER.info("HARNESS_DONE");
             client.stop();

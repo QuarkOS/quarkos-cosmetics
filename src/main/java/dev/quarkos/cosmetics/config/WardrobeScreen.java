@@ -78,6 +78,7 @@ public final class WardrobeScreen extends Screen {
     }
 
     private static final List<Slot> HEAD_SLOTS = Arrays.stream(Slot.values()).filter(Slot::wornOnHead).toList();
+    private static final List<Slot> WARDROBE_SLOTS = List.of(Slot.HAT, Slot.EARS, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT);
     private static final int[] SKIN_DISTANCES = {8, 16, 32, 64};
     private final Screen parent;
     private final PlayerPreview preview;
@@ -156,7 +157,7 @@ public final class WardrobeScreen extends Screen {
 
         ClientSettings settings = ClientSettings.get();
         if (slot == null) {
-            slot = HEAD_SLOTS.stream().filter(value -> !settings.equippedId(value).isBlank()).findFirst().orElse(Slot.HAT);
+            slot = WARDROBE_SLOTS.stream().filter(value -> !settings.equippedId(value).isBlank()).findFirst().orElse(Slot.HAT);
         }
         if (urlDraft == null) {
             urlDraft = settings.galleryUrl;
@@ -228,6 +229,9 @@ public final class WardrobeScreen extends Screen {
 
     private void open(View next) {
         if (view != next) {
+            if (next == View.GALLERY && slot.isShoulder()) {
+                slot = Slot.HAT;
+            }
             view = next;
             rebuild();
         }
@@ -241,7 +245,7 @@ public final class WardrobeScreen extends Screen {
         Rect toolbar = collection.toolbar();
         String visibleLabel = toolbar.w() >= 237 ? "Category visible" : "Visible";
         int toggleWidth = font.width(visibleLabel) + 42;
-        int categoryWidth = Math.min(166, toolbar.w() - toggleWidth - 4);
+        int categoryWidth = Math.min(290, toolbar.w() - toggleWidth - 4);
         categories(new Rect(toolbar.x(), toolbar.y(), categoryWidth, toolbar.h()), true);
         addRenderableWidget(ToggleSwitch.create(trailing(toolbar, toggleWidth), visibleLabel,
                 () -> settings.categoryOn.getOrDefault(slot, true), on -> {
@@ -252,10 +256,12 @@ public final class WardrobeScreen extends Screen {
         List<Card> cards = new ArrayList<>();
         cards.add(new Card("", "None", null, null));
         for (ModelLibrary.Resolved model : ModelLibrary.packed(slot)) {
-            cards.add(new Card(model.id(), model.name(), null, Thumbnail.of(model)));
+            if (!slot.isShoulder() || Chick.ID.equals(model.id())) {
+                cards.add(new Card(model.id(), model.name(), null, Thumbnail.of(model)));
+            }
         }
         GridMetrics metrics = buildGrid(collection.grid(), cards, false, equipped);
-        if (cards.size() == 1) {
+        if (cards.size() == 1 && slot.wornOnHead()) {
             Rect none = metrics.card(0, 0);
             int left = none.right() + 12;
             emptyWardrobe = new Rect(left, none.y() + 8, collection.grid().right() - left, 17);
@@ -300,12 +306,13 @@ public final class WardrobeScreen extends Screen {
         }
     }
 
-    private void categories(Rect bar, boolean showCounts) {
-        for (int i = 0; i < HEAD_SLOTS.size(); i++) {
-            Slot target = HEAD_SLOTS.get(i);
+    private void categories(Rect bar, boolean wardrobe) {
+        List<Slot> slots = wardrobe ? WARDROBE_SLOTS : HEAD_SLOTS;
+        for (int i = 0; i < slots.size(); i++) {
+            Slot target = slots.get(i);
             String label = slotName(target);
-            int count = showCounts ? ModelLibrary.packed(target).size() : 0;
-            FlatButton button = new FlatButton(bar.column(i, HEAD_SLOTS.size(), 4), Component.literal(label), pressed -> {
+            int count = wardrobe && !target.isShoulder() ? ModelLibrary.packed(target).size() : 0;
+            FlatButton button = new FlatButton(bar.column(i, slots.size(), 4), Component.literal(label), pressed -> {
                 if (slot != target) {
                     slot = target;
                     gallerySelection = "";
@@ -317,16 +324,25 @@ public final class WardrobeScreen extends Screen {
                 UiTheme.frame(graphics, bounds, selected ? UiTheme.HOVER : widget.fill(hovered),
                         selected ? UiTheme.ACCENT : widget.border());
                 int ink = selected ? UiTheme.TEXT : UiTheme.MUTED;
+                if (target.isShoulder() || (wardrobe && bounds.w() < 54)) {
+                    String caption = target.isShoulder() && font.width(label) > bounds.w() - 4
+                            ? target == Slot.SHOULDER_LEFT ? "Left" : "Right" : label;
+                    UiTheme.centered(graphics, font, caption, bounds.inset(2), ink);
+                    return;
+                }
                 UiTheme.slotIcon(graphics, target, bounds.x() + 5, bounds.y() + (bounds.h() - 12) / 2, ink);
                 String countLabel = Integer.toString(count);
                 int numberWidth = font.width(countLabel);
-                int reserve = showCounts ? numberWidth + 7 : 5;
+                int reserve = wardrobe ? numberWidth + 7 : 5;
                 UiTheme.text(graphics, font, label, new Rect(bounds.x() + 21, bounds.y(), bounds.w() - 21 - reserve, bounds.h()), ink);
-                if (showCounts) {
+                if (wardrobe) {
                     UiTheme.text(graphics, font, countLabel,
                             new Rect(bounds.right() - numberWidth - 5, bounds.y(), numberWidth, bounds.h()), UiTheme.MUTED);
                 }
             });
+            if (wardrobe) {
+                button.setTooltip(Tooltip.create(Component.literal(label)));
+            }
             addRenderableWidget(button);
         }
     }

@@ -2,7 +2,7 @@
 
 Free Minecraft Java client cosmetics by Emilio Schwaiger. The mod id is `quarkos_cosmetics`. It is client-only, MIT licensed, and does not depend on `quarkos_capes`.
 
-The packed v1 wardrobe is hats and ears: lantern cap, paper boat, crescent circlet, jack-o'-lantern mask, fox tips, moth tufts, ribbon bows, and a chick on the head. Body cosmetics are not equipped or listed. The gallery is optional. The client stores a player UUID and never stores a Minecraft access token.
+The packed wardrobe includes hats, ears, and a chick that perches on your head or either shoulder. The gallery is optional. The client stores a player UUID and never stores a Minecraft access token.
 
 ## Run
 
@@ -34,4 +34,4 @@ Packed `quarkos:` cosmetics equip locally. Publishing one creates a gallery id t
 
 ## Slots
 
-Packed cosmetics use `cosmetics-model-1`. Element names containing `flap` or `idle` animate. v1 lists hat and ears only. The chick perches on the head. The second-skin shell is an original per-pixel extrusion of the 64×64 overlay, culled past the configured distance (default 16 blocks).
+Packed cosmetics use `cosmetics-model-1`. Element names containing `flap` or `idle` animate. To move the chick, select its card in the **Hat**, **Left shoulder**, or **Right shoulder** wardrobe category. The second-skin shell is an original per-pixel extrusion of the 64×64 overlay, culled past the configured distance (default 16 blocks).

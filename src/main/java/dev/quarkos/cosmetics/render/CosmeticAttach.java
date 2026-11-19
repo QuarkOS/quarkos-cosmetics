@@ -16,9 +16,9 @@ final class CosmeticAttach {
     }
 
     static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age,
-                     ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
+                     ModelPart root, ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
                      List<Worn.Placement> placements, boolean wingsFlap, boolean self, boolean wardrobePreview) {
-        CosmeticDrawer.cosmetics(pose, submitter, light, age, head, body, leftArm, rightArm,
+        CosmeticDrawer.cosmetics(pose, submitter, light, age, root, head, body, leftArm, rightArm,
                 placements, wingsFlap, self, wardrobePreview);
     }
 

@@ -273,7 +273,7 @@ public final class GalleryWork {
 
     /** Publishes the one chick into the perch slot when signed in. The slot is the sync field. */
     public static void syncChick(Slot perch) {
-        if (perch != Slot.HAT) {
+        if (!Chick.isPerch(perch)) {
             return;
         }
         ClientSettings settings = ClientSettings.get();
@@ -285,11 +285,10 @@ public final class GalleryWork {
             return;
         }
         String token = bearer;
-        String cached = settings.chickGallery.get(perch);
         EXEC.execute(() -> {
             try {
                 GalleryClient client = client();
-                String id = cached;
+                String id = settings.chickGallery.get(perch);
                 if (id == null || id.isBlank()) {
                     ModelLibrary.Resolved resolved = ModelLibrary.resolve(Chick.ID);
                     if (resolved == null || resolved.png() == null) {
@@ -297,25 +296,24 @@ public final class GalleryWork {
                     }
                     String body = resolved.model().publishBody(resolved.name(), resolved.description(), perch, "texture", resolved.png());
                     id = client.publish(token, body).id();
+                    settings.chickGallery.put(perch, id);
                 }
-                client.equip(token, perch, id);
-                for (Slot other : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
-                    if (other != perch && settings.chickGallery.get(other) != null) {
+                GalleryClient.Equipment wearing = client.equip(token, perch, id);
+                for (Slot other : Slot.values()) {
+                    String otherChick = settings.chickGallery.get(other);
+                    if (other != perch && otherChick != null && otherChick.equals(wearing.id(other))) {
                         client.equip(token, other, null);
                     }
                 }
                 GalleryClient.Detail detail = client.cosmetic(id);
                 String equippedId = id;
                 onClient(() -> {
-                    settings.chickGallery.put(perch, equippedId);
                     remember(detail);
-                    settings.setChickPerch(perch);
-                    settings.equip(perch, equippedId);
-                    for (Slot other : new Slot[] {Slot.HAT, Slot.SHOULDER_LEFT, Slot.SHOULDER_RIGHT}) {
-                        if (other != perch && settings.isChickGallery(settings.equippedId(other))) {
-                            settings.equip(other, "");
-                        }
+                    if (ClientSettings.get() != settings || !perch.wire.equals(settings.chickPerch)
+                            || !Chick.ID.equals(settings.equippedId(perch))) {
+                        return;
                     }
+                    settings.equip(perch, equippedId);
                     save();
                     status = "Chick on " + perch.wire + ".";
                     refreshScreen();

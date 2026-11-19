@@ -66,7 +66,7 @@ public final class CosmeticDrawer {
     }
 
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
-                                 ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
+                                 ModelPart root, ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
                                  List<Worn.Placement> placed, boolean wingsFlap, boolean self, boolean wardrobePreview) {
         for (Worn.Placement placement : placed) {
             ModelPart part = switch (placement.anchor()) {
@@ -75,13 +75,21 @@ public final class CosmeticDrawer {
                 case LEFT_ARM -> leftArm;
                 case RIGHT_ARM -> rightArm;
             };
+            if (Chick.isPerch(placement.slot()) && Chick.draws(placement.id())) {
+                pose.pushPose();
+                if (root != null) {
+                    root.translateAndRotate(pose);
+                }
+                Chick.draw(pose, submitter, light, age, placement.slot(), part, body, self && !wardrobePreview);
+                pose.popPose();
+                continue;
+            }
+            if (placement.slot().isShoulder()) {
+                continue;
+            }
             if (kiteWings(placement.id())) {
                 KiteWings.draw(pose, submitter, light, age, wingsFlap, part,
                         placement.offsetX(), placement.offsetY(), placement.offsetZ());
-                continue;
-            }
-            if (Chick.draws(placement.id()) && Chick.isPerch(placement.slot())) {
-                Chick.draw(pose, submitter, light, age, placement.slot(), head, body);
                 continue;
             }
             if (JackOLanternMask.ID.equals(placement.id())) {

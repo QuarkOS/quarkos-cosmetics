@@ -34,8 +34,9 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
         boolean wingsFlap = entity instanceof net.minecraft.world.entity.player.Player player
                 && (player.isSprinting() || player.isFallFlying() || player.getAbilities().flying);
         boolean wardrobePreview = state instanceof PlayerPreview.WardrobeState wardrobe && wardrobe.quarkos$isWardrobePreview();
-        Chick.bind(entity instanceof net.minecraft.world.entity.player.Player player ? player : null, helmet, state.showHat);
         PlayerModel model = this.getParentModel();
+        Chick.bind(entity instanceof net.minecraft.world.entity.player.Player player ? player : null, helmet, state.showHat,
+                model.leftSleeve, model.rightSleeve, CosmeticAttach.showSkin(self, state.distanceToCameraSq));
         CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
             var type = switch (pass) {
                 case EYES -> RenderTypes.eyes(texture);
@@ -52,7 +53,7 @@ public final class CosmeticLayer extends RenderLayer<AvatarRenderState, PlayerMo
             };
             collector.submitCustomGeometry(stack, type, (entry, consumer) -> draw.accept(consumer));
         };
-        CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
+        CosmeticAttach.draw(pose, submitter, light, state.ageInTicks, model.root(), model.head, model.body, model.leftArm, model.rightArm,
                 CosmeticAttach.placements(entity == null ? null : entity.getUUID(), self, elytra, helmet, chest, legs),
                 wingsFlap, self, wardrobePreview);
     }
@@ -87,8 +88,9 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
         boolean legs = !player.getItemBySlot(EquipmentSlot.LEGS).isEmpty();
         boolean self = Minecraft.getInstance().player == player;
         boolean wingsFlap = player.isSprinting() || player.isFallFlying() || player.getAbilities().flying;
-        Chick.bind(player, helmet, player.isModelPartShown(PlayerModelPart.HAT));
         PlayerModel<AbstractClientPlayer> model = this.getParentModel();
+        Chick.bind(player, helmet, player.isModelPartShown(PlayerModelPart.HAT), model.leftSleeve, model.rightSleeve,
+                CosmeticAttach.showSkin(self, player.distanceToSqr(Minecraft.getInstance().gameRenderer.getMainCamera().getPosition())));
         CosmeticDrawer.Submitter submitter = (stack, texture, pass, draw) -> {
             RenderType type = switch (pass) {
                 case EYES -> RenderType.eyes(texture);
@@ -99,7 +101,7 @@ public final class CosmeticLayer extends RenderLayer<AbstractClientPlayer, Playe
             };
             draw.accept(buffer.getBuffer(type));
         };
-        CosmeticAttach.draw(pose, submitter, light, ageInTicks, model.head, model.body, model.leftArm, model.rightArm,
+        CosmeticAttach.draw(pose, submitter, light, ageInTicks, null, model.head, model.body, model.leftArm, model.rightArm,
                 CosmeticAttach.placements(player.getUUID(), self, elytra, helmet, chest, legs), wingsFlap, self, false);
     }
 }
