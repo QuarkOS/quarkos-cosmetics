@@ -13,6 +13,8 @@ import java.util.HashSet;
 import java.util.List;
 
 final class ReleaseModelCapture {
+    private static boolean verifyWardrobe;
+
     record Frame(String path, String id, Slot slot, float yaw, boolean plate, boolean sneak,
                  float age, String clip, String source, String action, boolean perch) {
         boolean equipped() {
@@ -25,6 +27,10 @@ final class ReleaseModelCapture {
 
     static boolean enabled() {
         return System.getProperty("quarkos_cosmetics.releasePlan") != null;
+    }
+
+    static boolean verifyWardrobe() {
+        return verifyWardrobe;
     }
 
     static List<Frame> prepare(Path shots) {
@@ -55,6 +61,7 @@ final class ReleaseModelCapture {
             if (frames.isEmpty()) {
                 throw new IllegalStateException("Release plan has no frames");
             }
+            verifyWardrobe = root.path("models").size() == models.size();
             ReleaseModelGeometry.write(shots.resolve("geometry.txt"), models);
             return List.copyOf(frames);
         } catch (IOException e) {

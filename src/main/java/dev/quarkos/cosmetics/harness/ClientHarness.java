@@ -474,9 +474,13 @@ public final class ClientHarness {
             return;
         }
         if (shotIndex >= activeShots().size()) {
-            state = ReleaseModelCapture.enabled() ? State.STOP
-                    : shotFilter().isEmpty() || shotFilter().stream().anyMatch(name -> name.contains("two-client"))
-                    ? State.PAIR : wardrobeState();
+            if (ReleaseModelCapture.enabled()) {
+                restoreStudioSettings();
+                state = modelWardrobeState();
+            } else {
+                state = shotFilter().isEmpty() || shotFilter().stream().anyMatch(name -> name.contains("two-client"))
+                        ? State.PAIR : wardrobeState();
+            }
             ticks = 0;
             shotQueued = false;
             settledAt = -1;
@@ -769,6 +773,9 @@ public final class ClientHarness {
     }
 
     private static State modelWardrobeState() {
+        if (ReleaseModelCapture.enabled()) {
+            return ReleaseModelCapture.verifyWardrobe() ? State.MODEL_WARDROBE : State.STOP;
+        }
         Set<String> names = shotFilter();
         return names.contains("blockato") || names.isEmpty() && !Boolean.getBoolean("quarkos_cosmetics.wardrobeOnly")
                 ? State.MODEL_WARDROBE : State.STOP;

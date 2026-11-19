@@ -1,6 +1,12 @@
 {
   "capture": {
-    "look_views": ["front", "back", "left", "right", "three-quarter"],
+    "look_views": [
+      "front",
+      "back",
+      "left",
+      "right",
+      "three-quarter"
+    ],
     "sample_count": 9,
     "preview_width_px": 640,
     "tile_px": 220
@@ -13,7 +19,7 @@
     "loop_seam_fraction": 0.16,
     "seat_gap_head_width_fraction": 0.065,
     "pair_area_ratio_min": 0.25,
-    "front_overlay_fraction_max": 0.10,
+    "front_overlay_fraction_max": 0.1,
     "background_noise_fraction": 0.005,
     "bbox_margin_px": 6
   },
@@ -23,14 +29,30 @@
     "wide_hat_width_max": 16,
     "head_hugging_width_max": 13,
     "ear_width_max": 16,
-    "halo_width_range": [9, 12],
-    "halo_gap_range": [1.5, 3],
+    "halo_width_range": [
+      9,
+      12
+    ],
+    "halo_gap_range": [
+      1.5,
+      3
+    ],
     "back_width_max": 10,
     "back_depth_max": 6,
-    "wing_span_range": [20, 28],
-    "wing_root_y_range": [20, 24],
+    "wing_span_range": [
+      20,
+      28
+    ],
+    "wing_root_y_range": [
+      20,
+      24
+    ],
     "wing_root_half_width": 2,
-    "buddy_size_max": [6, 7, 6],
+    "buddy_size_max": [
+      6,
+      7,
+      6
+    ],
     "head_center_max": 1.5,
     "body_center_max": 2,
     "shoulder_center_max": 3,
@@ -40,17 +62,24 @@
     "face_penetration_max": 0.05,
     "seat_contact_max": 0.55,
     "stair_bands_max": 2,
-    "unrotated_curve_segments_max": 1
+    "unrotated_curve_segments_max": 1,
+    "santa_flop_segments_min": 2
   },
   "animation": {
     "ticks_per_second": 20,
-    "idle_seconds_range": [2, 4],
+    "idle_seconds_range": [
+      2,
+      4
+    ],
     "maximum_loop_hz": 2,
     "halo_degrees_per_second_max": 45,
     "terminal_keyframe_tolerance": 0.05
   },
   "perch": {
     "head_gap_max_px": 0.01,
-    "width_ratio_range": [0.64, 0.70]
+    "width_ratio_range": [
+      0.64,
+      0.7
+    ]
   }
 }

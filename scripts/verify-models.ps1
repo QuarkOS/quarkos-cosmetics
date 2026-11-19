@@ -39,7 +39,7 @@ function Doctor {
     foreach ($entry in @("$jdk\bin\java.exe", "$repo\gradlew.bat", $gradleHome)) {
         if (-not (Test-Path -LiteralPath $entry)) { throw "Missing $entry" }
     }
-    $python = (Get-Command python.exe -CommandType Application).Source
+    $python = (Get-Command python.exe -CommandType Application | Select-Object -First 1).Source
     & $python -B -c 'from PIL import Image; import numpy'
     if ($LASTEXITCODE -ne 0) { throw 'Quark Python requires Pillow and NumPy.' }
     $branch = & git -C $repo branch --show-current
