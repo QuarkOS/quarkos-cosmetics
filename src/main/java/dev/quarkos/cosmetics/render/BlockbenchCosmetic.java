@@ -3,6 +3,7 @@ package dev.quarkos.cosmetics.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.quarkos.cosmetics.config.TintColor;
+import dev.quarkos.cosmetics.harness.ClientHarness;
 import dev.quarkos.cosmetics.model.Worn;
 import dev.quarkos.cosmetics.render.BlockbenchModel.Bone;
 import dev.quarkos.cosmetics.render.BlockbenchModel.Clip;
@@ -16,6 +17,7 @@ import dev.quarkos.cosmetics.render.CosmeticDrawer.Pass;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Player;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -24,6 +26,7 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.WeakHashMap;
 import java.util.function.Function;
 
 import static dev.quarkos.cosmetics.render.BlockbenchModel.sample;
@@ -38,13 +41,14 @@ import static net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
 final class BlockbenchCosmetic {
     private static final Vec GHOST_SHIFT = new Vec(2.5f, -6f, -3f);
     private static final float GHOST_SCALE = 0.75f;
+    private static final WeakHashMap<Player, BlockbenchMotion> MOTION = new WeakHashMap<>();
 
     private BlockbenchCosmetic() {
     }
 
     static void draw(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, float age, ModelPart playerRoot,
                      Function<Worn.Anchor, ModelPart> part, ModelLibrary.Resolved resolved, int tint,
-                     float offsetX, float offsetY, float offsetZ) {
+                     float offsetX, float offsetY, float offsetZ, Player wearer) {
         PackedCatalog.Item item = resolved.builtin();
         BlockbenchModel model = item.blockbench();
         boolean legacy = item.entry().legacyBlockbench();
@@ -54,6 +58,17 @@ final class BlockbenchCosmetic {
         Identifier glow = item.glow() == null ? null : ModelLibrary.blockbenchTexture(item.glow(), legacy);
         TextureFrames baseFrames = item.base().frames();
         TextureFrames glowFrames = item.glow() == null ? null : item.glow().frames();
+        BlockbenchMotion.Playback action = null;
+        if (wearer != null && !model.actions().isEmpty()) {
+            if (ClientHarness.releaseCaptureEnabled()) {
+                action = BlockbenchMotion.sample(model, ClientHarness.releaseAction(), ClientHarness.releaseActionAge());
+            } else {
+                BlockbenchMotion motion = MOTION.computeIfAbsent(wearer, ignored -> new BlockbenchMotion());
+                motion.observe(new BlockbenchMotion.State(wearer.tickCount, wearer.isCrouching() || wearer.isShiftKeyDown(),
+                        wearer.onGround(), wearer.getY(), wearer.hurtTime, wearer.walkAnimation.speed() > .05f));
+                action = motion.playback(model, age);
+            }
+        }
 
         for (Root root : model.roots()) {
             pose.pushPose();
@@ -82,7 +97,7 @@ final class BlockbenchCosmetic {
 
             List<PosedCube> posed = new ArrayList<>();
             EnumSet<Pass> passes = EnumSet.noneOf(Pass.class);
-            walk(root.bone(), model.idle(), new Matrix4f(pose.last().pose()), age, legacy, ghost, posed, passes);
+            walk(root.bone(), model.idle(), action, new Matrix4f(pose.last().pose()), age, legacy, ghost, posed, passes);
             if (legacy) {
                 Pass pass = ghost ? Pass.TRANSLUCENT : Pass.CUTOUT_NO_CULL;
                 submitter.submit(pose, base, pass,
@@ -104,11 +119,11 @@ final class BlockbenchCosmetic {
     }
 
     static void portrait(PoseStack pose, CosmeticDrawer.Submitter submitter, int light, ModelLibrary.Resolved resolved) {
-        draw(pose, submitter, light, 0, null, anchor -> null, resolved, TintColor.DEFAULT, 0, 0, 0);
+        draw(pose, submitter, light, 0, null, anchor -> null, resolved, TintColor.DEFAULT, 0, 0, 0, null);
     }
 
-    private static void walk(Bone bone, List<Clip> idle, Matrix4f parent, float age, boolean legacy, boolean ghost,
-                             List<PosedCube> posed, EnumSet<Pass> passes) {
+    private static void walk(Bone bone, List<Clip> idle, BlockbenchMotion.Playback action, Matrix4f parent,
+                             float age, boolean legacy, boolean ghost, List<PosedCube> posed, EnumSet<Pass> passes) {
         Vec rotation = bone.rotation();
         Vec position = Vec.ZERO;
         Vec scale = Vec.ONE;
@@ -121,6 +136,16 @@ final class BlockbenchCosmetic {
                 position = position.add(sample(tracks.position(), time, Vec.ZERO, legacy));
                 scale = scale.multiply(sample(tracks.scale(), time, Vec.ONE, legacy));
             }
+        }
+        Tracks active = action == null ? null : action.clip().bones().get(bone.uuid());
+        if (active != null) {
+            float time = action.seconds();
+            float weight = action.weight();
+            if (!active.rotation().isEmpty()) {
+                rotation = rotation.lerp(bone.rotation().add(sample(active.rotation(), time, Vec.ZERO, false)), weight);
+            }
+            position = position.lerp(sample(active.position(), time, position, false), weight);
+            scale = scale.lerp(sample(active.scale(), time, scale, false), weight);
         }
         Vec pivot = bone.pivot();
         Matrix4f local = new Matrix4f(parent).translate(pivot.x() + position.x(), pivot.y() + position.y(), pivot.z() + position.z());
@@ -151,7 +176,7 @@ final class BlockbenchCosmetic {
             }
         }
         for (Bone child : bone.children()) {
-            walk(child, idle, local, age, legacy, ghost, posed, passes);
+            walk(child, idle, action, local, age, legacy, ghost, posed, passes);
         }
     }
 

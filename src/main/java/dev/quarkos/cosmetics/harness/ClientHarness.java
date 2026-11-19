@@ -687,6 +687,14 @@ public final class ClientHarness {
         return releaseFrame.action().isEmpty() ? releaseFrame.age() : 0;
     }
 
+    public static String releaseAction() {
+        return releaseFrame == null ? "" : releaseFrame.action();
+    }
+
+    public static float releaseActionAge() {
+        return releaseFrame == null ? 0 : releaseFrame.age();
+    }
+
     private static List<Shot> modelShots() {
         List<Shot> shots = new ArrayList<>();
         for (ModelLibrary.Resolved model : ModelLibrary.packed()) {

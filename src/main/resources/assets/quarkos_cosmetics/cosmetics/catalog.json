@@ -146,7 +146,12 @@
       "slot": "hat",
       "texture": "textures/cosmetics/star_tree_topper_halo.png",
       "model": "cosmetics/blockato/star_tree_topper_halo.bbmodel",
-      "marker": "FFFFC8"
+      "marker": "FFFFC8",
+      "model_offset": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "quarkos:bat_wings",
@@ -353,7 +358,12 @@
       "texture": "textures/cosmetics/cyber_halo.png",
       "model": "cosmetics/blockato/cyber_halo.bbmodel",
       "marker": "646991",
-      "glow": "textures/cosmetics/cyber_halo_glowmask.png"
+      "glow": "textures/cosmetics/cyber_halo_glowmask.png",
+      "model_offset": [
+        0,
+        1,
+        0
+      ]
     },
     {
       "id": "quarkos:drone_buddy",
@@ -443,7 +453,12 @@
       "texture": "textures/cosmetics/visor_goggles_hud.png",
       "model": "cosmetics/blockato/visor_goggles_hud.bbmodel",
       "marker": "9A6C4E",
-      "glow": "textures/cosmetics/visor_goggles_hud_glowmask.png"
+      "glow": "textures/cosmetics/visor_goggles_hud_glowmask.png",
+      "model_offset": [
+        0,
+        -1,
+        0
+      ]
     },
     {
       "id": "quarkos:balloon_buddy",

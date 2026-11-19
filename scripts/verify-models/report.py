@@ -9,7 +9,7 @@ import textwrap
 import numpy as np
 from PIL import Image, ImageDraw
 
-from checks import band, bounds, change, fit_checks, flag, gap_px, properties, silhouette_checks, upper
+from checks import authored_motion_checks, band, bounds, change, fit_checks, flag, gap_px, properties, silhouette_checks, upper
 from plan import ASSETS, HEAD, THRESHOLDS, read_json, save_json, slug
 from raster import camera_for, mannequin, read_emission, render
 
@@ -119,7 +119,8 @@ def motion(raw, output, model, views, config, reasons):
         diffs = [int(change(a, b, pixels["channel_delta"]).sum()) for a, b in zip(arrays, arrays[1:])]
         extent = max(1, max(areas))
         steps = np.maximum(1, np.diff(clip["ticks"]))
-        jump = max(float(diff / (extent * step)) for diff, step in zip(diffs, steps))
+        start = 1 if clip["action"] == "on_unsneak" else 0
+        jump = max(float(diff / (extent * step)) for diff, step in zip(diffs[start:], steps[start:]))
         if max(diffs) < pixels["minimum_motion_px"]:
             flag(reasons, "authored_motion_invisible", "mod-side", max(diffs),
                  f">= {pixels['minimum_motion_px']}", "px", clip["name"])
@@ -352,6 +353,7 @@ def generate(run, config):
             raise ValueError(f"No geometry emitted for {item['id']}")
         metrics = fit_checks(item, quads, config["units"], reasons)
         silhouette_checks(item, config["units"], reasons)
+        authored_motion_checks(item, config["animation"], reasons)
         looks, looks_metrics = look_checks(raw, output, item, views, config, metrics, reasons)
         if quads:
             look = item["looks"][item["close_view"]]

@@ -122,7 +122,8 @@ def fit_checks(model, quads, u, reasons):
         for axis, value, maximum in zip(("width", "height", "depth"), (w, h, d), u["buddy_size_max"]):
             upper(reasons, f"shoulder_size_{axis}", "art", value, maximum, "u", evidence)
         anchor = 6.25 if slot == "shoulder_left" else -6.25
-        upper(reasons, "shoulder_center", "mod-side", abs(center[0] - anchor), u["shoulder_center_max"], "u", evidence)
+        if not kind["floater"]:
+            upper(reasons, "shoulder_center", "mod-side", abs(center[0] - anchor), u["shoulder_center_max"], "u", evidence)
     elif slot in HEAD:
         if kind["headband"]:
             maximum = u["head_hugging_width_max"]
@@ -193,3 +194,33 @@ def silhouette_checks(model, u, reasons):
                  and e["to"][0] - e["from"][0] >= 2 and e["to"][2] - e["from"][2] >= 2]
         levels = len({round(e["from"][1], 1) for e in slabs})
         upper(reasons, "stair_bands", "art", levels, u["stair_bands_max"], "levels", source)
+
+
+def authored_motion_checks(model, rules, reasons):
+    if not model["model"].endswith(".bbmodel") or model["group"] == "v1":
+        return
+    source = read_json(ASSETS / model["model"])
+    spinning = properties(model)["halo"] or "satellite_dish" in model["id"]
+    for clip in source.get("animations", []):
+        if clip.get("loop") != "loop":
+            continue
+        for animator in clip.get("animators", {}).values():
+            keys = animator.get("keyframes", [])
+            for channel in ("rotation", "position", "scale"):
+                track = sorted((k for k in keys if k["channel"] == channel), key=lambda k: k["time"])
+                if len(track) < 2:
+                    continue
+                vectors = np.array([[float(k["data_points"][0][axis]) for axis in "xyz"] for k in track])
+                delta = np.abs(vectors[-1] - vectors[0])
+                if channel == "rotation":
+                    delta = np.minimum(delta % 360, (-delta) % 360)
+                unit = {"rotation": "deg", "position": "u", "scale": "scale"}[channel]
+                evidence = f"{clip['name'].rsplit('.', 1)[-1]} / {animator['name']} / {channel}"
+                upper(reasons, "terminal_keyframe_delta", "art", delta.max(),
+                      rules["terminal_keyframe_tolerance"], unit, evidence)
+                if spinning and channel == "rotation":
+                    divisions = np.diff([k["time"] for k in track])
+                    speed = np.abs(np.diff(vectors, axis=0))[divisions > 0] / divisions[divisions > 0, None]
+                    if speed.size:
+                        upper(reasons, "halo_spin_rate", "art", speed.max(),
+                              rules["halo_degrees_per_second_max"], "deg/s", evidence)

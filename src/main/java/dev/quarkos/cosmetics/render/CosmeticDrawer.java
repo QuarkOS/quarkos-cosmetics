@@ -8,6 +8,7 @@ import dev.quarkos.cosmetics.harness.ClientHarness;
 import dev.quarkos.cosmetics.model.Worn;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Player;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
@@ -64,7 +65,8 @@ public final class CosmeticDrawer {
 
     public static void cosmetics(PoseStack pose, Submitter submitter, int light, float age,
                                  ModelPart root, ModelPart head, ModelPart body, ModelPart leftArm, ModelPart rightArm,
-                                 List<Worn.Placement> placed, boolean wingsFlap, boolean self, boolean wardrobePreview) {
+                                 List<Worn.Placement> placed, boolean wingsFlap, boolean self, boolean wardrobePreview,
+                                 Player wearer) {
         if (self && !wardrobePreview) {
             age = ClientHarness.releaseAge(age);
         }
@@ -102,7 +104,7 @@ public final class CosmeticDrawer {
             int tint = self && canTint(placement.id()) ? ClientSettings.get().tint(placement.slot()) : TintColor.DEFAULT;
             if (resolved.blockbench()) {
                 BlockbenchCosmetic.draw(pose, submitter, light, age, root, parts, resolved, tint,
-                        placement.offsetX(), placement.offsetY(), placement.offsetZ());
+                        placement.offsetX(), placement.offsetY(), placement.offsetZ(), wardrobePreview ? null : wearer);
                 continue;
             }
             pose.pushPose();

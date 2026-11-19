@@ -12,6 +12,7 @@ The values in `scripts/verify-models/thresholds.json` come from the Blockato des
 | Proportion | Rendered width, height, depth, or span for the applicable item type. | Art |
 | Curves | Unrotated horn segments, horizontal levels in tapered hats, and rotated segments in Santa's flop. | Art |
 | Motion | Adjacent-frame pixel changes and peak change per sampled tick. Loop seams compare the last tick with the wrapped frame when the other clocks also repeat. | Missing motion is mod-side. Jumps and authored seams are art. |
+| Authored loops | First and last values for each bone channel, and sampled rotation rates for halos and dishes. | Art |
 | Chick perch | The renderer measures the gap and the chick width against the head. | Mod-side |
 
 Model-space limits describe the posed geometry at the first capture tick. The live seat measurement uses a diagonal pixel neighborhood. A visible overlap can hide a depth gap, so check the side view and model-space distance before changing a mount. A paired outline can look asymmetric because it has an authored accessory. Inspect the image before assigning the finding to Modelato.

@@ -33,7 +33,7 @@ public final class ReleaseModelGeometry {
                     draw.accept(new Vertices(out));
                 };
                 if (model.blockbench()) {
-                    BlockbenchCosmetic.draw(pose, sink, 0, 0, null, anchor -> null, model, 0xffffff, 0, 0, 0);
+                    BlockbenchCosmetic.draw(pose, sink, 0, 0, null, anchor -> null, model, 0xffffff, 0, 0, 0, null);
                 } else {
                     KiteWings.draw(pose, sink, 0, 0, false, null, 0, 0, 0);
                 }

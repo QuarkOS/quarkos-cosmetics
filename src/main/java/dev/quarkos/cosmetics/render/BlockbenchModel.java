@@ -5,6 +5,7 @@ import dev.quarkos.cosmetics.model.Worn.Anchor;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -14,7 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-record BlockbenchModel(List<Root> roots, List<Clip> idle, int cubes) {
+record BlockbenchModel(List<Root> roots, List<Clip> idle, Map<BlockbenchMotion.Action, ActionClip> actions, int cubes) {
     record Vec(float x, float y, float z) {
         static final Vec ZERO = new Vec(0, 0, 0);
         static final Vec ONE = new Vec(1, 1, 1);
@@ -35,6 +36,10 @@ record BlockbenchModel(List<Root> roots, List<Clip> idle, int cubes) {
 
         Vec multiply(Vec other) {
             return new Vec(x * other.x, y * other.y, z * other.z);
+        }
+
+        Vec lerp(Vec other, float amount) {
+            return new Vec(x + (other.x - x) * amount, y + (other.y - y) * amount, z + (other.z - z) * amount);
         }
     }
 
@@ -58,6 +63,9 @@ record BlockbenchModel(List<Root> roots, List<Clip> idle, int cubes) {
         float time(float ageTicks) {
             return length > 0 ? (ageTicks / 20f) % length : 0;
         }
+    }
+
+    record ActionClip(Clip clip, boolean hold) {
     }
 
     record Tracks(List<Key> rotation, List<Key> position, List<Key> scale) {
@@ -102,20 +110,28 @@ record BlockbenchModel(List<Root> roots, List<Clip> idle, int cubes) {
         }
 
         List<Clip> idle = new ArrayList<>();
+        var actions = new EnumMap<BlockbenchMotion.Action, ActionClip>(BlockbenchMotion.Action.class);
         for (JsonNode animation : json.path("animations")) {
-            if ("loop".equals(animation.path("loop").asText())) {
-                String name = requiredText(animation, "name");
-                float length = number(animation.path("length"));
-                Map<String, Tracks> tracks = new HashMap<>();
-                animation.path("animators").fields().forEachRemaining(entry -> {
-                    JsonNode animator = entry.getValue();
-                    tracks.put(entry.getKey(), new Tracks(keys(animator, "rotation", Vec.ZERO),
-                            keys(animator, "position", Vec.ZERO), keys(animator, "scale", Vec.ONE)));
-                });
-                idle.add(new Clip(name, length, Map.copyOf(tracks)));
+            String mode = animation.path("loop").asText();
+            String name = requiredText(animation, "name");
+            var action = legacy ? null : BlockbenchMotion.Action.fromClip(name);
+            if (!"loop".equals(mode) && action == null) {
+                continue;
+            }
+            Map<String, Tracks> tracks = new HashMap<>();
+            animation.path("animators").fields().forEachRemaining(entry -> {
+                JsonNode animator = entry.getValue();
+                tracks.put(entry.getKey(), new Tracks(keys(animator, "rotation", Vec.ZERO),
+                        keys(animator, "position", Vec.ZERO), keys(animator, "scale", Vec.ONE)));
+            });
+            var clip = new Clip(name, number(animation.path("length")), Map.copyOf(tracks));
+            if (action == null) {
+                idle.add(clip);
+            } else {
+                actions.put(action, new ActionClip(clip, "hold".equals(mode)));
             }
         }
-        return new BlockbenchModel(List.copyOf(roots), List.copyOf(idle), used.size());
+        return new BlockbenchModel(List.copyOf(roots), List.copyOf(idle), Map.copyOf(actions), used.size());
     }
 
     private static Anchor anchor(String name) {
