@@ -58,7 +58,7 @@ def separated_headband_gap(mask, region, min_area_fraction):
     above = [part for part in components if part[:, 0].max() < anchor[:, 0].min()]
     if not above:
         return None
-    return scale * max(0, max(anchor[:, 0].min() - part[:, 0].max() - 1 for part in above))
+    return scale * max(0, int(max(anchor[:, 0].min() - part[:, 0].max() - 1 for part in above)))
 
 
 def flag(reasons, check, category, value, threshold, unit, evidence):
