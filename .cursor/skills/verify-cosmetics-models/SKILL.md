@@ -48,7 +48,9 @@ Keep the 1920 by 1080 frames on Quark in `raw`. On Quark, run `python -B scripts
 
 ## Cleanup
 
-The task releases its own lock, closes its process job, and unregisters itself. The job contains only the processes that run started. The next run reserves a fresh dated directory and retains prior evidence. A timeout closes the job before releasing the lock. Read `logs/run.log` and `done.json` to check teardown.
+The task releases its own lock and closes the job that contains its processes. The next run reserves a fresh dated directory and retains prior evidence. A timeout closes the job before releasing the lock. Read `logs/run.log` and `done.json` to check teardown.
+
+`-Command Wait -RunDir $run` also removes the finished task registration. If you monitored with `Status`, run `.\scripts\verify-models.ps1 -Command Cleanup -RunDir $run` from the launching session. This also works after a stopped task fails to write `done.json`.
 
 The test lock is `D:\dev\mc-test.lock`. A recent lock delays capture for up to 90 minutes by default. The task refreshes its own marker during capture. If a lock is at least 30 minutes old and can be opened for reclamation, the task moves it into the new run directory.
 

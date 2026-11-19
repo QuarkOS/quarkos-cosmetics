@@ -1,7 +1,7 @@
 # Run the Fabric release capture on Quark's private Windows desktop.
 [CmdletBinding()]
 param(
-    [ValidateSet('Launch', 'Doctor', 'Status', 'Wait', 'Worker')]
+    [ValidateSet('Launch', 'Doctor', 'Status', 'Wait', 'Cleanup', 'Worker')]
     [string]$Command = 'Launch',
     [ValidateSet('26.3', '1.21.11')]
     [string]$Version = '26.3',
@@ -35,6 +35,31 @@ function Read-RunFile([string]$name) {
     Get-Content -LiteralPath (Join-Path $RunDir $name) -Raw | ConvertFrom-Json
 }
 
+function Remove-RunTask($request) {
+    $taskName = "CosmeticsModels-$($request.token)"
+    if ($request.token -notmatch '^[0-9a-f]{12}$' -or $request.task -ne $taskName) {
+        throw 'The request does not name a Cosmetics Models task.'
+    }
+    $directory = (Resolve-Path -LiteralPath $RunDir).Path
+    $suffix = ' -Command Worker -RunDir "' + $directory + '"'
+    $deadline = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        $task = Get-ScheduledTask -TaskName $taskName -TaskPath '\' -ErrorAction SilentlyContinue
+        if (-not $task) { return }
+        $action = $task.Actions
+        if ([IO.Path]::GetFileName($action.Execute) -ne 'conhost.exe' -or
+            -not $action.Arguments.EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Task $taskName does not belong to $directory."
+        }
+        if ($task.State -eq 'Ready') {
+            Unregister-ScheduledTask -InputObject $task -Confirm:$false
+            return
+        }
+        Start-Sleep -Seconds 1
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Task $taskName has not stopped."
+}
+
 function Doctor {
     foreach ($entry in @("$jdk\bin\java.exe", "$repo\gradlew.bat", $gradleHome)) {
         if (-not (Test-Path -LiteralPath $entry)) { throw "Missing $entry" }
@@ -65,6 +90,12 @@ if ($Command -eq 'Doctor') {
     exit 0
 }
 
+if ($Command -eq 'Cleanup') {
+    if (-not $RunDir) { throw 'Pass -RunDir from the launch output.' }
+    Remove-RunTask (Read-RunFile 'request.json')
+    exit 0
+}
+
 if ($Command -in 'Status', 'Wait') {
     if (-not $RunDir) { throw 'Pass -RunDir from the launch output.' }
     $request = Read-RunFile 'request.json'
@@ -72,7 +103,10 @@ if ($Command -in 'Status', 'Wait') {
         if (Test-Path -LiteralPath (Join-Path $RunDir 'done.json')) {
             $done = Read-RunFile 'done.json'
             $done | ConvertTo-Json -Depth 12
-            if ($Command -eq 'Wait') { exit $done.exitCode }
+            if ($Command -eq 'Wait') {
+                Remove-RunTask $request
+                exit $done.exitCode
+            }
             exit 0
         }
         $task = Get-ScheduledTask -TaskName $request.task -ErrorAction SilentlyContinue
@@ -301,6 +335,10 @@ try {
 } finally {
     Exit-CaptureLock
     Write-JsonAtomic $result (Join-Path $RunDir 'done.json')
-    Unregister-ScheduledTask -TaskName $request.task -Confirm:$false -ErrorAction SilentlyContinue
+    try {
+        Unregister-ScheduledTask -TaskName $request.task -Confirm:$false
+    } catch {
+        Log "Task unregister needs the launching session. $($_.Exception.Message)"
+    }
 }
 exit $result.exitCode
