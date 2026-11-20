@@ -89,7 +89,7 @@ public final class GalleryClient {
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .header("User-Agent", "quarkos_cosmetics/1.0.0")
+                .header("User-Agent", "quarkos_cosmetics/1.1.0")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .build();
         HttpResponse<String> response = sendRaw(request);
@@ -216,7 +216,7 @@ public final class GalleryClient {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path))
                 .timeout(Duration.ofSeconds(10))
                 .header("Accept", "application/json")
-                .header("User-Agent", "quarkos_cosmetics/1.0.0");
+                .header("User-Agent", "quarkos_cosmetics/1.1.0");
         if (token != null && !token.isBlank()) {
             builder.header("Authorization", "Bearer " + token);
         }

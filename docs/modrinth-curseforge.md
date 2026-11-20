@@ -6,10 +6,10 @@ Local equip works offline. The gallery talks only to this project's server. The 
 
 ## Required
 
-- Minecraft 1.21.1 or 1.21.11
+- Minecraft 1.21.1 or 1.21.11 (Fabric or Forge), or 26.3 (Fabric)
 - Fabric Loader and Fabric API, or Forge
-- GeckoLib 4.9.3 on 1.21.1, or GeckoLib 5.4.5 on 1.21.11 (the matching Fabric or Forge build)
-- Java 21
+- GeckoLib 4.9.3 on 1.21.1, GeckoLib 5.4.5 on 1.21.11, or GeckoLib 5.5.7 on 26.3 (the matching Fabric or Forge build)
+- Java 21 (Java 25 on 26.3)
 
 ## Optional
 

@@ -1,6 +1,6 @@
 mod.id = "quarkos_cosmetics"
 mod.name = "Quarkos Cosmetics"
-mod.version = "1.0.0"
+mod.version = "1.1.0"
 mod.group = "dev.quarkos"
 
 deps.fabric_loader = "0.19.5"
