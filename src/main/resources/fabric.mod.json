@@ -7,6 +7,11 @@
   "authors": [
     "Emilio Schwaiger"
   ],
+  "contact": {
+    "homepage": "https://github.com/QuarkOS/quarkos-cosmetics",
+    "sources": "https://github.com/QuarkOS/quarkos-cosmetics",
+    "issues": "https://github.com/QuarkOS/quarkos-cosmetics/issues"
+  },
   "license": "MIT",
   "icon": "assets/quarkos_cosmetics/icon.png",
   "environment": "client",
