@@ -26,7 +26,7 @@ final class CosmeticAttach {
 
     static List<Worn.Placement> placements(UUID uuid, boolean self, boolean elytra, boolean helmet, boolean chest, boolean legs) {
         ClientSettings settings = ClientSettings.get();
-        Map<Slot, String> equipped = self || uuid == null ? settings.equipped : settings.hideOthers ? Map.of() : EquipmentMirror.slots(uuid);
+        Map<Slot, String> equipped = self || uuid == null ? settings.equipped : settings.hideOthers || !ClientSettings.GALLERY_ENABLED ? Map.of() : EquipmentMirror.slots(uuid);
         return Worn.plan(equipped, settings.disabled, settings.categoryOn, Mods.tailsLoaded(), elytra, helmet, chest, legs);
     }
 

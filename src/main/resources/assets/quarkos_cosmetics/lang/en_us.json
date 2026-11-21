@@ -1,8 +1,8 @@
 {
   "key.quarkos_cosmetics.open": "Open Cosmetics",
-  "key.categories.quarkos_cosmetics": "Quarkos Cosmetics",
-  "key.category.quarkos_cosmetics.wardrobe": "Quarkos Cosmetics",
-  "screen.quarkos_cosmetics.title": "Quarkos Cosmetics",
+  "key.categories.quarkos_cosmetics": "QuarkOS Cosmetics",
+  "key.category.quarkos_cosmetics.wardrobe": "QuarkOS Cosmetics",
+  "screen.quarkos_cosmetics.title": "QuarkOS Cosmetics",
   "text.quarkos_cosmetics.pause": "Cosmetics",
   "text.quarkos_cosmetics.done": "Done",
   "text.quarkos_cosmetics.hide_others": "Other players: shown",

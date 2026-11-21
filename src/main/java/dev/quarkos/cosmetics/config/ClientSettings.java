@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Persistent wardrobe settings. The Minecraft access token is never written. */
 public final class ClientSettings {
     public static final String DEFAULT_GALLERY = "http://127.0.0.1:39221";
+    /** The gallery is a dev feature. It stays off unless the game starts with -Dquarkos_cosmetics.gallery=true. */
+    public static final boolean GALLERY_ENABLED = Boolean.getBoolean("quarkos_cosmetics.gallery");
     private static final String[] SECRET_KEYS = {"accessToken", "access_token", "password", "token", "galleryToken"};
 
     private static ClientSettings current = new ClientSettings();
@@ -134,7 +136,7 @@ public final class ClientSettings {
         try {
             Files.createDirectories(file.getParent());
             try (Writer writer = Files.newBufferedWriter(file)) {
-                properties.store(writer, "Quarkos Cosmetics. Never put a Minecraft access token in this file.");
+                properties.store(writer, "QuarkOS Cosmetics. Never put a Minecraft access token in this file.");
             }
         } catch (IOException ignored) {
             // The wardrobe still works for this session if the disk is read-only.

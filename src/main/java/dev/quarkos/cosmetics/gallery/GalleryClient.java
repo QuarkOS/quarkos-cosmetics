@@ -22,13 +22,18 @@ import java.util.UUID;
 
 /**
  * Talks only to this mod's gallery. The Minecraft access token is posted to
- * {@code mojangJoinUrl} from the challenge and is never sent to the gallery.
+ * Mojang's fixed session join URL and is never sent to the gallery. The
+ * {@code mojangJoinUrl} a gallery returns is ignored.
  */
 public final class GalleryClient {
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** The only place the access token is ever posted. */
+    public static final URI MOJANG_JOIN = URI.create("https://sessionserver.mojang.com/session/minecraft/join");
+
     private final String baseUrl;
     private final HttpClient http;
+    private final URI mojangJoin;
 
     public GalleryClient(String baseUrl) {
         this(baseUrl, HttpClient.newBuilder()
@@ -38,8 +43,14 @@ public final class GalleryClient {
     }
 
     public GalleryClient(String baseUrl, HttpClient http) {
+        this(baseUrl, http, MOJANG_JOIN);
+    }
+
+    /** Tests only: points the join at a local fake. */
+    GalleryClient(String baseUrl, HttpClient http, URI mojangJoin) {
         this.baseUrl = normalizeBase(baseUrl);
         this.http = http;
+        this.mojangJoin = mojangJoin;
     }
 
     public String baseUrl() {
@@ -74,7 +85,7 @@ public final class GalleryClient {
     }
 
     /**
-     * Posts the access token only to the challenge's Mojang join URL.
+     * Posts the access token only to Mojang's session join URL.
      * The token is not logged and is not included in any gallery request.
      */
     public void joinMojang(Challenge challenge, String accessToken, UUID profileId) throws GalleryException, IOException {
@@ -85,11 +96,11 @@ public final class GalleryClient {
         body.put("accessToken", accessToken);
         body.put("selectedProfile", profileId.toString().replace("-", "").toLowerCase(Locale.ROOT));
         body.put("serverId", challenge.serverId());
-        HttpRequest request = HttpRequest.newBuilder(URI.create(challenge.mojangJoinUrl()))
+        HttpRequest request = HttpRequest.newBuilder(mojangJoin)
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .header("User-Agent", "quarkos_cosmetics/1.1.0")
+                .header("User-Agent", "quarkos_cosmetics/1.1.1")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .build();
         HttpResponse<String> response = sendRaw(request);
@@ -216,7 +227,7 @@ public final class GalleryClient {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path))
                 .timeout(Duration.ofSeconds(10))
                 .header("Accept", "application/json")
-                .header("User-Agent", "quarkos_cosmetics/1.1.0");
+                .header("User-Agent", "quarkos_cosmetics/1.1.1");
         if (token != null && !token.isBlank()) {
             builder.header("Authorization", "Bearer " + token);
         }

@@ -3,7 +3,7 @@
   "id": "${id}",
   "version": "${version}",
   "name": "${name}",
-  "description": "Free client cosmetics: hats, shoulders, idle wings, tails, and ears, plus an original 3D second skin. Local equip works offline. The gallery is optional and talks only to this mod's own server.",
+  "description": "Free client cosmetics: hats, shoulders, idle wings, tails, and ears, plus an original 3D second skin. Local equip works offline.",
   "authors": [
     "Emilio Schwaiger"
   ],

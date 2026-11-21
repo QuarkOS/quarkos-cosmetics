@@ -49,8 +49,8 @@ class GalleryClientTest {
     @Test
     void twoClientsPublishEquipAndReadEachOther() throws Exception {
         start();
-        GalleryClient ada = new GalleryClient(galleryUrl());
-        GalleryClient bea = new GalleryClient(galleryUrl());
+        GalleryClient ada = client();
+        GalleryClient bea = client();
         GalleryClient.Session adaSession = ada.signIn("Ada", "token-ada", java.util.UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         GalleryClient.Session beaSession = bea.signIn("Bea", "token-bea", java.util.UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
         assertEquals("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", adaSession.uuid());
@@ -75,7 +75,7 @@ class GalleryClientTest {
     @Test
     void reportAndBrowseStayOnTheGallery() throws Exception {
         start();
-        GalleryClient ada = new GalleryClient(galleryUrl());
+        GalleryClient ada = client();
         GalleryClient.Session session = ada.signIn("Ada", "token-ada", java.util.UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         GalleryClient.Listed listed = ada.publish(session.token(), publishable("Lantern", "Paper.", Slot.HAT));
         GalleryClient.Page page = ada.list("lantern", Slot.HAT, null, 20);
@@ -112,6 +112,12 @@ class GalleryClientTest {
     void baseUrlDropsATrailingVersionPrefix() {
         assertEquals("http://127.0.0.1:39221", GalleryClient.normalizeBase("http://127.0.0.1:39221/v1/"));
         assertEquals("http://127.0.0.1:39221", GalleryClient.normalizeBase("http://127.0.0.1:39221/"));
+    }
+
+    private GalleryClient client() throws IOException {
+        String base = galleryUrl();
+        return new GalleryClient(base, java.net.http.HttpClient.newHttpClient(),
+                java.net.URI.create("http://127.0.0.1:" + mojang.getAddress().getPort() + "/session/minecraft/join"));
     }
 
     private void start() throws IOException {

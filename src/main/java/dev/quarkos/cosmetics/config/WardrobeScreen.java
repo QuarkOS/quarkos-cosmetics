@@ -219,7 +219,7 @@ public final class WardrobeScreen extends Screen {
     private void initHeader() {
         Rect header = frame.header();
         Rect nav = navigation();
-        View[] views = View.values();
+        View[] views = ClientSettings.GALLERY_ENABLED || studioGallery ? View.values() : new View[]{View.WARDROBE, View.SETTINGS};
         for (int i = 0; i < views.length; i++) {
             View tab = views[i];
             choice(nav.column(i, views.length, 4), tab.label, () -> view == tab, () -> open(tab));
@@ -237,6 +237,9 @@ public final class WardrobeScreen extends Screen {
     }
 
     private void open(View next) {
+        if (next == View.GALLERY && !ClientSettings.GALLERY_ENABLED && !studioGallery) {
+            return;
+        }
         if (view != next) {
             view = next;
             if (view == View.GALLERY && !studioGallery && GalleryWork.browseStatus(slot) == GalleryWork.BrowseStatus.IDLE) {
@@ -272,7 +275,7 @@ public final class WardrobeScreen extends Screen {
             Rect none = metrics.card(0, 0);
             int left = none.right() + 12;
             emptyWardrobe = new Rect(left, none.y() + 8, collection.grid().right() - left, 17);
-            if (emptyWardrobe.w() >= 89 && none.h() >= 48) {
+            if (ClientSettings.GALLERY_ENABLED && emptyWardrobe.w() >= 89 && none.h() >= 48) {
                 button(new Rect(left, emptyWardrobe.bottom() + 3, 89, 18), "Browse gallery", () -> open(View.GALLERY));
             }
         }
@@ -448,7 +451,7 @@ public final class WardrobeScreen extends Screen {
             return GalleryWork.browse();
         }
         return ModelLibrary.packed().stream()
-                .map(item -> new GalleryClient.Listed(item.id(), item.name(), item.description(), item.slot().wire, "Quarkos Studio"))
+                .map(item -> new GalleryClient.Listed(item.id(), item.name(), item.description(), item.slot().wire, "QuarkOS Studio"))
                 .toList();
     }
 

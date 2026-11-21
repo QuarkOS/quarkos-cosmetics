@@ -23,13 +23,13 @@ val forgeNode = when (minecraftVersion) {
         "1.21.1-52.1.20",
         "52.1.20",
         "4.9.3",
-        """{"pack":{"description":"Quarkos Cosmetics","pack_format":34}}""" + "\n",
+        """{"pack":{"description":"QuarkOS Cosmetics","pack_format":34}}""" + "\n",
     )
     "1.21.11" -> ForgeNode(
         "1.21.11-61.2.4",
         "61.2.4",
         "5.4.5",
-        """{"pack":{"description":"Quarkos Cosmetics","min_format":[94,0],"max_format":[94,1]}}""" + "\n",
+        """{"pack":{"description":"QuarkOS Cosmetics","min_format":[94,0],"max_format":[94,1]}}""" + "\n",
     )
     else -> null
 }
@@ -54,7 +54,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     apply(plugin = "java")
     apply(plugin = "net.minecraftforge.gradle")
 
-    version = "1.1.0+$minecraftVersion"
+    version = "1.1.1+$minecraftVersion"
     base.archivesName.set("quarkos_cosmetics-forge")
     group = "dev.quarkos"
 
@@ -188,7 +188,7 @@ if (minecraftVersion == "forge" || forgeNode == null) {
     tasks.named<ProcessResources>("processResources") {
         dependsOn(writeForgePack, writeForgeManifest)
         val props = mapOf(
-            "version" to "1.1.0+$minecraftVersion",
+            "version" to "1.1.1+$minecraftVersion",
             "forge_dep" to node.forgeDep,
             "minecraft" to minecraftVersion,
             "geckolib" to node.geckolibVersion,
