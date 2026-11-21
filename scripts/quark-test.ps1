@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Build and test QuarkOS Cosmetics on Emilio's Windows PC "Quark".
+  Build and test Quark's Cosmetics on Emilio's Windows PC "Quark".
 .DESCRIPTION
   Portable JDK + Gradle home on D: (no global installs, no admin). Steps (each skippable):
     1. JUnit tests      :<TestVersion>:test

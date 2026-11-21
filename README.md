@@ -1,4 +1,4 @@
-# QuarkOS Cosmetics
+# Quark's Cosmetics
 
 Free Minecraft Java client cosmetics by Emilio Schwaiger. The mod id is `quarkos_cosmetics`. It is client-only, MIT licensed, and does not depend on `quarkos_capes`.
 

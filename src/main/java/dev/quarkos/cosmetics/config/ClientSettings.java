@@ -136,7 +136,7 @@ public final class ClientSettings {
         try {
             Files.createDirectories(file.getParent());
             try (Writer writer = Files.newBufferedWriter(file)) {
-                properties.store(writer, "QuarkOS Cosmetics. Never put a Minecraft access token in this file.");
+                properties.store(writer, "Quark's Cosmetics. Never put a Minecraft access token in this file.");
             }
         } catch (IOException ignored) {
             // The wardrobe still works for this session if the disk is read-only.

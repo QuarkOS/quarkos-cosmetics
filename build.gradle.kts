@@ -88,9 +88,9 @@ val writePack = tasks.register("writePackMeta") {
     val out = layout.buildDirectory.file("generated/pack/pack.mcmeta")
     outputs.file(out)
     val meta = when {
-        sc.current.version == "26.3" -> """{"pack":{"description":"QuarkOS Cosmetics","min_format":[97,1],"max_format":[97,1]}}"""
-        sc.current.parsed >= "1.21.9" -> """{"pack":{"description":"QuarkOS Cosmetics","min_format":[75,0],"max_format":[75,0]}}"""
-        else -> """{"pack":{"description":"QuarkOS Cosmetics","pack_format":34}}"""
+        sc.current.version == "26.3" -> """{"pack":{"description":"Quark's Cosmetics","min_format":[97,1],"max_format":[97,1]}}"""
+        sc.current.parsed >= "1.21.9" -> """{"pack":{"description":"Quark's Cosmetics","min_format":[75,0],"max_format":[75,0]}}"""
+        else -> """{"pack":{"description":"Quark's Cosmetics","pack_format":34}}"""
     }
     inputs.property("packMetadata", meta)
     doLast {

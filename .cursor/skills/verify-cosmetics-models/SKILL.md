@@ -1,6 +1,6 @@
 ---
 name: verify-cosmetics-models
-description: Verify the QuarkOS Cosmetics Fabric client on Quark. Equip every shipped cosmetic and check its in-world fit, looks, motion, and Wardrobe preview before a release.
+description: Verify the Quark's Cosmetics Fabric client on Quark. Equip every shipped cosmetic and check its in-world fit, looks, motion, and Wardrobe preview before a release.
 disable-model-invocation: true
 ---
 

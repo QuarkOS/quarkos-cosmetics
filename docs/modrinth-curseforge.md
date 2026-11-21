@@ -1,4 +1,4 @@
-# QuarkOS Cosmetics
+# Quark's Cosmetics
 
 Free client cosmetics for Minecraft Java. v1 packs hats and ears, plus an optional gallery for cosmetics you publish yourself.
 

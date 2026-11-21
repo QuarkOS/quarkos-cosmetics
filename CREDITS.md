@@ -1,6 +1,6 @@
 # Credits
 
-QuarkOS Cosmetics is MIT, copyright Emilio Schwaiger.
+Quark's Cosmetics is MIT, copyright Emilio Schwaiger.
 
 - Jackson Databind, Jackson Core, and Jackson Annotations 2.18.3 are Apache License 2.0. They are included in the Fabric jar and shaded into the Forge jar so gallery JSON matches the gallery service. https://github.com/FasterXML/jackson-databind
 - The gallery service uses Javalin 7.2.4 and Jackson 2.18.3, both Apache License 2.0. This mod does not ship Javalin.

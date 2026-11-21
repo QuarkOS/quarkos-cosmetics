@@ -451,7 +451,7 @@ public final class WardrobeScreen extends Screen {
             return GalleryWork.browse();
         }
         return ModelLibrary.packed().stream()
-                .map(item -> new GalleryClient.Listed(item.id(), item.name(), item.description(), item.slot().wire, "QuarkOS Studio"))
+                .map(item -> new GalleryClient.Listed(item.id(), item.name(), item.description(), item.slot().wire, "Quark's Studio"))
                 .toList();
     }
 

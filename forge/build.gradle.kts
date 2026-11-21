@@ -23,13 +23,13 @@ val forgeNode = when (minecraftVersion) {
         "1.21.1-52.1.20",
         "52.1.20",
         "4.9.3",
-        """{"pack":{"description":"QuarkOS Cosmetics","pack_format":34}}""" + "\n",
+        """{"pack":{"description":"Quark's Cosmetics","pack_format":34}}""" + "\n",
     )
     "1.21.11" -> ForgeNode(
         "1.21.11-61.2.4",
         "61.2.4",
         "5.4.5",
-        """{"pack":{"description":"QuarkOS Cosmetics","min_format":[94,0],"max_format":[94,1]}}""" + "\n",
+        """{"pack":{"description":"Quark's Cosmetics","min_format":[94,0],"max_format":[94,1]}}""" + "\n",
     )
     else -> null
 }

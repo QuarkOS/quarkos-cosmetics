@@ -2,7 +2,7 @@
 
 ## 1.1.1
 
-- The mod's name now shows as "QuarkOS Cosmetics" everywhere (it said "Quarkos").
+- The mod's display name is now "Quark's Cosmetics" everywhere (it said "Quarkos").
 - Removed the Gallery tab and the "Browse gallery" button. Its server was never public, so the tab could not load anything.
 - The mod no longer makes background network requests: it stopped polling a local gallery server for other players' cosmetics. Your own cosmetics work exactly as before.
 
