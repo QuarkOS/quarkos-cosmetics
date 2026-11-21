@@ -143,6 +143,10 @@ if (minecraftVersion == "forge" || forgeNode == null) {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
         exclude("META-INF/MANIFEST.MF")
+        // The embedded Jackson jars carry module descriptors. If they land in the
+        // mod jar, Forge loads the whole mod as module com.fasterxml.jackson.*
+        // and the mixin plugin and mixins fail with IllegalAccessError.
+        exclude("module-info.class", "META-INF/versions/*/module-info.class")
         manifest {
             attributes("MixinConfigs" to "quarkos_cosmetics.mixins.json")
         }
