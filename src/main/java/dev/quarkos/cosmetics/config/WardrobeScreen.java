@@ -734,7 +734,7 @@ public final class WardrobeScreen extends Screen {
     //?}
         Rect panel = frame.content();
         UiTheme.text(graphics, font, "Display settings", new Rect(panel.x() + 10, panel.y() + 6, panel.w() - 20, 17), UiTheme.TEXT);
-        drawSettingRow(graphics, settingsLayout.hideOthers(), "Hide cosmetics and 3D layers on other players.");
+        drawSettingRow(graphics, settingsLayout.hideOthers(), "Hide this mod's 3D skin layers on other players.");
         drawSettingRow(graphics, settingsLayout.skinLayer(), "Give the outer layer of player skins depth.");
         Rect distance = settingsLayout.skinDistance();
         UiTheme.frame(graphics, distance, UiTheme.STAGE, UiTheme.BORDER);

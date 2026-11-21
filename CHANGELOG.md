@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- The Mod Menu and Forge list icon is now the v2 cosmetics icon.
+- Forge 1.21.11 now declares resource pack format 75.0. It previously used the data-pack 94.x numbers.
+- The Hide others setting now says it hides this mod's 3D skin layers on other players.
+
 ## 1.1.1
 
 - The mod's display name is now "Quark's Cosmetics" everywhere (it said "Quarkos").
